@@ -62,7 +62,9 @@ func (c *Controller) processNextItem() bool {
 	// parallel.
 	defer c.queue.Done(key)
 
-	// Invoke the method containing the business logic
+	// Invoke the method containing the business logic.
+	// Note that the `.(string)` type assertion is safe because
+	// only strings are added to the queue.
 	err := c.syncToStdout(key.(string))
 	// Handle the error if something went wrong during the execution of the business logic
 	c.handleErr(err, key)
