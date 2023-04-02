@@ -68,6 +68,7 @@ func (c *Controller) processNextItem() bool {
 	err := c.syncToStdout(key.(string))
 	// Handle the error if something went wrong during the execution of the business logic
 	c.handleErr(err, key)
+
 	return true
 }
 
@@ -78,6 +79,7 @@ func (c *Controller) syncToStdout(key string) error {
 	obj, exists, err := c.indexer.GetByKey(key)
 	if err != nil {
 		klog.Errorf("Fetching object with key %s from store failed with %v", key, err)
+
 		return err
 	}
 
@@ -89,6 +91,7 @@ func (c *Controller) syncToStdout(key string) error {
 		// is dependent on the actual instance, to detect that a Pod was recreated with the same name
 		fmt.Printf("Sync/Add/Update for Pod %s\n", obj.(*v1.Pod).GetName())
 	}
+
 	return nil
 }
 
@@ -99,6 +102,7 @@ func (c *Controller) handleErr(err error, key interface{}) {
 		// This ensures that future processing of updates for this key is not delayed because of
 		// an outdated error history.
 		c.queue.Forget(key)
+
 		return
 	}
 
@@ -109,6 +113,7 @@ func (c *Controller) handleErr(err error, key interface{}) {
 		// Re-enqueue the key rate limited. Based on the rate limiter on the
 		// queue and the re-enqueue history, the key will be processed later again.
 		c.queue.AddRateLimited(key)
+
 		return
 	}
 
@@ -131,6 +136,7 @@ func (c *Controller) Run(workers int, stopCh chan struct{}) {
 	// Wait for all involved caches to be synced, before processing items from the queue is started
 	if !cache.WaitForCacheSync(stopCh, c.informer.HasSynced) {
 		runtime.HandleError(fmt.Errorf("Timed out waiting for caches to sync"))
+
 		return
 	}
 
