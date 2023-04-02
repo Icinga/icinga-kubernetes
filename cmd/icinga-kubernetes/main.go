@@ -51,9 +51,10 @@ func NewController(queue workqueue.RateLimitingInterface, indexer cache.Indexer,
 }
 
 func (c *Controller) processNextItem() bool {
-	// Wait until there is a new item in the working queue
-	key, quit := c.queue.Get()
-	if quit {
+	// Wait until there is a new item in the working queue.
+	// `shutdown` is true if `ShutDown()` was called on the queue as in `Controller::Run()`.
+	key, shutdown := c.queue.Get()
+	if shutdown {
 		return false
 	}
 	// Tell the queue that we are done with processing this key. This unblocks the key for other workers
