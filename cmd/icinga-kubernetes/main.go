@@ -152,22 +152,26 @@ func main() {
 	flag.StringVar(&master, "master", "", "master url")
 	flag.Parse()
 
-	// creates the connection
+	// creates the connection config
 	config, err := clientcmd.BuildConfigFromFlags(master, kubeconfig)
 	if err != nil {
 		klog.Fatal(err)
 	}
 
-	// creates the clientset
+	// creates the clientset for accessing the various Kubernetes API groups and resources
+	// https://kubernetes.io/docs/concepts/overview/kubernetes-api/#api-groups-and-versioning
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		klog.Fatal(err)
 	}
 
-	// create the pod watcher
+	// create the pod watcher to track changes to pods, i.e.create, delete and update operations
+	// https://kubernetes.io/docs/reference/using-api/api-concepts/#efficient-detection-of-changes
 	podListWatcher := cache.NewListWatchFromClient(clientset.CoreV1().RESTClient(), "pods", v1.NamespaceDefault, fields.Everything())
 
-	// create the workqueue
+	// create the workqueue which in the current state of the code contains
+	// only a sequence of keys of the pods for which an operation was made,
+	// regardless of whether they were created, updated or deleted
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
 	// Bind the workqueue to a cache with the help of an informer. This way we make sure that
