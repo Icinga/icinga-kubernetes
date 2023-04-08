@@ -20,7 +20,9 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/go-sql-driver/mysql"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/icinga/icinga-kubernetes/pkg/database"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
 	"github.com/jmoiron/sqlx"
 	v1 "k8s.io/api/core/v1"
@@ -32,6 +34,11 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
+	"log"
+	"net"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -93,6 +100,11 @@ func (c *Controller) syncToDb(key string) error {
 		fmt.Printf("Pod %s does not exist anymore\n", key)
 
 		// TODO: Issue DELETE statement.
+		name := strings.TrimPrefix(key, v1.NamespaceDefault+"/")
+		_, err := c.db.Exec(`DELETE FROM pod WHERE name=?`, name)
+		if err != nil {
+			return err
+		}
 	} else {
 		fmt.Printf("Sync/Add/Update for Pod %s\n", obj.(*v1.Pod).GetName())
 
@@ -106,9 +118,9 @@ func (c *Controller) syncToDb(key string) error {
 		if err != nil {
 			return err
 		}
-		stmt := `INSERT INTO pod (name)
-VALUES (:name)
-ON DUPLICATE KEY UPDATE name = VALUES(NAME)`
+		stmt := `INSERT INTO pod (name, namespace, uid, phase)
+VALUES (:name, :namespace, :uid, :phase)
+ON DUPLICATE KEY UPDATE name = VALUES(name), namespace = VALUES(namespace), uid = VALUES(uid), phase = VALUES(phase)`
 		fmt.Printf("%+v\n", pod)
 		_, err = c.db.NamedExecContext(context.TODO(), stmt, pod)
 		if err != nil {
@@ -180,9 +192,18 @@ func (c *Controller) runWorker() {
 func main() {
 	var kubeconfig string
 	var master string
+	var dbConfig string
 
-	flag.StringVar(&kubeconfig, "kubeconfig", "", "absolute path to the kubeconfig file")
+	userHomeDir, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Printf("error getting user home dir: %v\n", err)
+		os.Exit(1)
+	}
+	kubeConfigPath := filepath.Join(userHomeDir, ".kube", "config")
+	dbConfig = "../../config.yml" //??
+	flag.StringVar(&kubeconfig, "kubeconfig", kubeConfigPath, "absolute path to the kubeconfig file")
 	flag.StringVar(&master, "master", "", "master url")
+	flag.StringVar(&dbConfig, "dbConfig", dbConfig, "path to database config file")
 	flag.Parse()
 
 	// creates the connection config
@@ -245,8 +266,23 @@ func main() {
 		},
 	}, cache.Indexers{})
 
-	// TODO: Create database from a YAML configuration file.
-	db, err := sqlx.Open("mysql", "/kubernetes")
+	// TODO: Create database from a YAML configuration file.*/*/
+	d, err := database.FromYAMLFile(dbConfig)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	dsn := mysql.Config{
+		User:                 d.Database.User,
+		Passwd:               d.Database.Password,
+		Net:                  "tcp",
+		Addr:                 net.JoinHostPort(d.Database.Host, fmt.Sprint(3306)),
+		DBName:               d.Database.Database,
+		AllowNativePasswords: true,
+		Params:               map[string]string{"sql_mode": "ANSI_QUOTES"},
+	}
+
+	db, err := sqlx.Open("mysql", dsn.FormatDSN())
 	if err != nil {
 		klog.Fatal(err)
 	}
@@ -260,7 +296,20 @@ func main() {
 	// where the key has the format namespace/name.
 	// This way we only need to load minimal information from the database,
 	// and this applies to all resource types, not just pods.
-	indexer.Add(cache.ExplicitKey(v1.NamespaceDefault + "/" + "fake-pod"))
+	stmt, err := db.Query(`SELECT name from pod`)
+	if err != nil {
+		klog.Fatal(err)
+	}
+	defer stmt.Close()
+
+	for stmt.Next() {
+		var pod v1.Pod
+		err := stmt.Scan(&pod.Name)
+		if err != nil {
+			log.Fatal(err)
+		}
+		indexer.Add(cache.ExplicitKey(v1.NamespaceDefault + "/" + pod.GetName()))
+	}
 
 	// Now let's start the controller
 	stop := make(chan struct{})
