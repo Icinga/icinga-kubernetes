@@ -200,10 +200,9 @@ func main() {
 		os.Exit(1)
 	}
 	kubeConfigPath := filepath.Join(userHomeDir, ".kube", "config")
-	dbConfig = "../../config.yml" //??
 	flag.StringVar(&kubeconfig, "kubeconfig", kubeConfigPath, "absolute path to the kubeconfig file")
 	flag.StringVar(&master, "master", "", "master url")
-	flag.StringVar(&dbConfig, "dbConfig", dbConfig, "path to database config file")
+	flag.StringVar(&dbConfig, "dbConfig", "./config.yml", "path to database config file")
 	flag.Parse()
 
 	// creates the connection config
