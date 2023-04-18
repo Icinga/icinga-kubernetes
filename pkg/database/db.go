@@ -6,19 +6,6 @@ import (
 	"os"
 )
 
-type Database struct {
-	Type     string `yaml:"type"`
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	Database string `yaml:"database"`
-	User     string `yaml:"user"`
-	Password string `yaml:"password"`
-}
-
-type Config struct {
-	Database Database `yaml:"database"`
-}
-
 func FromYAMLFile(file string) (*Config, error) {
 	f, err := os.Open(file)
 	if err != nil {
@@ -26,7 +13,9 @@ func FromYAMLFile(file string) (*Config, error) {
 	}
 	defer f.Close()
 
-	c := &Config{}
+	c := &struct {
+		Database Config `yaml:"database"`
+	}{}
 	decoder := yaml.NewDecoder(f)
 	if err := decoder.Decode(c); err != nil {
 		return nil, errors.Wrap(err, "can't parse YAML file "+file)
@@ -36,11 +25,5 @@ func FromYAMLFile(file string) (*Config, error) {
 		return nil, errors.Wrap(err, "invalid configuration")
 	}
 
-	return c, nil
-}
-
-func (d *Database) Validate() error {
-	// Validate config
-
-	return nil
+	return &c.Database, nil
 }

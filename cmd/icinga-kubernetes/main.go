@@ -272,11 +272,11 @@ func main() {
 	}
 
 	dsn := mysql.Config{
-		User:                 d.Database.User,
-		Passwd:               d.Database.Password,
+		User:                 d.User,
+		Passwd:               d.Password,
 		Net:                  "tcp",
-		Addr:                 net.JoinHostPort(d.Database.Host, fmt.Sprint(3306)),
-		DBName:               d.Database.Database,
+		Addr:                 net.JoinHostPort(d.Host, fmt.Sprint(3306)),
+		DBName:               d.Database,
 		AllowNativePasswords: true,
 		Params:               map[string]string{"sql_mode": "ANSI_QUOTES"},
 	}
