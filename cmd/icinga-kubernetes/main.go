@@ -126,6 +126,20 @@ ON DUPLICATE KEY UPDATE name = VALUES(name), namespace = VALUES(namespace), uid 
 		if err != nil {
 			return err
 		}
+
+		// TODO: Pass clientset to controller
+		k8sPod := obj.(*v1.Pod)
+		// TODO: Loop over pod conatiners:
+		for _, container := ... {
+			req := clientset.CoreV1().Pods(k8sPod.Namespace).GetLogs(k8sPod.Name, &v1.PodLogOptions{Container: container.Name})
+			response := req.Do(context.TODO())
+			raw, err := response.Raw()
+			if err != nil {
+				return err
+			}
+			logs := string(raw)
+			// TODO: Update logs in database via INSERT INTO ... ON DUPLICATE KEY. Add table for logs, i.e. container_logs.
+		}
 	}
 
 	return nil

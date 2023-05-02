@@ -5,3 +5,8 @@ CREATE TABLE pod (
   phase varchar(63) NOT NULL,
   PRIMARY KEY(name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE container_logs (
+  name varchar(63) NOT NULL,
+  logs ... (binary) NOT NULL,
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
