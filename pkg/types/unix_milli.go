@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding"
+	"encoding/binary"
 	"encoding/json"
-	"github.com/pkg/errors"
 	"strconv"
 	"time"
 )
@@ -63,10 +63,11 @@ func (t *UnixMilli) Scan(src interface{}) error {
 		return nil
 	}
 
-	v, ok := src.(int64)
-	if !ok {
-		return errors.Errorf("bad int64 type assertion from %#v", src)
-	}
+	// v, ok := src.(int64)
+	// if !ok {
+	// 	return errors.Errorf("bad int64 type assertion from %#v", src)
+	// }
+	v := int64(binary.BigEndian.Uint64(src.([]byte)))
 	tt := FromUnixMilli(v)
 	*t = UnixMilli(tt)
 
