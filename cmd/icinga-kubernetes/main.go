@@ -25,6 +25,7 @@ import (
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
 	"github.com/jmoiron/sqlx"
+	"io"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/runtime"
@@ -38,25 +39,54 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
+func createClientSet() (*kubernetes.Clientset, error) {
+	var kubeconfig string
+	var master string
+
+	userHomeDir, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Printf("error getting user home dir: %v\n", err)
+		os.Exit(1)
+	}
+	kubeConfigPath := filepath.Join(userHomeDir, ".kube", "config")
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	flag.StringVar(&kubeconfig, "kubeconfig", kubeConfigPath, "absolute path to the kubeconfig file")
+	flag.StringVar(&master, "master", "", "master url")
+	flag.Parse()
+
+	config, err := clientcmd.BuildConfigFromFlags(master, kubeconfig)
+	if err != nil {
+		klog.Fatal(err)
+	}
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		klog.Fatal(err)
+	}
+
+	return clientset, nil
+}
+
 // Controller demonstrates how to implement a controller with client-go.
 type Controller struct {
-	indexer  cache.Indexer
-	queue    workqueue.RateLimitingInterface
-	informer cache.Controller
-	db       *sqlx.DB
+	indexer   cache.Indexer
+	queue     workqueue.RateLimitingInterface
+	informer  cache.Controller
+	db        *sqlx.DB
+	clientset *kubernetes.Clientset
 }
 
 // NewController creates a new Controller.
-func NewController(queue workqueue.RateLimitingInterface, indexer cache.Indexer, informer cache.Controller, db *sqlx.DB) *Controller {
+func NewController(queue workqueue.RateLimitingInterface, indexer cache.Indexer, informer cache.Controller, db *sqlx.DB, clientset *kubernetes.Clientset) *Controller {
 	return &Controller{
-		informer: informer,
-		indexer:  indexer,
-		queue:    queue,
-		db:       db,
+		informer:  informer,
+		indexer:   indexer,
+		queue:     queue,
+		db:        db,
+		clientset: clientset,
 	}
 }
 
@@ -99,9 +129,16 @@ func (c *Controller) syncToDb(key string) error {
 	if !exists {
 		fmt.Printf("Pod %s does not exist anymore\n", key)
 
-		// TODO: Issue DELETE statement.
-		name := strings.TrimPrefix(key, v1.NamespaceDefault+"/")
-		_, err := c.db.Exec(`DELETE FROM pod WHERE name=?`, name)
+		namespace, name, err := cache.SplitMetaNamespaceKey(key)
+		if err != nil {
+			return err
+		}
+		_, err = c.db.Exec(`DELETE FROM pod WHERE namespace=? AND name=?`, namespace, name)
+		if err != nil {
+			return err
+		}
+
+		_, err = c.db.Exec(`DELETE FROM container_logs WHERE namespace=? AND pod_name=?`, namespace, name)
 		if err != nil {
 			return err
 		}
@@ -126,8 +163,43 @@ ON DUPLICATE KEY UPDATE name = VALUES(name), namespace = VALUES(namespace), uid 
 		if err != nil {
 			return err
 		}
+
+		k8sPod := obj.(*v1.Pod)
+		// TODO: Loop over pod containers:
+		for _, container := range k8sPod.Spec.Containers {
+			c.syncContainerLogs(k8sPod, container)
+		}
 	}
 
+	return nil
+}
+
+func (c *Controller) syncContainerLogs(pod *v1.Pod, container v1.Container) error {
+	req := c.clientset.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, &v1.PodLogOptions{Container: container.Name})
+	body, err := req.Stream(context.TODO())
+	if err != nil {
+		return err
+	}
+	defer body.Close()
+	logs, err := io.ReadAll(body)
+	if err != nil {
+		return err
+	}
+	containerLog := schemav1.ContainerLog{
+		ContainerName: container.Name,
+		PodName:       pod.Name,
+		Namespace:     pod.Namespace,
+		Logs:          string(logs),
+	}
+	// TODO: Update logs in database via INSERT INTO ... ON DUPLICATE KEY. Add table for logs, i.e. container_logs.
+	stmt := `INSERT INTO container_logs (namespace, pod_name, container_name, logs)
+VALUES (:namespace, :pod_name, :container_name, :logs)
+ON DUPLICATE KEY UPDATE namespace = VALUES(namespace), pod_name = VALUES(pod_name), 
+                        container_name = VALUES(container_name), logs = VALUES(logs)`
+	_, err = c.db.NamedExecContext(context.TODO(), stmt, containerLog)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -190,37 +262,15 @@ func (c *Controller) runWorker() {
 }
 
 func main() {
-	var kubeconfig string
-	var master string
 	var dbConfig string
-
-	userHomeDir, err := os.UserHomeDir()
-	if err != nil {
-		fmt.Printf("error getting user home dir: %v\n", err)
-		os.Exit(1)
-	}
-	kubeConfigPath := filepath.Join(userHomeDir, ".kube", "config")
-	flag.StringVar(&kubeconfig, "kubeconfig", kubeConfigPath, "absolute path to the kubeconfig file")
-	flag.StringVar(&master, "master", "", "master url")
 	flag.StringVar(&dbConfig, "dbConfig", "./config.yml", "path to database config file")
 	flag.Parse()
 
-	// creates the connection config
-	config, err := clientcmd.BuildConfigFromFlags(master, kubeconfig)
-	if err != nil {
-		klog.Fatal(err)
-	}
-
-	// creates the clientset for accessing the various Kubernetes API groups and resources
-	// https://kubernetes.io/docs/concepts/overview/kubernetes-api/#api-groups-and-versioning
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		klog.Fatal(err)
-	}
+	clientset, _ := createClientSet()
 
 	// create the pod watcher to track changes to pods, i.e.create, delete and update operations
 	// https://kubernetes.io/docs/reference/using-api/api-concepts/#efficient-detection-of-changes
-	podListWatcher := cache.NewListWatchFromClient(clientset.CoreV1().RESTClient(), "pods", v1.NamespaceDefault, fields.Everything())
+	podListWatcher := cache.NewListWatchFromClient(clientset.CoreV1().RESTClient(), "pods", "", fields.Everything())
 
 	// create the workqueue which in the current state of the code contains
 	// only a sequence of keys of the pods for which an operation was made,
@@ -286,7 +336,7 @@ func main() {
 		klog.Fatal(err)
 	}
 
-	controller := NewController(queue, indexer, informer, db)
+	controller := NewController(queue, indexer, informer, db, clientset)
 
 	// TODO: Warm up the cache for initial synchronization.
 	// Pods that have been already persisted to database must be added to the cache.
@@ -295,7 +345,7 @@ func main() {
 	// where the key has the format namespace/name.
 	// This way we only need to load minimal information from the database,
 	// and this applies to all resource types, not just pods.
-	stmt, err := db.Query(`SELECT name from pod`)
+	stmt, err := db.Queryx(`SELECT namespace, name from pod`)
 	if err != nil {
 		klog.Fatal(err)
 	}
@@ -303,11 +353,11 @@ func main() {
 
 	for stmt.Next() {
 		var pod v1.Pod
-		err := stmt.Scan(&pod.Name)
+		err := stmt.StructScan(&pod)
 		if err != nil {
 			log.Fatal(err)
 		}
-		indexer.Add(cache.ExplicitKey(v1.NamespaceDefault + "/" + pod.GetName()))
+		indexer.Add(cache.ExplicitKey(pod.Namespace + "/" + pod.Name))
 	}
 
 	// Now let's start the controller
