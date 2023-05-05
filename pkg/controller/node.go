@@ -35,14 +35,14 @@ func (n *NodeSync) Sync(key string, obj interface{}, exists bool) error {
 			return err
 		}
 	} else {
-		fmt.Printf("Sync/Add/Update for Node %s\n", obj.(*corev1.Node).GetName())
 		node, err := schemav1.NewNodeFromK8s(obj.(*corev1.Node))
 		if err != nil {
 			return err
 		}
-		stmt := `INSERT INTO node (name, namespace)
-VALUES (:name, :namespace)
-ON DUPLICATE KEY UPDATE name = VALUES(name), namespace = VALUES(namespace)`
+		stmt := `INSERT INTO node (name, namespace, pod_cidr, unschedulable, created, ready)
+VALUES (:name, :namespace, :pod_cidr, :unschedulable, :created, :ready)
+ON DUPLICATE KEY UPDATE name = VALUES(name), namespace = VALUES(namespace), pod_cidr = VALUES(pod_cidr),
+                        unschedulable = VALUES(unschedulable), created = VALUES(created), ready = VALUES(ready)`
 		_, err = n.db.NamedExecContext(context.TODO(), stmt, node)
 		if err != nil {
 			return err

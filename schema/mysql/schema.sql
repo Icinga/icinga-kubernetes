@@ -17,5 +17,9 @@ CREATE TABLE container_logs (
 CREATE TABLE node (
   namespace varchar(63) NOT NULL,
   name varchar(63) NOT NULL,
+  pod_cidr varchar(63) NOT NULL,
+  unschedulable enum('n', 'y') NOT NULL,
+  created bigint unsigned NOT NULL,
+  ready enum('n', 'y') NOT NULL,
   PRIMARY KEY (namespace, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
