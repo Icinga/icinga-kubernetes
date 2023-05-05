@@ -19,6 +19,11 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
+	"net"
+	"os"
+	"path/filepath"
+
 	"github.com/go-sql-driver/mysql"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/icinga/icinga-kubernetes/pkg/controller"
@@ -28,10 +33,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
-	"log"
-	"net"
-	"os"
-	"path/filepath"
 )
 
 func createClientSet() (*kubernetes.Clientset, error) {
@@ -108,6 +109,14 @@ func main() {
 	nodeSync.WarmUp(nodeInformer.GetIndexer())
 	{
 		c := controller.NewController(nodeInformer, nodeSync.Sync)
+		go c.Run(1, stop)
+	}
+
+	deploymentInformer := factory.Apps().V1().Deployments().Informer()
+	deploymentSync := controller.NewDeploymentSync(db)
+	deploymentSync.WarmUp(deploymentInformer.GetIndexer())
+	{
+		c := controller.NewController(deploymentInformer, deploymentSync.Sync)
 		go c.Run(1, stop)
 	}
 
