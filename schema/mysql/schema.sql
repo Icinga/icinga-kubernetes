@@ -13,3 +13,9 @@ CREATE TABLE container_logs (
   logs mediumblob NOT NULL,
   PRIMARY KEY (namespace, pod_name, container_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE node (
+  namespace varchar(63) NOT NULL,
+  name varchar(63) NOT NULL,
+  PRIMARY KEY (namespace, name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
