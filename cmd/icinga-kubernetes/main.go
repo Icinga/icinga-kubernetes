@@ -120,6 +120,14 @@ func main() {
 		go c.Run(1, stop)
 	}
 
+	replicaSetInformer := factory.Apps().V1().ReplicaSets().Informer()
+	replicaSetSync := controller.NewReplicaSetSync(db)
+	replicaSetSync.WarmUp(replicaSetInformer.GetIndexer())
+	{
+		c := controller.NewController(replicaSetInformer, replicaSetSync.Sync)
+		go c.Run(1, stop)
+	}
+
 	// Wait forever
 	select {}
 }
