@@ -60,3 +60,17 @@ CREATE TABLE service (
   created bigint unsigned NOT NULL,
   PRIMARY KEY (namespace, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE daemon_set (
+  namespace varchar(63) NOT NULL,
+  name varchar(63) NOT NULL,
+  uid varchar(63) NOT NULL,
+  min_ready_seconds int NOT NULL,
+  current_number_scheduled int NOT NULL,
+  number_misscheduled int NOT NULL,
+  desired_number_scheduled int NOT NULL,
+  number_ready int NOT NULL,
+  collision_count int NOT NULL,
+  created bigint unsigned NOT NULL,
+  PRIMARY KEY (namespace, name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;

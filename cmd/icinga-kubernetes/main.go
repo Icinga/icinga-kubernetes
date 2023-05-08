@@ -136,6 +136,14 @@ func main() {
 		go c.Run(1, stop)
 	}
 
+	daemonSetInformer := factory.Apps().V1().DaemonSets().Informer()
+	daemonSetSync := controller.NewDaemonSetSync(db)
+	daemonSetSync.WarmUp(daemonSetInformer.GetIndexer())
+	{
+		c := controller.NewController(daemonSetInformer, daemonSetSync.Sync)
+		go c.Run(1, stop)
+	}
+
 	// Wait forever
 	select {}
 }
