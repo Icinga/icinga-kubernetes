@@ -37,3 +37,16 @@ CREATE TABLE deployment (
   collision_count int NOT NULL,
   PRIMARY KEY (namespace, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE replica_set (
+   namespace varchar(63) NOT NULL,
+   name varchar(63) NOT NULL,
+   desired_replicas int NOT NULL,
+   actual_replicas int NOT NULL,
+   min_ready_seconds int NOT NULL,
+   fully_labeled_replicas int NOT NULL,
+   ready_replicas int NOT NULL,
+   available_replicas int NOT NULL,
+   created bigint unsigned NOT NULL,
+   PRIMARY KEY (namespace, name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
