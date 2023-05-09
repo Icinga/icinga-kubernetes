@@ -74,3 +74,19 @@ CREATE TABLE daemon_set (
   created bigint unsigned NOT NULL,
   PRIMARY KEY (namespace, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE stateful_set (
+  namespace varchar(63) NOT NULL,
+  name varchar(63) NOT NULL,
+  uid varchar(63) NOT NULL,
+  replicas int NOT NULL,
+  service_name varchar(63) NOT NULL,
+  ready_replicas int NOT NULL,
+  current_replicas int NOT NULL,
+  updated_replicas int NOT NULL,
+  available_replicas int NOT NULL,
+  current_revision varchar(63) NOT NULL,
+  update_revision varchar(63) NOT NULL,
+  collision_count int NOT NULL,
+  PRIMARY KEY (namespace, name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;

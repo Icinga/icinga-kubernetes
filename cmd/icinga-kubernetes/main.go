@@ -144,6 +144,14 @@ func main() {
 		go c.Run(1, stop)
 	}
 
+	statefulSetInformer := factory.Apps().V1().StatefulSets().Informer()
+	statefulSetSync := controller.NewStatefulSetSync(db)
+	statefulSetSync.WarmUp(statefulSetInformer.GetIndexer())
+	{
+		c := controller.NewController(statefulSetInformer, statefulSetSync.Sync)
+		go c.Run(1, stop)
+	}
+
 	// Wait forever
 	select {}
 }
