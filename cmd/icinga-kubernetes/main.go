@@ -128,6 +128,14 @@ func main() {
 		go c.Run(1, stop)
 	}
 
+	serviceInformer := factory.Core().V1().Services().Informer()
+	serviceSync := controller.NewServiceSync(db)
+	serviceSync.WarmUp(serviceInformer.GetIndexer())
+	{
+		c := controller.NewController(serviceInformer, serviceSync.Sync)
+		go c.Run(1, stop)
+	}
+
 	// Wait forever
 	select {}
 }
