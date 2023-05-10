@@ -5,18 +5,18 @@ import (
 )
 
 type StatefulSet struct {
-	Name              string
-	Namespace         string
-	UID               string
-	Replicas          int32
-	ServiceName       string
-	ReadyReplicas     int32
-	CurrentReplicas   int32
-	UpdatedReplicas   int32
-	AvailableReplicas int32
-	CurrentRevision   string
-	UpdateRevision    string
-	CollisionCount    int32
+	Name              string `db:"name"`
+	Namespace         string `db:"namespace"`
+	UID               string `db:"uid"`
+	Replicas          int32  `db:"replicas"`
+	ServiceName       string `db:"service_name"`
+	ReadyReplicas     int32  `db:"ready_replicas"`
+	CurrentReplicas   int32  `db:"current_replicas"`
+	UpdatedReplicas   int32  `db:"updated_replicas"`
+	AvailableReplicas int32  `db:"available_replicas"`
+	CurrentRevision   string `db:"current_revision"`
+	UpdateRevision    string `db:"update_revision"`
+	CollisionCount    int32  `db:"collision_count"`
 }
 
 func NewStatefulSetFromK8s(obj *appv1.StatefulSet) StatefulSet {
