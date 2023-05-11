@@ -106,3 +106,16 @@ CREATE TABLE event (
   reference varchar(63) NOT NULL,
   PRIMARY KEY (namespace, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE pod_metrics (
+  namespace varchar(63) NOT NULL,
+  pod_name varchar(63) NOT NULL,
+  container_name varchar(63) NOT NULL,
+  timestamp bigint unsigned NOT NULL,
+  duration bigint unsigned NOT NULL,
+  cpu_usage float NOT NULL,
+  memory_usage float NOT NULL,
+  storage_usage float NOT NULL,
+  ephemeral_storage_usage float NOT NULL,
+  PRIMARY KEY (namespace, pod_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
