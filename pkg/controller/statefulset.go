@@ -34,6 +34,8 @@ ON DUPLICATE KEY UPDATE name = VALUES(name), namespace = VALUES(namespace), uid 
 		if err != nil {
 			return err
 		}
+
+		return nil
 	}
 
 	fmt.Printf("Stateful Set %s does not exist anymore\n", key)
