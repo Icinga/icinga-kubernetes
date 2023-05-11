@@ -17,12 +17,14 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
 	"net"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/go-sql-driver/mysql"
 	_ "github.com/go-sql-driver/mysql"
@@ -106,6 +108,7 @@ func main() {
 	podSync := controller.NewPodSync(clientset, metricsClientset, db)
 	podSync.WarmUp(podInformer.GetIndexer())
 	{
+		go podSync.SyncMetrics(context.TODO(), 1*time.Minute)
 		c := controller.NewController(podInformer, podSync.Sync)
 		go c.Run(1, stop)
 	}

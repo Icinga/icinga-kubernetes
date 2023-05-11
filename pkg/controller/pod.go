@@ -16,12 +16,16 @@ import (
 	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
 	"log"
+	"sync"
+	"time"
 )
 
 type PodSync struct {
 	clientset        *kubernetes.Clientset
 	metricsClientset *metricsv.Clientset
 	db               *sqlx.DB
+	knownPods        map[string]*schemav1.Pod
+	mu               sync.Mutex
 }
 
 func NewPodSync(clientset *kubernetes.Clientset, metricsClientset *metricsv.Clientset, db *sqlx.DB) *PodSync {
@@ -29,40 +33,54 @@ func NewPodSync(clientset *kubernetes.Clientset, metricsClientset *metricsv.Clie
 		clientset:        clientset,
 		metricsClientset: metricsClientset,
 		db:               db,
+		knownPods:        make(map[string]*schemav1.Pod),
 	}
 }
 
-func (p *PodSync) GetPodMetrics(pod *corev1.Pod) (float64, float64, float64, float64, error) {
+func (p *PodSync) SyncMetrics(ctx context.Context, interval time.Duration) error {
+	for {
+		p.mu.Lock()
+		for _, pod := range p.knownPods {
+			podMetrics, _ := p.metricsClientset.MetricsV1beta1().PodMetricses(pod.Namespace).Get(context.TODO(), pod.Name,
+				metav1.GetOptions{})
+			for _, container := range podMetrics.Containers {
+				if err := p.syncPodMetrics(pod, container); err != nil {
+					return err
+				}
+			}
+		}
+
+		p.mu.Unlock()
+		time.Sleep(interval)
+	}
+}
+
+func (p *PodSync) GetPodMetrics(pod *schemav1.Pod) (cpu float64, memory float64, storage float64, estorage float64, err error) {
 	podMetrics, err := p.metricsClientset.MetricsV1beta1().PodMetricses(pod.Namespace).Get(context.TODO(), pod.Name,
 		metav1.GetOptions{})
 	if err != nil {
-		return 0, 0, 0, 0, err
+		return
 	}
-
-	cpuUsage := float64(0)
-	memoryUsage := float64(0)
-	storageUsage := float64(0)
-	ephemeralStorageUsage := float64(0)
 
 	for _, container := range podMetrics.Containers {
-		cpuUsageValue := container.Usage[corev1.ResourceCPU]
-		cpuUsageInt64 := cpuUsageValue.AsDec().UnscaledBig().Int64()
-		cpuUsage = float64(cpuUsageInt64) / 1000.0
+		cpuValue := container.Usage[corev1.ResourceCPU]
+		cpuInt64 := cpuValue.AsDec().UnscaledBig().Int64()
+		cpu = float64(cpuInt64) / 1000.0
 
-		memoryUsageValue := container.Usage[corev1.ResourceMemory]
-		memoryUsageInt64 := memoryUsageValue.Value()
-		memoryUsage = float64(memoryUsageInt64) / (1024 * 1024)
+		memoryValue := container.Usage[corev1.ResourceMemory]
+		memoryInt64 := memoryValue.Value()
+		memory = float64(memoryInt64) / (1024 * 1024)
 
-		storageUsageValue := container.Usage[corev1.ResourceStorage]
-		storageUsageInt64 := storageUsageValue.Value()
-		storageUsage = float64(storageUsageInt64) / (1024 * 1024)
+		storageValue := container.Usage[corev1.ResourceStorage]
+		storageInt64 := storageValue.Value()
+		storage = float64(storageInt64) / (1024 * 1024)
 
-		ephemeralStorageUsageValue := container.Usage[corev1.ResourceEphemeralStorage]
-		ephemeralStorageUsageInt64 := ephemeralStorageUsageValue.Value()
-		ephemeralStorageUsage = float64(ephemeralStorageUsageInt64) / (1024 * 1024)
+		estorageValue := container.Usage[corev1.ResourceEphemeralStorage]
+		estorageInt64 := estorageValue.Value()
+		estorage = float64(estorageInt64) / (1024 * 1024)
 	}
 
-	return cpuUsage, memoryUsage, storageUsage, ephemeralStorageUsage, nil
+	return
 }
 
 func (p *PodSync) Sync(key string, obj interface{}, exists bool) error {
@@ -73,6 +91,11 @@ func (p *PodSync) Sync(key string, obj interface{}, exists bool) error {
 		if err != nil {
 			return err
 		}
+
+		p.mu.Lock()
+		delete(p.knownPods, key)
+		p.mu.Unlock()
+
 		_, err = p.db.Exec(`DELETE FROM pod WHERE namespace=? AND name=?`, namespace, name)
 		if err != nil {
 			return err
@@ -93,6 +116,11 @@ func (p *PodSync) Sync(key string, obj interface{}, exists bool) error {
 		if err != nil {
 			return err
 		}
+
+		p.mu.Lock()
+		p.knownPods[key] = pod
+		p.mu.Unlock()
+
 		stmt := `INSERT INTO pod (name, namespace, uid, phase)
 VALUES (:name, :namespace, :uid, :phase)
 ON DUPLICATE KEY UPDATE name = VALUES(name), namespace = VALUES(namespace), uid = VALUES(uid), phase = VALUES(phase)`
@@ -106,14 +134,6 @@ ON DUPLICATE KEY UPDATE name = VALUES(name), namespace = VALUES(namespace), uid 
 		// TODO: Loop over pod containers:
 		for _, container := range k8sPod.Spec.Containers {
 			if err := p.syncContainerLogs(k8sPod, container); err != nil {
-				return err
-			}
-		}
-
-		podMetrics, err := p.metricsClientset.MetricsV1beta1().PodMetricses(pod.Namespace).Get(context.TODO(), pod.Name,
-			metav1.GetOptions{})
-		for _, container := range podMetrics.Containers {
-			if err := p.syncPodMetrics(k8sPod, container); err != nil {
 				return err
 			}
 		}
@@ -152,7 +172,7 @@ ON DUPLICATE KEY UPDATE namespace = VALUES(namespace), pod_name = VALUES(pod_nam
 	return nil
 }
 
-func (p *PodSync) syncPodMetrics(pod *corev1.Pod, containerMetrics v1beta1.ContainerMetrics) error {
+func (p *PodSync) syncPodMetrics(pod *schemav1.Pod, containerMetrics v1beta1.ContainerMetrics) error {
 	metrics, err := p.metricsClientset.MetricsV1beta1().PodMetricses(pod.Namespace).Get(context.TODO(), pod.Name,
 		metav1.GetOptions{})
 	if err != nil {
