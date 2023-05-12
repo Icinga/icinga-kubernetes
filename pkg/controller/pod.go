@@ -16,6 +16,7 @@ import (
 	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
 	"log"
+	"reflect"
 	"sync"
 	"time"
 )
@@ -110,6 +111,16 @@ func (p *PodSync) Sync(key string, obj interface{}, exists bool) error {
 		if err != nil {
 			return err
 		}
+
+		_, err = p.db.Exec(`DELETE FROM volumes WHERE namespace=? AND pod_name=?`, namespace, name)
+		if err != nil {
+			return err
+		}
+
+		_, err = p.db.Exec(`DELETE FROM pod_pvc WHERE namespace=? AND pod_name=?`, namespace, name)
+		if err != nil {
+			return err
+		}
 	} else {
 		fmt.Printf("Sync/Add/Update for Pod %s\n", obj.(*corev1.Pod).GetName())
 		pod, err := schemav1.NewPodFromK8s(obj.(*corev1.Pod))
@@ -137,6 +148,61 @@ ON DUPLICATE KEY UPDATE name = VALUES(name), namespace = VALUES(namespace), uid 
 				return err
 			}
 		}
+
+		if err := p.syncPodVolumes(k8sPod); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (p *PodSync) syncPodVolumes(pod *corev1.Pod) error {
+	for _, volume := range pod.Spec.Volumes {
+		if volume.PersistentVolumeClaim != nil {
+			podPvc := schemav1.PodPvc{
+				Namespace: pod.Namespace,
+				PodName:   pod.Name,
+				ClaimName: volume.PersistentVolumeClaim.ClaimName,
+				ReadOnly:  volume.PersistentVolumeClaim.ReadOnly,
+			}
+			stmt := `INSERT INTO pod_pvc (namespace, pod_name, claim_name, read_only)
+VALUES (:namespace, :pod_name, :claim_name, :read_only)
+ON DUPLICATE KEY UPDATE namespace = VALUES(namespace), pod_name = VALUES(pod_name), claim_name = VALUES(claim_name), read_only = VALUES(read_only)`
+			_, err := p.db.NamedExecContext(context.TODO(), stmt, podPvc)
+			if err != nil {
+				return err
+			}
+		} else {
+			err := p.insertPodVolume(pod, volume)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (p *PodSync) insertPodVolume(pod *corev1.Pod, vol corev1.Volume) error {
+	t, source, err := MarshalFirstNonNilStructFieldToJSON(vol.VolumeSource)
+	if err != nil {
+		return err
+	}
+
+	volume := schemav1.Volumes{
+		Namespace:    pod.Namespace,
+		PodName:      pod.Name,
+		Name:         vol.Name,
+		Type:         t,
+		VolumeSource: source,
+	}
+
+	stmt := `INSERT INTO volumes (namespace, pod_name, name, type, volume_source)
+VALUES (:namespace, :pod_name, :name, :type, :volume_source)
+ON DUPLICATE KEY UPDATE namespace = VALUES(namespace), pod_name = VALUES(pod_name), NAME = VALUES(NAME), TYPE = VALUES(TYPE), volume_source = VALUES(volume_source)`
+	_, err = p.db.NamedExecContext(context.TODO(), stmt, volume)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -204,8 +270,35 @@ func (p *PodSync) syncPodMetrics(pod *schemav1.Pod, containerMetrics v1beta1.Con
 	return nil
 }
 
+func (p *PodSync) syncPodPersistentVolumeClaim(pod *corev1.Pod, vol corev1.Volume) error {
+	for _, volume := range pod.Spec.Volumes {
+		if volume.PersistentVolumeClaim != nil {
+			podPvc := schemav1.PodPvc{
+				Namespace: pod.Namespace,
+				PodName:   pod.Name,
+				ClaimName: volume.PersistentVolumeClaim.ClaimName,
+				ReadOnly:  volume.PersistentVolumeClaim.ReadOnly,
+			}
+			stmt := `INSERT INTO pod_pvc (namespace, pod_name, claim_name, read_only)
+VALUES (:namespace, :pod_name, :claim_name, :read_only)
+ON DUPLICATE KEY UPDATE namespace = VALUES(namespace), pod_name = VALUES(pod_name), claim_name = VALUES(claim_name), read_only = VALUES(read_only)`
+			_, err := p.db.NamedExecContext(context.TODO(), stmt, podPvc)
+			if err != nil {
+				return err
+			}
+		} else {
+			err := p.syncPodVolumes(pod)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 func (p *PodSync) WarmUp(indexer cache.Indexer) {
-	stmt, err := p.db.Queryx(`SELECT namespace, name from pod`)
+	stmt, err := p.db.Queryx(`SELECT namespace, name FROM pod`)
 	if err != nil {
 		klog.Fatal(err)
 	}
@@ -222,4 +315,21 @@ func (p *PodSync) WarmUp(indexer cache.Indexer) {
 			Namespace: pod.Namespace,
 		})
 	}
+}
+
+func MarshalFirstNonNilStructFieldToJSON(i any) (string, string, error) {
+	v := reflect.ValueOf(i)
+	for _, field := range reflect.VisibleFields(v.Type()) {
+		if v.FieldByIndex(field.Index).IsNil() {
+			continue
+		}
+		jsn, err := types.MarshalJSON(v.FieldByIndex(field.Index).Interface())
+		if err != nil {
+			return "", "", err
+		}
+
+		return field.Name, string(jsn), nil
+	}
+
+	return "", "", nil
 }
