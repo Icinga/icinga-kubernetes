@@ -119,3 +119,12 @@ CREATE TABLE pod_metrics (
   ephemeral_storage_usage float NOT NULL,
   PRIMARY KEY (namespace, pod_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE volumes (
+  namespace varchar(63) NOT NULL,
+  pod_name varchar(63) NOT NULL,
+  name varchar(63) NOT NULL,
+  type varchar(255) NOT NULL,
+  volume_source longtext NOT NULL,
+  PRIMARY KEY (namespace, pod_name, name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
