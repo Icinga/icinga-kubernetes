@@ -152,6 +152,14 @@ func main() {
 		go c.Run(1, stop)
 	}
 
+	eventInformer := factory.Events().V1().Events().Informer()
+	eventSync := controller.NewEventSync(db)
+	eventSync.WarmUp(eventInformer.GetIndexer())
+	{
+		c := controller.NewController(eventInformer, eventSync.Sync)
+		go c.Run(1, stop)
+	}
+
 	// Wait forever
 	select {}
 }

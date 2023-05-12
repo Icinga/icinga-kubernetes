@@ -91,3 +91,18 @@ CREATE TABLE stateful_set (
   collision_count int NOT NULL,
   PRIMARY KEY (namespace, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE event (
+  namespace varchar(63) NOT NULL,
+  name varchar(63) NOT NULL,
+  uid varchar(63) NOT NULL,
+  reporting_controller varchar(63) NOT NULL,
+  reporting_instance varchar(63) NOT NULL,
+  action varchar(63) NOT NULL,
+  reason varchar(63) NOT NULL,
+  note varchar(63) NOT NULL,
+  type varchar(63) NOT NULL,
+  reference_kind varchar(63) NOT NULL,
+  reference varchar(63) NOT NULL,
+  PRIMARY KEY (namespace, name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
