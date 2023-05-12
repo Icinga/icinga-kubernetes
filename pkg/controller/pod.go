@@ -121,6 +121,11 @@ func (p *PodSync) Sync(key string, obj interface{}, exists bool) error {
 		if err != nil {
 			return err
 		}
+
+		_, err = p.db.Exec(`DELETE FROM container_volume_mount WHERE namespace=? AND pod_name=?`, namespace, name)
+		if err != nil {
+			return err
+		}
 	} else {
 		fmt.Printf("Sync/Add/Update for Pod %s\n", obj.(*corev1.Pod).GetName())
 		pod, err := schemav1.NewPodFromK8s(obj.(*corev1.Pod))
@@ -144,6 +149,9 @@ ON DUPLICATE KEY UPDATE name = VALUES(name), namespace = VALUES(namespace), uid 
 		k8sPod := obj.(*corev1.Pod)
 		// TODO: Loop over pod containers:
 		for _, container := range k8sPod.Spec.Containers {
+			if err := p.syncContainerVolumes(k8sPod, container); err != nil {
+				return err
+			}
 			if err := p.syncContainerLogs(k8sPod, container); err != nil {
 				return err
 			}
@@ -199,7 +207,7 @@ func (p *PodSync) insertPodVolume(pod *corev1.Pod, vol corev1.Volume) error {
 
 	stmt := `INSERT INTO volumes (namespace, pod_name, name, type, volume_source)
 VALUES (:namespace, :pod_name, :name, :type, :volume_source)
-ON DUPLICATE KEY UPDATE namespace = VALUES(namespace), pod_name = VALUES(pod_name), NAME = VALUES(NAME), TYPE = VALUES(TYPE), volume_source = VALUES(volume_source)`
+ON DUPLICATE KEY UPDATE namespace = VALUES(namespace), pod_name = VALUES(pod_name), name = VALUES(name), type = VALUES(type), volume_source = VALUES(volume_source)`
 	_, err = p.db.NamedExecContext(context.TODO(), stmt, volume)
 	if err != nil {
 		return err
@@ -291,6 +299,29 @@ ON DUPLICATE KEY UPDATE namespace = VALUES(namespace), pod_name = VALUES(pod_nam
 			if err != nil {
 				return err
 			}
+		}
+	}
+
+	return nil
+}
+
+func (p *PodSync) syncContainerVolumes(pod *corev1.Pod, container corev1.Container) error {
+	for _, mount := range container.VolumeMounts {
+		containerVolumeMount := schemav1.ContainerVolumeMount{
+			Namespace: pod.Namespace,
+			PodName:   pod.Name,
+			MountName: mount.Name,
+			ReadOnly:  mount.ReadOnly,
+			MountPath: mount.MountPath,
+			SubPath:   mount.SubPath,
+		}
+		stmt := `INSERT INTO container_volume_mount (namespace, pod_name, mount_name, read_only, mount_path, sub_path)
+VALUES (:namespace, :pod_name, :mount_name, :read_only, :mount_path, :sub_path)
+ON DUPLICATE KEY UPDATE namespace = VALUES(namespace), pod_name = VALUES(pod_name), mount_name = VALUES(mount_name),
+                        read_only = VALUES(read_only), mount_path = VALUES(mount_path), sub_path = VALUES(sub_path)`
+		_, err := p.db.NamedExecContext(context.TODO(), stmt, containerVolumeMount)
+		if err != nil {
+			return err
 		}
 	}
 

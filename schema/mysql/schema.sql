@@ -136,3 +136,13 @@ CREATE TABLE pod_pvc (
   read_only tinyint NOT NULL,
   PRIMARY KEY (namespace, pod_name, claim_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE container_volume_mount (
+  namespace varchar(63) NOT NULL,
+  pod_name varchar(63) NOT NULL,
+  mount_name varchar(63) NOT NULL,
+  read_only varchar(63) NOT NULL,
+  mount_path varchar(63) NOT NULL,
+  sub_path varchar(63) NOT NULL,
+  PRIMARY KEY (namespace, pod_name, mount_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
