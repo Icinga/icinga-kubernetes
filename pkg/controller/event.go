@@ -28,9 +28,9 @@ func (p *EventSync) Sync(key string, obj interface{}, exists bool) error {
 	fmt.Printf("Sync/Add/Update for Event %s\n", obj.(*eventv1.Event).GetName())
 	event := schemav1.NewEventFromK8s(obj.(*eventv1.Event))
 
-	stmt := `INSERT INTO event (name, namespace, uid, reporting_controller, reporting_instance, action, reason, note, type, reference_kind, reference)
-VALUES (:name, :namespace, :uid, :reporting_controller, :reporting_instance, :action, :reason, :note, :type, :reference_kind, :reference)
-ON DUPLICATE KEY UPDATE namespace = VALUES(namespace), name = VALUES(name), uid = VALUES(uid), reporting_controller = VALUES(reporting_controller), reporting_instance = VALUES(reporting_instance), action = VALUES(action), reason = VALUES(reason), note = VALUES(note), type = VALUES(type), reference_kind = VALUES(reference_kind), reference = VALUES(reference)`
+	stmt := `INSERT INTO event (name, namespace, uid, reporting_controller, reporting_instance, action, reason, note, type, created, reference_kind, reference)
+VALUES (:name, :namespace, :uid, :reporting_controller, :reporting_instance, :action, :reason, :note, :type, :created, :reference_kind, :reference)
+ON DUPLICATE KEY UPDATE namespace = VALUES(namespace), name = VALUES(name), uid = VALUES(uid), reporting_controller = VALUES(reporting_controller), reporting_instance = VALUES(reporting_instance), action = VALUES(action), reason = VALUES(reason), note = VALUES(note), type = VALUES(type), created = VALUES(created), reference_kind = VALUES(reference_kind), reference = VALUES(reference)`
 	fmt.Printf("%+v\n", event)
 	_, err := p.db.NamedExecContext(context.TODO(), stmt, event)
 	if err != nil {

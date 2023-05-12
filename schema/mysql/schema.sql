@@ -102,6 +102,7 @@ CREATE TABLE event (
   reason varchar(63) NOT NULL,
   note varchar(63) NOT NULL,
   type varchar(63) NOT NULL,
+  created bigint unsigned NOT NULL,
   reference_kind varchar(63) NOT NULL,
   reference varchar(63) NOT NULL,
   PRIMARY KEY (namespace, name)
