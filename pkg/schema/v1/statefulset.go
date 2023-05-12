@@ -1,22 +1,24 @@
 package v1
 
 import (
+	"github.com/icinga/icinga-kubernetes/pkg/types"
 	appv1 "k8s.io/api/apps/v1"
 )
 
 type StatefulSet struct {
-	Name              string `db:"name"`
-	Namespace         string `db:"namespace"`
-	UID               string `db:"uid"`
-	Replicas          int32  `db:"replicas"`
-	ServiceName       string `db:"service_name"`
-	ReadyReplicas     int32  `db:"ready_replicas"`
-	CurrentReplicas   int32  `db:"current_replicas"`
-	UpdatedReplicas   int32  `db:"updated_replicas"`
-	AvailableReplicas int32  `db:"available_replicas"`
-	CurrentRevision   string `db:"current_revision"`
-	UpdateRevision    string `db:"update_revision"`
-	CollisionCount    int32  `db:"collision_count"`
+	Name              string          `db:"name"`
+	Namespace         string          `db:"namespace"`
+	UID               string          `db:"uid"`
+	Replicas          int32           `db:"replicas"`
+	ServiceName       string          `db:"service_name"`
+	ReadyReplicas     int32           `db:"ready_replicas"`
+	CurrentReplicas   int32           `db:"current_replicas"`
+	UpdatedReplicas   int32           `db:"updated_replicas"`
+	AvailableReplicas int32           `db:"available_replicas"`
+	CurrentRevision   string          `db:"current_revision"`
+	UpdateRevision    string          `db:"update_revision"`
+	CollisionCount    int32           `db:"collision_count"`
+	Created           types.UnixMilli `db:"created"`
 }
 
 func NewStatefulSetFromK8s(obj *appv1.StatefulSet) StatefulSet {
@@ -44,5 +46,6 @@ func NewStatefulSetFromK8s(obj *appv1.StatefulSet) StatefulSet {
 		CurrentRevision:   obj.Status.CurrentRevision,
 		UpdateRevision:    obj.Status.UpdateRevision,
 		CollisionCount:    collisionCount,
+		Created:           types.UnixMilli(obj.CreationTimestamp.Time),
 	}
 }
