@@ -128,3 +128,11 @@ CREATE TABLE volumes (
   volume_source longtext NOT NULL,
   PRIMARY KEY (namespace, pod_name, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE pod_pvc (
+  namespace varchar(63) NOT NULL,
+  pod_name varchar(63) NOT NULL,
+  claim_name varchar(63) NOT NULL,
+  read_only tinyint NOT NULL,
+  PRIMARY KEY (namespace, pod_name, claim_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
