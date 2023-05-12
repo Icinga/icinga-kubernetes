@@ -28,11 +28,11 @@ func (p *DeploymentSync) Sync(key string, obj interface{}, exists bool) error {
 		fmt.Printf("Sync/Add/Update for Deployment %s\n", obj.(*appv1.Deployment).GetName())
 		deployment := schemav1.NewDeploymentFromK8s(obj.(*appv1.Deployment))
 
-		stmt := `INSERT INTO deployment (name, namespace, uid, strategy, paused, replicas, available_replicas, ready_replicas, unavailable_replicas, collision_count)
-VALUES (:name, :namespace, :uid, :strategy, :paused, :replicas, :available_replicas, :ready_replicas, :unavailable_replicas, :collision_count)
+		stmt := `INSERT INTO deployment (name, namespace, uid, strategy, paused, replicas, available_replicas, ready_replicas, unavailable_replicas, collision_count, created)
+VALUES (:name, :namespace, :uid, :strategy, :paused, :replicas, :available_replicas, :ready_replicas, :unavailable_replicas, :collision_count, :created)
 ON DUPLICATE KEY UPDATE name = VALUES(name), namespace = VALUES(namespace), uid = VALUES(uid), strategy = VALUES(strategy), paused = VALUES(paused),
 						replicas = VALUES(replicas), available_replicas = VALUES(available_replicas), ready_replicas = VALUES(ready_replicas),
-						unavailable_replicas = VALUES(unavailable_replicas), collision_count = VALUES(collision_count)`
+						unavailable_replicas = VALUES(unavailable_replicas), collision_count = VALUES(collision_count), created = VALUES(created)`
 		fmt.Printf("%+v\n", deployment)
 		_, err := p.db.NamedExecContext(context.TODO(), stmt, deployment)
 		if err != nil {

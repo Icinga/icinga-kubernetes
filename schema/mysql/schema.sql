@@ -35,6 +35,7 @@ CREATE TABLE deployment (
   available_replicas int NOT NULL,
   unavailable_replicas int NOT NULL,
   collision_count int NOT NULL,
+  created bigint unsigned NOT NULL,
   PRIMARY KEY (namespace, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
