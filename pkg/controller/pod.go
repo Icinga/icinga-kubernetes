@@ -3,7 +3,9 @@ package controller
 import (
 	"context"
 	"fmt"
+	"github.com/icinga/icinga-kubernetes/pkg/database"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
+	"github.com/icinga/icinga-kubernetes/pkg/types"
 	"github.com/jmoiron/sqlx"
 	"io"
 	corev1 "k8s.io/api/core/v1"
@@ -11,19 +13,74 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
+	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
 	"log"
+	"sync"
+	"time"
 )
 
 type PodSync struct {
-	clientset *kubernetes.Clientset
-	db        *sqlx.DB
+	clientset        *kubernetes.Clientset
+	metricsClientset *metricsv.Clientset
+	db               *sqlx.DB
+	knownPods        map[string]*schemav1.Pod
+	mu               sync.Mutex
 }
 
-func NewPodSync(clientset *kubernetes.Clientset, db *sqlx.DB) *PodSync {
+func NewPodSync(clientset *kubernetes.Clientset, metricsClientset *metricsv.Clientset, db *sqlx.DB) *PodSync {
 	return &PodSync{
-		clientset: clientset,
-		db:        db,
+		clientset:        clientset,
+		metricsClientset: metricsClientset,
+		db:               db,
+		knownPods:        make(map[string]*schemav1.Pod),
 	}
+}
+
+func (p *PodSync) SyncMetrics(ctx context.Context, interval time.Duration) error {
+	for {
+		p.mu.Lock()
+		for _, pod := range p.knownPods {
+			podMetrics, _ := p.metricsClientset.MetricsV1beta1().PodMetricses(pod.Namespace).Get(context.TODO(), pod.Name,
+				metav1.GetOptions{})
+			for _, container := range podMetrics.Containers {
+				if err := p.syncPodMetrics(pod, container); err != nil {
+					return err
+				}
+			}
+		}
+
+		p.mu.Unlock()
+		time.Sleep(interval)
+	}
+}
+
+func (p *PodSync) GetPodMetrics(pod *schemav1.Pod) (cpu float64, memory float64, storage float64, estorage float64, err error) {
+	podMetrics, err := p.metricsClientset.MetricsV1beta1().PodMetricses(pod.Namespace).Get(context.TODO(), pod.Name,
+		metav1.GetOptions{})
+	if err != nil {
+		return
+	}
+
+	for _, container := range podMetrics.Containers {
+		cpuValue := container.Usage[corev1.ResourceCPU]
+		cpuInt64 := cpuValue.AsDec().UnscaledBig().Int64()
+		cpu = float64(cpuInt64) / 1000.0
+
+		memoryValue := container.Usage[corev1.ResourceMemory]
+		memoryInt64 := memoryValue.Value()
+		memory = float64(memoryInt64) / (1024 * 1024)
+
+		storageValue := container.Usage[corev1.ResourceStorage]
+		storageInt64 := storageValue.Value()
+		storage = float64(storageInt64) / (1024 * 1024)
+
+		estorageValue := container.Usage[corev1.ResourceEphemeralStorage]
+		estorageInt64 := estorageValue.Value()
+		estorage = float64(estorageInt64) / (1024 * 1024)
+	}
+
+	return
 }
 
 func (p *PodSync) Sync(key string, obj interface{}, exists bool) error {
@@ -34,6 +91,11 @@ func (p *PodSync) Sync(key string, obj interface{}, exists bool) error {
 		if err != nil {
 			return err
 		}
+
+		p.mu.Lock()
+		delete(p.knownPods, key)
+		p.mu.Unlock()
+
 		_, err = p.db.Exec(`DELETE FROM pod WHERE namespace=? AND name=?`, namespace, name)
 		if err != nil {
 			return err
@@ -43,12 +105,22 @@ func (p *PodSync) Sync(key string, obj interface{}, exists bool) error {
 		if err != nil {
 			return err
 		}
+
+		_, err = p.db.Exec(`DELETE FROM pod_metrics WHERE namespace=? AND pod_name=?`, namespace, name)
+		if err != nil {
+			return err
+		}
 	} else {
 		fmt.Printf("Sync/Add/Update for Pod %s\n", obj.(*corev1.Pod).GetName())
 		pod, err := schemav1.NewPodFromK8s(obj.(*corev1.Pod))
 		if err != nil {
 			return err
 		}
+
+		p.mu.Lock()
+		p.knownPods[key] = pod
+		p.mu.Unlock()
+
 		stmt := `INSERT INTO pod (name, namespace, uid, phase)
 VALUES (:name, :namespace, :uid, :phase)
 ON DUPLICATE KEY UPDATE name = VALUES(name), namespace = VALUES(namespace), uid = VALUES(uid), phase = VALUES(phase)`
@@ -93,6 +165,38 @@ VALUES (:namespace, :pod_name, :container_name, :logs)
 ON DUPLICATE KEY UPDATE namespace = VALUES(namespace), pod_name = VALUES(pod_name), 
                         container_name = VALUES(container_name), logs = VALUES(logs)`
 	_, err = p.db.NamedExecContext(context.TODO(), stmt, containerLog)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (p *PodSync) syncPodMetrics(pod *schemav1.Pod, containerMetrics v1beta1.ContainerMetrics) error {
+	metrics, err := p.metricsClientset.MetricsV1beta1().PodMetricses(pod.Namespace).Get(context.TODO(), pod.Name,
+		metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	cpuUsage, memoryUsage, storageUsage, ephemeralStorageUsage, err := p.GetPodMetrics(pod)
+	if err != nil {
+		return err
+	}
+
+	podMetrics := schemav1.PodMetrics{
+		Namespace:             pod.Namespace,
+		PodName:               pod.Name,
+		ContainerName:         containerMetrics.Name,
+		Timestamp:             types.UnixMilli(metrics.Timestamp.Time),
+		Duration:              metrics.Window.Duration,
+		CPUUsage:              cpuUsage,
+		MemoryUsage:           memoryUsage,
+		StorageUsage:          storageUsage,
+		EphemeralStorageUsage: ephemeralStorageUsage,
+	}
+
+	stmt := database.BuildUpsertStmt(podMetrics)
+	_, err = p.db.NamedExecContext(context.TODO(), stmt, podMetrics)
 	if err != nil {
 		return err
 	}

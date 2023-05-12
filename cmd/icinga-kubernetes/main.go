@@ -17,12 +17,14 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
 	"net"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/go-sql-driver/mysql"
 	_ "github.com/go-sql-driver/mysql"
@@ -33,9 +35,10 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
+	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
-func createClientSet() (*kubernetes.Clientset, error) {
+func createClientSet() (*kubernetes.Clientset, *metricsv.Clientset, error) {
 	var kubeconfig string
 	var master string
 
@@ -60,7 +63,12 @@ func createClientSet() (*kubernetes.Clientset, error) {
 		klog.Fatal(err)
 	}
 
-	return clientset, nil
+	metricsClientset, err := metricsv.NewForConfig(config)
+	if err != nil {
+		klog.Fatal(err)
+	}
+
+	return clientset, metricsClientset, nil
 }
 
 func main() {
@@ -68,7 +76,7 @@ func main() {
 	flag.StringVar(&dbConfig, "dbConfig", "./config.yml", "path to database config file")
 	flag.Parse()
 
-	clientset, _ := createClientSet()
+	clientset, metricsClientset, _ := createClientSet()
 
 	// TODO: Create database from a YAML configuration file.*/*/
 	d, err := database.FromYAMLFile(dbConfig)
@@ -97,9 +105,10 @@ func main() {
 	defer close(stop)
 
 	podInformer := factory.Core().V1().Pods().Informer()
-	podSync := controller.NewPodSync(clientset, db)
+	podSync := controller.NewPodSync(clientset, metricsClientset, db)
 	podSync.WarmUp(podInformer.GetIndexer())
 	{
+		go podSync.SyncMetrics(context.TODO(), 1*time.Minute)
 		c := controller.NewController(podInformer, podSync.Sync)
 		go c.Run(1, stop)
 	}
