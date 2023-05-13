@@ -165,3 +165,11 @@ CREATE TABLE volumes_in_use (
   volume_name varchar(63) NOT NULL,
   PRIMARY KEY (namespace, node_name, volume_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE container_volume_devices (
+  namespace varchar(63) NOT NULL,
+  pod_name varchar(63) NOT NULL,
+  device_name varchar(63) NOT NULL,
+  device_path varchar(63) NOT NULL,
+  PRIMARY KEY (namespace, pod_name, device_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
