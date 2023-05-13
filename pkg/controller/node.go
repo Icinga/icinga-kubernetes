@@ -39,6 +39,10 @@ func (n *NodeSync) Sync(key string, obj interface{}, exists bool) error {
 		if err != nil {
 			return err
 		}
+		_, err = n.db.Exec(`DELETE FROM volumes_in_use WHERE namespace=? AND node_name=?`, namespace, name)
+		if err != nil {
+			return err
+		}
 	} else {
 		node, err := schemav1.NewNodeFromK8s(obj.(*corev1.Node))
 		if err != nil {
@@ -57,6 +61,9 @@ ON DUPLICATE KEY UPDATE name = VALUES(name), namespace = VALUES(namespace), pod_
 			return err
 		}
 
+		if err = n.syncVolumesInUse(obj.(*corev1.Node)); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -83,8 +90,28 @@ ON DUPLICATE KEY UPDATE namespace = VALUES(namespace), node_name = VALUES(node_n
 	return nil
 }
 
+func (n *NodeSync) syncVolumesInUse(node *corev1.Node) error {
+	for _, volume := range node.Status.VolumesInUse {
+		volumeInUse := schemav1.VolumesInUse{
+			Namespace:  node.Namespace,
+			NodeName:   node.Name,
+			VolumeName: string(volume),
+		}
+		stmt := `INSERT INTO volumes_in_use (namespace, node_name, volume_name)
+VALUES (:namespace, :node_name, :volume_name)
+ON DUPLICATE KEY UPDATE namespace = VALUES(namespace), node_name = VALUES(node_name),
+                        volume_name = VALUES(volume_name)`
+		_, err := n.db.NamedExecContext(context.TODO(), stmt, volumeInUse)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (n *NodeSync) WarmUp(indexer cache.Indexer) {
-	stmt, err := n.db.Queryx(`SELECT namespace, name from node`)
+	stmt, err := n.db.Queryx(`SELECT namespace, name FROM node`)
 	if err != nil {
 		klog.Fatal(err)
 	}
