@@ -41,12 +41,12 @@ func (r *ReplicaSetSync) Sync(key string, obj interface{}, exists bool) error {
 			return err
 		}
 		stmt := `INSERT INTO replica_set (name, namespace, uid, desired_replicas, actual_replicas, min_ready_seconds, 
-                         fully_labeled_replicas, ready_replicas, available_replicas, created)
+                         fully_labeled_replicas, replicas, ready_replicas, available_replicas, created)
 VALUES (:name, :namespace, :uid, :desired_replicas, :actual_replicas, :min_ready_seconds, 
-                         :fully_labeled_replicas, :ready_replicas, :available_replicas, :created)
+                         :fully_labeled_replicas, :replicas, :ready_replicas, :available_replicas, :created)
 ON DUPLICATE KEY UPDATE name = VALUES(name), namespace = VALUES(namespace), uid = VALUES(uid), desired_replicas = VALUES(desired_replicas),
                         actual_replicas = VALUES(actual_replicas), min_ready_seconds = VALUES(min_ready_seconds), 
-                        fully_labeled_replicas = VALUES(fully_labeled_replicas), ready_replicas = VALUES(ready_replicas),
+                        fully_labeled_replicas = VALUES(fully_labeled_replicas), replicas = VALUES(replicas), ready_replicas = VALUES(ready_replicas),
                         available_replicas = VALUES(available_replicas), created = VALUES(created)`
 		_, err = r.db.NamedExecContext(context.TODO(), stmt, replicaSet)
 		if err != nil {

@@ -47,6 +47,7 @@ CREATE TABLE replica_set (
    actual_replicas int NOT NULL,
    min_ready_seconds int NOT NULL,
    fully_labeled_replicas int NOT NULL,
+   replicas int NOT NULL,
    ready_replicas int NOT NULL,
    available_replicas int NOT NULL,
    created bigint unsigned NOT NULL,
