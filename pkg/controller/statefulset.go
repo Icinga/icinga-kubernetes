@@ -27,9 +27,9 @@ func (n *StatefulSetSync) Sync(key string, obj interface{}, exists bool) error {
 	if exists {
 		statefulSet := schemav1.NewStatefulSetFromK8s(obj.(*appsv1.StatefulSet))
 
-		stmt := `INSERT INTO stateful_set (name, namespace, uid, replicas, service_name, ready_replicas, current_replicas, updated_replicas, available_replicas, current_revision, update_revision, collision_count)
-VALUES (:name, :namespace, :uid, :replicas, :service_name, :ready_replicas, :current_replicas, :updated_replicas, :available_replicas, :current_revision, :update_revision, :collision_count)
-ON DUPLICATE KEY UPDATE name = VALUES(name), namespace = VALUES(namespace), uid = VALUES(uid), replicas = VALUES(replicas), service_name = VALUES(service_name), ready_replicas = VALUES(ready_replicas), current_replicas = VALUES(current_replicas), updated_replicas = VALUES(updated_replicas), available_replicas = VALUES(available_replicas), current_revision = VALUES(current_revision), update_revision = VALUES(update_revision), collision_count = VALUES(collision_count)`
+		stmt := `INSERT INTO stateful_set (name, namespace, uid, replicas, service_name, ready_replicas, current_replicas, updated_replicas, available_replicas, current_revision, update_revision, collision_count, created)
+VALUES (:name, :namespace, :uid, :replicas, :service_name, :ready_replicas, :current_replicas, :updated_replicas, :available_replicas, :current_revision, :update_revision, :collision_count, :created)
+ON DUPLICATE KEY UPDATE name = VALUES(name), namespace = VALUES(namespace), uid = VALUES(uid), replicas = VALUES(replicas), service_name = VALUES(service_name), ready_replicas = VALUES(ready_replicas), current_replicas = VALUES(current_replicas), updated_replicas = VALUES(updated_replicas), available_replicas = VALUES(available_replicas), current_revision = VALUES(current_revision), update_revision = VALUES(update_revision), collision_count = VALUES(collision_count), created = VALUES(created)`
 		_, err := n.db.NamedExecContext(context.TODO(), stmt, statefulSet)
 		if err != nil {
 			return err
