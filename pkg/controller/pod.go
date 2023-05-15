@@ -126,6 +126,11 @@ func (p *PodSync) Sync(key string, obj interface{}, exists bool) error {
 		if err != nil {
 			return err
 		}
+
+		_, err = p.db.Exec(`DELETE FROM container_volume_devices WHERE namespace=? AND pod_name=?`, namespace, name)
+		if err != nil {
+			return err
+		}
 	} else {
 		fmt.Printf("Sync/Add/Update for Pod %s\n", obj.(*corev1.Pod).GetName())
 		pod, err := schemav1.NewPodFromK8s(obj.(*corev1.Pod))
@@ -320,6 +325,23 @@ VALUES (:namespace, :pod_name, :mount_name, :read_only, :mount_path, :sub_path)
 ON DUPLICATE KEY UPDATE namespace = VALUES(namespace), pod_name = VALUES(pod_name), mount_name = VALUES(mount_name),
                         read_only = VALUES(read_only), mount_path = VALUES(mount_path), sub_path = VALUES(sub_path)`
 		_, err := p.db.NamedExecContext(context.TODO(), stmt, containerVolumeMount)
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, devices := range container.VolumeDevices {
+		containerVolumeDevices := schemav1.ContainerVolumeDevices{
+			Namespace:  pod.Namespace,
+			PodName:    pod.Name,
+			DeviceName: devices.Name,
+			DevicePath: devices.DevicePath,
+		}
+		stmt := `INSERT INTO container_volume_devices (namespace, pod_name, device_name, device_path)
+VALUES (:namespace, :pod_name, :device_name, :device_path)
+ON DUPLICATE KEY UPDATE namespace = VALUES(namespace), pod_name = VALUES(pod_name), device_name = VALUES(device_name),
+                        device_path = VALUES(device_path)`
+		_, err := p.db.NamedExecContext(context.TODO(), stmt, containerVolumeDevices)
 		if err != nil {
 			return err
 		}
