@@ -8,12 +8,13 @@ import (
 type ReplicaSet struct {
 	Name                 string
 	Namespace            string
-	DesiredReplicas      int32 `db:"desired_replicas"`
-	ActualReplicas       int32 `db:"actual_replicas"`
-	MinReadySeconds      int32 `db:"min_ready_seconds"`
-	FullyLabeledReplicas int32 `db:"fully_labeled_replicas"`
-	ReadyReplicas        int32 `db:"ready_replicas"`
-	AvailableReplicas    int32 `db:"available_replicas"`
+	UID                  string `db:"uid"`
+	DesiredReplicas      int32  `db:"desired_replicas"`
+	ActualReplicas       int32  `db:"actual_replicas"`
+	MinReadySeconds      int32  `db:"min_ready_seconds"`
+	FullyLabeledReplicas int32  `db:"fully_labeled_replicas"`
+	ReadyReplicas        int32  `db:"ready_replicas"`
+	AvailableReplicas    int32  `db:"available_replicas"`
 	Created              types.UnixMilli
 }
 
@@ -26,6 +27,7 @@ func NewReplicaSetFromK8s(obj *appv1.ReplicaSet) (*ReplicaSet, error) {
 	return &ReplicaSet{
 		Name:                 obj.Name,
 		Namespace:            obj.Namespace,
+		UID:                  string(obj.UID),
 		DesiredReplicas:      desiredReplicas,
 		ActualReplicas:       obj.Status.Replicas,
 		MinReadySeconds:      obj.Spec.MinReadySeconds,

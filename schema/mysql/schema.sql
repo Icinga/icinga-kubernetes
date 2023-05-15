@@ -42,6 +42,7 @@ CREATE TABLE deployment (
 CREATE TABLE replica_set (
    namespace varchar(63) NOT NULL,
    name varchar(63) NOT NULL,
+   uid varchar(63) NOT NULL,
    desired_replicas int NOT NULL,
    actual_replicas int NOT NULL,
    min_ready_seconds int NOT NULL,
