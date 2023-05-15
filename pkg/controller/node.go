@@ -34,6 +34,11 @@ func (n *NodeSync) Sync(key string, obj interface{}, exists bool) error {
 		if err != nil {
 			return err
 		}
+
+		_, err = n.db.Exec(`DELETE FROM volumes_attached WHERE namespace=? AND node_name=?`, namespace, name)
+		if err != nil {
+			return err
+		}
 	} else {
 		node, err := schemav1.NewNodeFromK8s(obj.(*corev1.Node))
 		if err != nil {
@@ -44,6 +49,32 @@ VALUES (:name, :namespace, :pod_cidr, :unschedulable, :created, :ready)
 ON DUPLICATE KEY UPDATE name = VALUES(name), namespace = VALUES(namespace), pod_cidr = VALUES(pod_cidr),
                         unschedulable = VALUES(unschedulable), created = VALUES(created), ready = VALUES(ready)`
 		_, err = n.db.NamedExecContext(context.TODO(), stmt, node)
+		if err != nil {
+			return err
+		}
+
+		if err = n.syncVolumesAttached(obj.(*corev1.Node)); err != nil {
+			return err
+		}
+
+	}
+
+	return nil
+}
+
+func (n *NodeSync) syncVolumesAttached(node *corev1.Node) error {
+	for _, volume := range node.Status.VolumesAttached {
+		volumesAttached := schemav1.VolumesAttached{
+			Namespace:  node.Namespace,
+			NodeName:   node.Name,
+			VolumeName: string(volume.Name),
+			DevicePath: volume.DevicePath,
+		}
+		stmt := `INSERT INTO volumes_attached (namespace, node_name, volume_name, device_path)
+VALUES (:namespace, :node_name, :volume_name, :device_path)
+ON DUPLICATE KEY UPDATE namespace = VALUES(namespace), node_name = VALUES(node_name), 
+                        volume_name = VALUES(volume_name), device_path = VALUES(device_path)`
+		_, err := n.db.NamedExecContext(context.TODO(), stmt, volumesAttached)
 		if err != nil {
 			return err
 		}
