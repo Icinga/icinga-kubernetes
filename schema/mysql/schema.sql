@@ -158,3 +158,10 @@ CREATE TABLE volumes_attached (
   device_path varchar(63) NOT NULL,
   PRIMARY KEY (namespace, node_name, volume_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE volumes_in_use (
+  namespace varchar(63) NOT NULL,
+  node_name varchar(63) NOT NULL,
+  volume_name varchar(63) NOT NULL,
+  PRIMARY KEY (namespace, node_name, volume_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
