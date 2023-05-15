@@ -13,6 +13,7 @@ type ReplicaSet struct {
 	ActualReplicas       int32  `db:"actual_replicas"`
 	MinReadySeconds      int32  `db:"min_ready_seconds"`
 	FullyLabeledReplicas int32  `db:"fully_labeled_replicas"`
+	Replicas             int32  `db:"replicas"`
 	ReadyReplicas        int32  `db:"ready_replicas"`
 	AvailableReplicas    int32  `db:"available_replicas"`
 	Created              types.UnixMilli
@@ -32,6 +33,7 @@ func NewReplicaSetFromK8s(obj *appv1.ReplicaSet) (*ReplicaSet, error) {
 		ActualReplicas:       obj.Status.Replicas,
 		MinReadySeconds:      obj.Spec.MinReadySeconds,
 		FullyLabeledReplicas: obj.Status.FullyLabeledReplicas,
+		Replicas:             obj.Status.Replicas,
 		ReadyReplicas:        obj.Status.ReadyReplicas,
 		AvailableReplicas:    obj.Status.AvailableReplicas,
 		Created:              types.UnixMilli(obj.CreationTimestamp.Time),
