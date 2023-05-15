@@ -3,13 +3,14 @@ package controller
 import (
 	"context"
 	"fmt"
+	"log"
+
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
 	"github.com/jmoiron/sqlx"
 	appv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
-	"log"
 )
 
 type ReplicaSetSync struct {
@@ -39,11 +40,11 @@ func (r *ReplicaSetSync) Sync(key string, obj interface{}, exists bool) error {
 		if err != nil {
 			return err
 		}
-		stmt := `INSERT INTO replica_set (name, namespace, desired_replicas, actual_replicas, min_ready_seconds, 
+		stmt := `INSERT INTO replica_set (name, namespace, uid, desired_replicas, actual_replicas, min_ready_seconds, 
                          fully_labeled_replicas, ready_replicas, available_replicas, created)
-VALUES (:name, :namespace, :desired_replicas, :actual_replicas, :min_ready_seconds, 
+VALUES (:name, :namespace, :uid, :desired_replicas, :actual_replicas, :min_ready_seconds, 
                          :fully_labeled_replicas, :ready_replicas, :available_replicas, :created)
-ON DUPLICATE KEY UPDATE name = VALUES(name), namespace = VALUES(namespace), desired_replicas = VALUES(desired_replicas),
+ON DUPLICATE KEY UPDATE name = VALUES(name), namespace = VALUES(namespace), uid = VALUES(uid), desired_replicas = VALUES(desired_replicas),
                         actual_replicas = VALUES(actual_replicas), min_ready_seconds = VALUES(min_ready_seconds), 
                         fully_labeled_replicas = VALUES(fully_labeled_replicas), ready_replicas = VALUES(ready_replicas),
                         available_replicas = VALUES(available_replicas), created = VALUES(created)`
