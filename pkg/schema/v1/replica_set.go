@@ -7,6 +7,7 @@ import (
 	kappsv1 "k8s.io/api/apps/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ktypes "k8s.io/apimachinery/pkg/types"
+	"strings"
 )
 
 type ReplicaSet struct {
@@ -20,6 +21,8 @@ type ReplicaSet struct {
 	AvailableReplicas    int32
 	Conditions           []ReplicaSetCondition `db:"-"`
 	Owners               []ReplicaSetOwner     `db:"-"`
+	Labels               []Label               `db:"-"`
+	ReplicaSetLabels     []ReplicaSetLabel     `db:"-"`
 }
 
 type ReplicaSetCondition struct {
@@ -38,6 +41,11 @@ type ReplicaSetOwner struct {
 	Uid                ktypes.UID
 	Controller         types.Bool
 	BlockOwnerDeletion types.Bool
+}
+
+type ReplicaSetLabel struct {
+	ReplicaSetId types.Binary
+	LabelId      types.Binary
 }
 
 func NewReplicaSet() Resource {
@@ -95,6 +103,19 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object) {
 			},
 		})
 	}
+
+	for labelName, labelValue := range replicaSet.Labels {
+		labelId := types.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		r.Labels = append(r.Labels, Label{
+			Id:    labelId,
+			Name:  labelName,
+			Value: labelValue,
+		})
+		r.ReplicaSetLabels = append(r.ReplicaSetLabels, ReplicaSetLabel{
+			ReplicaSetId: r.Id,
+			LabelId:      labelId,
+		})
+	}
 }
 
 func (r *ReplicaSet) Relations() database.Relations {
@@ -106,6 +127,14 @@ func (r *ReplicaSet) Relations() database.Relations {
 		database.HasMany[ReplicaSetOwner]{
 			Entities:    r.Owners,
 			ForeignKey_: "pod_id",
+		},
+		database.HasMany[Label]{
+			Entities:    r.Labels,
+			ForeignKey_: "value", // TODO: This is a hack to not delete any labels.
+		},
+		database.HasMany[ReplicaSetLabel]{
+			Entities:    r.ReplicaSetLabels,
+			ForeignKey_: "replica_set_id",
 		},
 	}
 }
