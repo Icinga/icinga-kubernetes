@@ -316,6 +316,18 @@ CREATE TABLE deployment_label (
   PRIMARY KEY (deployment_id, label_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+CREATE TABLE daemon_set_label (
+  daemon_set_id binary(20) NOT NULL,
+  label_id binary(20) NOT NULL,
+  PRIMARY KEY (daemon_set_id, label_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE stateful_set_label (
+  stateful_set_id binary(20) NOT NULL,
+  label_id binary(20) NOT NULL,
+  PRIMARY KEY (stateful_set_id, label_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
 CREATE TABLE event (
   id binary(20) NOT NULL,
   namespace varchar(63) NOT NULL,
