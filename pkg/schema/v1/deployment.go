@@ -6,6 +6,7 @@ import (
 	"github.com/icinga/icinga-kubernetes/pkg/types"
 	kappsv1 "k8s.io/api/apps/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"strings"
 )
 
 type Deployment struct {
@@ -22,6 +23,8 @@ type Deployment struct {
 	AvailableReplicas       int32
 	UnavailableReplicas     int32
 	Conditions              []DeploymentCondition `db:"-"`
+	Labels                  []Label               `db:"-"`
+	DeploymentLabels        []DeploymentLabel     `db:"-"`
 }
 
 type DeploymentCondition struct {
@@ -32,6 +35,11 @@ type DeploymentCondition struct {
 	LastTransition types.UnixMilli
 	Reason         string
 	Message        string
+}
+
+type DeploymentLabel struct {
+	DeploymentId types.Binary
+	LabelId      types.Binary
 }
 
 func NewDeployment() Resource {
@@ -76,12 +84,33 @@ func (d *Deployment) Obtain(k8s kmetav1.Object) {
 			Message:        condition.Message,
 		})
 	}
+
+	for labelName, labelValue := range deployment.Labels {
+		labelId := types.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		d.Labels = append(d.Labels, Label{
+			Id:    labelId,
+			Name:  labelName,
+			Value: labelValue,
+		})
+		d.DeploymentLabels = append(d.DeploymentLabels, DeploymentLabel{
+			DeploymentId: d.Id,
+			LabelId:      labelId,
+		})
+	}
 }
 
 func (d *Deployment) Relations() database.Relations {
 	return database.Relations{
 		database.HasMany[DeploymentCondition]{
 			Entities:    d.Conditions,
+			ForeignKey_: "deployment_id",
+		},
+		database.HasMany[Label]{
+			Entities:    d.Labels,
+			ForeignKey_: "value", // TODO: This is a hack to not delete any labels.
+		},
+		database.HasMany[DeploymentLabel]{
+			Entities:    d.DeploymentLabels,
 			ForeignKey_: "deployment_id",
 		},
 	}
