@@ -219,6 +219,16 @@ CREATE TABLE replica_set_condition (
   PRIMARY KEY (replica_set_id, type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+CREATE TABLE replica_set_owner (
+  replica_set_id binary(20) NOT NULL,
+  kind enum('deployment') COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  controller enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
+  block_owner_deletion enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (replica_set_id, uid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
 CREATE TABLE daemon_set (
   id binary(20) NOT NULL,
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,

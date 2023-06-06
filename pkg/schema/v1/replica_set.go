@@ -6,6 +6,7 @@ import (
 	"github.com/icinga/icinga-kubernetes/pkg/types"
 	kappsv1 "k8s.io/api/apps/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	ktypes "k8s.io/apimachinery/pkg/types"
 )
 
 type ReplicaSet struct {
@@ -18,6 +19,7 @@ type ReplicaSet struct {
 	ReadyReplicas        int32
 	AvailableReplicas    int32
 	Conditions           []ReplicaSetCondition `db:"-"`
+	Owners               []ReplicaSetOwner     `db:"-"`
 }
 
 type ReplicaSetCondition struct {
@@ -27,6 +29,15 @@ type ReplicaSetCondition struct {
 	LastTransition types.UnixMilli
 	Reason         string
 	Message        string
+}
+
+type ReplicaSetOwner struct {
+	ReplicaSetId       types.Binary
+	Kind               string
+	Name               string
+	Uid                ktypes.UID
+	Controller         types.Bool
+	BlockOwnerDeletion types.Bool
 }
 
 func NewReplicaSet() Resource {
@@ -60,6 +71,30 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object) {
 			Message:        condition.Message,
 		})
 	}
+
+	for _, ownerReference := range replicaSet.OwnerReferences {
+		var blockOwnerDeletion, controller bool
+		if ownerReference.BlockOwnerDeletion != nil {
+			blockOwnerDeletion = *ownerReference.BlockOwnerDeletion
+		}
+		if ownerReference.Controller != nil {
+			controller = *ownerReference.Controller
+		}
+		r.Owners = append(r.Owners, ReplicaSetOwner{
+			ReplicaSetId: r.Id,
+			Kind:         strcase.Snake(ownerReference.Kind),
+			Name:         ownerReference.Name,
+			Uid:          ownerReference.UID,
+			BlockOwnerDeletion: types.Bool{
+				Bool:  blockOwnerDeletion,
+				Valid: true,
+			},
+			Controller: types.Bool{
+				Bool:  controller,
+				Valid: true,
+			},
+		})
+	}
 }
 
 func (r *ReplicaSet) Relations() database.Relations {
@@ -67,6 +102,10 @@ func (r *ReplicaSet) Relations() database.Relations {
 		database.HasMany[ReplicaSetCondition]{
 			Entities:    r.Conditions,
 			ForeignKey_: "replica_set_id",
+		},
+		database.HasMany[ReplicaSetOwner]{
+			Entities:    r.Owners,
+			ForeignKey_: "pod_id",
 		},
 	}
 }
