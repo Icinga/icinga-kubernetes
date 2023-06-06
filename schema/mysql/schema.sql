@@ -83,7 +83,7 @@ CREATE TABLE pod_condition (
   pod_id binary(20) NOT NULL,
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   status varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  last_probe bigint unsigned NOT NULL,
+  last_probe bigint unsigned NULL DEFAULT NULL,
   last_transition bigint unsigned NOT NULL,
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   message varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
