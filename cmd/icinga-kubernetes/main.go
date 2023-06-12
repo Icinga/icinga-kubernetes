@@ -187,6 +187,11 @@ func main() {
 
 		return s.Run(ctx, sync.WithNoDelete(), sync.WithNoWarumup())
 	})
+	g.Go(func() error {
+		s := syncv1.NewSync(db, factory.Core().V1().PersistentVolumeClaims().Informer(), log.WithName("pvcs"), schemav1.NewPvc)
+
+		return s.Run(ctx)
+	})
 	if err := g.Wait(); err != nil {
 		klog.Fatal(err)
 	}

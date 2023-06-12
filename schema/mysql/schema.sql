@@ -328,6 +328,12 @@ CREATE TABLE stateful_set_label (
   PRIMARY KEY (stateful_set_id, label_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+CREATE TABLE pvc_label (
+  pvc_id binary(20) NOT NULL,
+  label_id binary(20) NOT NULL,
+  PRIMARY KEY (pvc_id, label_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
 CREATE TABLE event (
   id binary(20) NOT NULL,
   namespace varchar(63) NOT NULL,
@@ -361,4 +367,29 @@ CREATE TABLE pod_metrics (
   storage_usage float NOT NULL,
   ephemeral_storage_usage float NOT NULL,
   PRIMARY KEY (namespace, pod_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE pvc (
+  id binary(20) NOT NULL,
+  namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  resource_version varchar(255) NOT NULL,
+  phase enum('pending', 'available', 'bound', 'released', 'failed') COLLATE utf8mb4_unicode_ci NOT NULL,
+  volume_name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  volume_mode enum('block', 'filesystem') COLLATE utf8mb4_unicode_ci NOT NULL,
+  storage_class varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  created bigint unsigned NOT NULL,
+  PRIMARY KEY (id, volume_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE pvc_condition (
+  pvc_id binary(20) NOT NULL,
+  type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  status varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  last_probe bigint unsigned NULL DEFAULT NULL,
+  last_transition bigint unsigned NOT NULL,
+  reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  message varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (pvc_id, type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
