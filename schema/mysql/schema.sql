@@ -397,3 +397,31 @@ CREATE TABLE pvc_condition (
   message varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (pvc_id, type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE persistent_volume (
+  id binary(20) NOT NULL,
+  namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  resource_version varchar(255) NOT NULL,
+  capacity bigint unsigned NOT NULL,
+  phase enum('pending', 'available', 'bound', 'released', 'failed') COLLATE utf8mb4_unicode_ci NOT NULL,
+  reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  message varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  access_modes tinyint unsigned NULL DEFAULT NULL,
+  volume_mode enum('block', 'filesystem') COLLATE utf8mb4_unicode_ci NOT NULL,
+  volume_source_type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  storage_class varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  volume_source longtext NOT NULL,
+  reclaim_policy enum('recycle', 'delete', 'retain') COLLATE utf8mb4_unicode_ci NOT NULL,
+  created bigint unsigned NOT NULL,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE persistent_volume_claim_ref (
+  persistent_volume_id binary(20) NOT NULL,
+  kind varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (persistent_volume_id, uid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;

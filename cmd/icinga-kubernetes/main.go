@@ -192,6 +192,11 @@ func main() {
 
 		return s.Run(ctx)
 	})
+	g.Go(func() error {
+		s := syncv1.NewSync(db, factory.Core().V1().PersistentVolumes().Informer(), log.WithName("persistent-volumes"), schemav1.NewPersistentVolume)
+
+		return s.Run(ctx)
+	})
 	if err := g.Wait(); err != nil {
 		klog.Fatal(err)
 	}
