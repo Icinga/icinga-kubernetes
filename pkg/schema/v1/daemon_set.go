@@ -6,6 +6,7 @@ import (
 	"github.com/icinga/icinga-kubernetes/pkg/types"
 	kappsv1 "k8s.io/api/apps/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"strings"
 )
 
 type DaemonSet struct {
@@ -21,6 +22,8 @@ type DaemonSet struct {
 	NumberAvailable        int32
 	NumberUnavailable      int32
 	Conditions             []DaemonSetCondition `db:"-"`
+	Labels                 []Label              `db:"-"`
+	DaemonSetLabels        []DaemonSetLabel     `db:"-"`
 }
 
 type DaemonSetCondition struct {
@@ -30,6 +33,11 @@ type DaemonSetCondition struct {
 	LastTransition types.UnixMilli
 	Reason         string
 	Message        string
+}
+
+type DaemonSetLabel struct {
+	DaemonSetId types.Binary
+	LabelId     types.Binary
 }
 
 func NewDaemonSet() Resource {
@@ -62,12 +70,33 @@ func (d *DaemonSet) Obtain(k8s kmetav1.Object) {
 			Message:        condition.Message,
 		})
 	}
+
+	for labelName, labelValue := range daemonSet.Labels {
+		labelId := types.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		d.Labels = append(d.Labels, Label{
+			Id:    labelId,
+			Name:  labelName,
+			Value: labelValue,
+		})
+		d.DaemonSetLabels = append(d.DaemonSetLabels, DaemonSetLabel{
+			DaemonSetId: d.Id,
+			LabelId:     labelId,
+		})
+	}
 }
 
 func (d *DaemonSet) Relations() database.Relations {
 	return database.Relations{
 		database.HasMany[DaemonSetCondition]{
 			Entities:    d.Conditions,
+			ForeignKey_: "daemon_set_id",
+		},
+		database.HasMany[Label]{
+			Entities:    d.Labels,
+			ForeignKey_: "value", // TODO: This is a hack to not delete any labels.
+		},
+		database.HasMany[DaemonSetLabel]{
+			Entities:    d.DaemonSetLabels,
 			ForeignKey_: "daemon_set_id",
 		},
 	}

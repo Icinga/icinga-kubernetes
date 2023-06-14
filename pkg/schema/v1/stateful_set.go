@@ -6,6 +6,7 @@ import (
 	"github.com/icinga/icinga-kubernetes/pkg/types"
 	kappsv1 "k8s.io/api/apps/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"strings"
 )
 
 type StatefulSet struct {
@@ -25,6 +26,8 @@ type StatefulSet struct {
 	UpdatedReplicas                                 int32
 	AvailableReplicas                               int32
 	Conditions                                      []StatefulSetCondition `db:"-"`
+	Labels                                          []Label                `db:"-"`
+	StatefulSetLabels                               []StatefulSetLabel     `db:"-"`
 }
 
 type StatefulSetCondition struct {
@@ -34,6 +37,11 @@ type StatefulSetCondition struct {
 	LastTransition types.UnixMilli
 	Reason         string
 	Message        string
+}
+
+type StatefulSetLabel struct {
+	StatefulSetId types.Binary
+	LabelId       types.Binary
 }
 
 func NewStatefulSet() Resource {
@@ -85,12 +93,33 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object) {
 			Message:        condition.Message,
 		})
 	}
+
+	for labelName, labelValue := range statefulSet.Labels {
+		labelId := types.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		s.Labels = append(s.Labels, Label{
+			Id:    labelId,
+			Name:  labelName,
+			Value: labelValue,
+		})
+		s.StatefulSetLabels = append(s.StatefulSetLabels, StatefulSetLabel{
+			StatefulSetId: s.Id,
+			LabelId:       labelId,
+		})
+	}
 }
 
 func (s *StatefulSet) Relations() database.Relations {
 	return database.Relations{
 		database.HasMany[StatefulSetCondition]{
 			Entities:    s.Conditions,
+			ForeignKey_: "stateful_set_id",
+		},
+		database.HasMany[Label]{
+			Entities:    s.Labels,
+			ForeignKey_: "value", // TODO: This is a hack to not delete any labels.
+		},
+		database.HasMany[StatefulSetLabel]{
+			Entities:    s.StatefulSetLabels,
 			ForeignKey_: "stateful_set_id",
 		},
 	}
