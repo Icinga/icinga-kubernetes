@@ -375,6 +375,8 @@ CREATE TABLE pvc (
   name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
+  desired_access_modes tinyint unsigned NOT NULL,
+  actual_access_modes tinyint unsigned NOT NULL,
   phase enum('pending', 'available', 'bound', 'released', 'failed') COLLATE utf8mb4_unicode_ci NOT NULL,
   volume_name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   volume_mode enum('block', 'filesystem') COLLATE utf8mb4_unicode_ci NOT NULL,

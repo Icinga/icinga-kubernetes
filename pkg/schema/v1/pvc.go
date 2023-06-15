@@ -9,16 +9,39 @@ import (
 	"strings"
 )
 
+type kpersistentVolumeAccessModesSize byte
+
+type kpersistentVolumeAccessModes map[kcorev1.PersistentVolumeAccessMode]kpersistentVolumeAccessModesSize
+
+func (modes kpersistentVolumeAccessModes) Bitmask(mode ...kcorev1.PersistentVolumeAccessMode) types.Bitmask[kpersistentVolumeAccessModesSize] {
+	b := types.Bitmask[kpersistentVolumeAccessModesSize]{}
+
+	for _, m := range mode {
+		b.Set(modes[m])
+	}
+
+	return b
+}
+
+var persistentVolumeAccessModes = kpersistentVolumeAccessModes{
+	kcorev1.ReadWriteOnce:    1 << 0,
+	kcorev1.ReadOnlyMany:     1 << 1,
+	kcorev1.ReadWriteMany:    1 << 2,
+	kcorev1.ReadWriteOncePod: 1 << 3,
+}
+
 type Pvc struct {
 	Meta
-	Id           types.Binary
-	Phase        string
-	VolumeName   string
-	VolumeMode   string
-	StorageClass string
-	Conditions   []PvcCondition `db:"-"`
-	Labels       []Label        `db:"-"`
-	PvcLabels    []PvcLabel     `db:"-"`
+	Id                 types.Binary
+	DesiredAccessModes types.Bitmask[kpersistentVolumeAccessModesSize]
+	ActualAccessModes  types.Bitmask[kpersistentVolumeAccessModesSize]
+	Phase              string
+	VolumeName         string
+	VolumeMode         string
+	StorageClass       string
+	Conditions         []PvcCondition `db:"-"`
+	Labels             []Label        `db:"-"`
+	PvcLabels          []PvcLabel     `db:"-"`
 }
 
 type PvcCondition struct {
@@ -46,6 +69,8 @@ func (p *Pvc) Obtain(k8s kmetav1.Object) {
 	pvc := k8s.(*kcorev1.PersistentVolumeClaim)
 
 	p.Id = types.Checksum(pvc.Namespace + "/" + pvc.Name)
+	p.DesiredAccessModes = persistentVolumeAccessModes.Bitmask(pvc.Spec.AccessModes...)
+	p.ActualAccessModes = persistentVolumeAccessModes.Bitmask(pvc.Status.AccessModes...)
 	p.Phase = strcase.Snake(string(pvc.Status.Phase))
 	p.VolumeName = pvc.Spec.VolumeName
 
