@@ -379,8 +379,8 @@ CREATE TABLE pvc (
   actual_access_modes tinyint unsigned NOT NULL,
   phase enum('pending', 'available', 'bound', 'released', 'failed') COLLATE utf8mb4_unicode_ci NOT NULL,
   volume_name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  volume_mode enum('block', 'filesystem') COLLATE utf8mb4_unicode_ci NOT NULL,
-  storage_class varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  volume_mode enum('block', 'filesystem') COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  storage_class varchar(255) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (id, volume_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;

@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"database/sql"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
 	"github.com/icinga/icinga-kubernetes/pkg/types"
@@ -37,8 +38,8 @@ type Pvc struct {
 	ActualAccessModes  types.Bitmask[kpersistentVolumeAccessModesSize]
 	Phase              string
 	VolumeName         string
-	VolumeMode         string
-	StorageClass       string
+	VolumeMode         sql.NullString
+	StorageClass       sql.NullString
 	Conditions         []PvcCondition `db:"-"`
 	Labels             []Label        `db:"-"`
 	PvcLabels          []PvcLabel     `db:"-"`
@@ -73,13 +74,17 @@ func (p *Pvc) Obtain(k8s kmetav1.Object) {
 	p.ActualAccessModes = persistentVolumeAccessModes.Bitmask(pvc.Status.AccessModes...)
 	p.Phase = strcase.Snake(string(pvc.Status.Phase))
 	p.VolumeName = pvc.Spec.VolumeName
-
 	if pvc.Spec.VolumeMode != nil {
-		p.VolumeMode = string(*pvc.Spec.VolumeMode)
+		p.VolumeMode = sql.NullString{
+			String: string(*pvc.Spec.VolumeMode),
+			Valid:  true,
+		}
 	}
-
-	if pvc.Spec.VolumeMode != nil {
-		p.StorageClass = *pvc.Spec.StorageClassName
+	if pvc.Spec.StorageClassName != nil {
+		p.StorageClass = sql.NullString{
+			String: *pvc.Spec.StorageClassName,
+			Valid:  true,
+		}
 	}
 
 	for _, condition := range pvc.Status.Conditions {
