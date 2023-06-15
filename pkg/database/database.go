@@ -36,6 +36,8 @@ type Database struct {
 
 	log logr.Logger
 
+	columnMap *ColumnMap
+
 	tableSemaphores   map[string]*semaphore.Weighted
 	tableSemaphoresMu sync.Mutex
 }
@@ -112,6 +114,7 @@ func NewFromConfig(c *Config, log logr.Logger) (*Database, error) {
 	return &Database{
 		DB:              db,
 		log:             log,
+		columnMap:       NewColumnMap(db.Mapper),
 		Options:         c.Options,
 		tableSemaphores: make(map[string]*semaphore.Weighted),
 	}, nil
@@ -126,24 +129,6 @@ func (db *Database) BatchSizeByPlaceholders(n int) int {
 	}
 
 	return 1
-}
-
-// BuildColumns returns all columns of the given struct.
-func (db *Database) BuildColumns(subject interface{}) []string {
-	t, ok := subject.(reflect.Type)
-	if !ok {
-		t = reflect.TypeOf(subject)
-	}
-	fields := db.Mapper.TypeMap(t).Names
-	columns := make([]string, 0, len(fields))
-	for _, f := range fields {
-		// if f.Field.Tag == "" {
-		// 	continue
-		// }
-		columns = append(columns, f.Name)
-	}
-
-	return columns
 }
 
 // BuildDeleteStmt returns a DELETE statement for the given struct.
@@ -167,7 +152,7 @@ func (db *Database) BuildDeleteStmt(from interface{}) string {
 func (db *Database) BuildSelectStmt(table interface{}, columns interface{}) string {
 	q := fmt.Sprintf(
 		`SELECT "%s" FROM "%s"`,
-		strings.Join(db.BuildColumns(columns), `", "`),
+		strings.Join(db.columnMap.Columns(columns), `", "`),
 		TableName(table),
 	)
 
@@ -177,17 +162,17 @@ func (db *Database) BuildSelectStmt(table interface{}, columns interface{}) stri
 // BuildUpsertStmt returns an upsert statement for the given struct.
 func (db *Database) BuildUpsertStmt(subject interface{}) (stmt string, placeholders int) {
 	var updateColumns []string
-	insertColumns := db.BuildColumns(subject)
+	insertColumns := db.columnMap.Columns(subject)
 	table := TableName(subject)
 
 	if upserter, ok := subject.(Upserter); ok {
 		upsert := upserter.Upsert()
 		if sliceofcolumns, ok := upsert.([]interface{}); ok {
 			for _, columns := range sliceofcolumns {
-				updateColumns = append(updateColumns, db.BuildColumns(columns)...)
+				updateColumns = append(updateColumns, db.columnMap.Columns(columns)...)
 			}
 		} else {
-			updateColumns = db.BuildColumns(upsert)
+			updateColumns = db.columnMap.Columns(upsert)
 		}
 	} else {
 		updateColumns = insertColumns
