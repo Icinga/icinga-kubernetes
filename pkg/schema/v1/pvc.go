@@ -36,6 +36,8 @@ type Pvc struct {
 	Id                 types.Binary
 	DesiredAccessModes types.Bitmask[kpersistentVolumeAccessModesSize]
 	ActualAccessModes  types.Bitmask[kpersistentVolumeAccessModesSize]
+	MinimumCapacity    sql.NullInt64
+	ActualCapacity     int64
 	Phase              string
 	VolumeName         string
 	VolumeMode         sql.NullString
@@ -72,6 +74,13 @@ func (p *Pvc) Obtain(k8s kmetav1.Object) {
 	p.Id = types.Checksum(pvc.Namespace + "/" + pvc.Name)
 	p.DesiredAccessModes = persistentVolumeAccessModes.Bitmask(pvc.Spec.AccessModes...)
 	p.ActualAccessModes = persistentVolumeAccessModes.Bitmask(pvc.Status.AccessModes...)
+	if requestsStorage, ok := pvc.Spec.Resources.Requests[kcorev1.ResourceStorage]; ok {
+		p.MinimumCapacity = sql.NullInt64{
+			Int64: requestsStorage.MilliValue(),
+			Valid: true,
+		}
+	}
+	p.ActualCapacity = pvc.Status.Capacity.Storage().MilliValue()
 	p.Phase = strcase.Snake(string(pvc.Status.Phase))
 	p.VolumeName = pvc.Spec.VolumeName
 	if pvc.Spec.VolumeMode != nil {
