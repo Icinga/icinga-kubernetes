@@ -102,14 +102,15 @@ CREATE TABLE pod_owner (
 
 CREATE TABLE pod_pvc (
   pod_id binary(20) NOT NULL,
-  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  volume_name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  claim_name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   read_only enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
-  PRIMARY KEY (pod_id, name)
+  PRIMARY KEY (pod_id, volume_name, claim_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE pod_volume (
   pod_id binary(20) NOT NULL,
-  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  volume_name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   source longtext NOT NULL,
   PRIMARY KEY (pod_id, name)
@@ -144,11 +145,11 @@ CREATE TABLE container_device (
 CREATE TABLE container_mount (
   container_id binary(20) NOT NULL,
   pod_id binary(20) NOT NULL,
-  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  volume_name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   path varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   sub_path varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   read_only enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
-  PRIMARY KEY (container_id, name)
+  PRIMARY KEY (container_id, volume_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE deployment (
