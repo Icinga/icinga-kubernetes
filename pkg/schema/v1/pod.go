@@ -41,7 +41,7 @@ type ContainerDevice struct {
 type ContainerMount struct {
 	ContainerId types.Binary
 	PodId       types.Binary
-	Name        string
+	VolumeName  string
 	Path        string
 	SubPath     string
 	ReadOnly    types.Bool
@@ -103,16 +103,17 @@ type PodOwner struct {
 }
 
 type PodVolume struct {
-	PodId  types.Binary
-	Name   string
-	Type   string
-	Source string
+	PodId      types.Binary
+	VolumeName string
+	Type       string
+	Source     string
 }
 
 type PodPvc struct {
-	PodId    types.Binary
-	Name     string
-	ReadOnly types.Bool
+	PodId      types.Binary
+	VolumeName string
+	ClaimName  string
+	ReadOnly   types.Bool
 }
 
 func NewPodFactory(clientset *kubernetes.Clientset) *PodFactory {
@@ -215,7 +216,7 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 			p.ContainerMounts = append(p.ContainerMounts, ContainerMount{
 				ContainerId: types.Checksum(pod.Namespace + "/" + pod.Name + "/" + container.Name),
 				PodId:       p.Id,
-				Name:        mount.Name,
+				VolumeName:  mount.Name,
 				Path:        mount.MountPath,
 				SubPath:     mount.SubPath,
 				ReadOnly: types.Bool{
@@ -276,8 +277,9 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 	for _, volume := range pod.Spec.Volumes {
 		if volume.PersistentVolumeClaim != nil {
 			p.Pvcs = append(p.Pvcs, PodPvc{
-				PodId: p.Id,
-				Name:  volume.PersistentVolumeClaim.ClaimName,
+				PodId:      p.Id,
+				VolumeName: volume.Name,
+				ClaimName:  volume.PersistentVolumeClaim.ClaimName,
 				ReadOnly: types.Bool{
 					Bool:  volume.PersistentVolumeClaim.ReadOnly,
 					Valid: true,
@@ -290,10 +292,10 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 			}
 
 			p.Volumes = append(p.Volumes, PodVolume{
-				PodId:  p.Id,
-				Name:   volume.Name,
-				Type:   t,
-				Source: source,
+				PodId:      p.Id,
+				VolumeName: volume.Name,
+				Type:       t,
+				Source:     source,
 			})
 		}
 	}
