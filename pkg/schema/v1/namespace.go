@@ -16,7 +16,7 @@ type Namespace struct {
 }
 
 type NamespaceCondition struct {
-	DeploymentId   types.Binary
+	NamespaceId    types.Binary
 	Type           string
 	Status         string
 	LastTransition types.UnixMilli
@@ -38,7 +38,7 @@ func (n *Namespace) Obtain(k8s kmetav1.Object) {
 
 	for _, condition := range namespace.Status.Conditions {
 		n.Conditions = append(n.Conditions, NamespaceCondition{
-			DeploymentId:   n.Id,
+			NamespaceId:    n.Id,
 			Type:           string(condition.Type),
 			Status:         string(condition.Status),
 			LastTransition: types.UnixMilli(condition.LastTransitionTime.Time),
