@@ -60,7 +60,7 @@ func (m *ColumnMap) getColumns(t reflect.Type) []string {
 		all[f.Path] = struct{}{}
 	}
 
-	for column, _ := range all {
+	for column := range all {
 		if _, ignore := ignores[column]; !ignore {
 			columns = append(columns, column)
 		}
