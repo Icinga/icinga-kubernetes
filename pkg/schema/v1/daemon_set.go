@@ -85,19 +85,12 @@ func (d *DaemonSet) Obtain(k8s kmetav1.Object) {
 	}
 }
 
-func (d *DaemonSet) Relations() database.Relations {
-	return database.Relations{
-		database.HasMany[DaemonSetCondition]{
-			Entities:    d.Conditions,
-			ForeignKey_: "daemon_set_id",
-		},
-		database.HasMany[Label]{
-			Entities:    d.Labels,
-			ForeignKey_: "value", // TODO: This is a hack to not delete any labels.
-		},
-		database.HasMany[DaemonSetLabel]{
-			Entities:    d.DaemonSetLabels,
-			ForeignKey_: "daemon_set_id",
-		},
+func (d *DaemonSet) Relations() []database.Relation {
+	fk := database.WithForeignKey("daemon_set_id")
+
+	return []database.Relation{
+		database.HasMany(d.Conditions, fk),
+		database.HasMany(d.DaemonSetLabels, fk),
+		database.HasMany(d.Labels, database.WithoutCascadeDelete()),
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/exp/constraints"
 	"math"
+	"strings"
 	"time"
 )
 
@@ -50,6 +51,13 @@ func MarshalJSON(v interface{}) ([]byte, error) {
 // UnmarshalJSON calls json.Unmarshal and wraps any resulting errors.
 func UnmarshalJSON(data []byte, v interface{}) error {
 	return errors.Wrapf(json.Unmarshal(data, v), "can't unmarshal JSON into %T", v)
+}
+
+// Name returns the declared name of type t.
+func Name(t interface{}) string {
+	s := strings.TrimLeft(fmt.Sprintf("%T", t), "*")
+
+	return s[strings.LastIndex(s, ".")+1:]
 }
 
 // Checksum returns the SHA-1 checksum of the data.

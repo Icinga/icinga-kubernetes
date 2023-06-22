@@ -103,16 +103,12 @@ func (n *Node) Obtain(k8s kmetav1.Object) {
 	}
 }
 
-func (n *Node) Relations() database.Relations {
-	return database.Relations{
-		database.HasMany[NodeCondition]{
-			Entities:    n.Conditions,
-			ForeignKey_: "node_id",
-		},
-		database.HasMany[NodeVolume]{
-			Entities:    n.Volumes,
-			ForeignKey_: "node_id",
-		},
+func (n *Node) Relations() []database.Relation {
+	fk := database.WithForeignKey("node_id")
+
+	return []database.Relation{
+		database.HasMany(n.Conditions, fk),
+		database.HasMany(n.Volumes, fk),
 	}
 }
 

@@ -118,23 +118,13 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object) {
 	}
 }
 
-func (r *ReplicaSet) Relations() database.Relations {
-	return database.Relations{
-		database.HasMany[ReplicaSetCondition]{
-			Entities:    r.Conditions,
-			ForeignKey_: "replica_set_id",
-		},
-		database.HasMany[ReplicaSetOwner]{
-			Entities:    r.Owners,
-			ForeignKey_: "pod_id",
-		},
-		database.HasMany[Label]{
-			Entities:    r.Labels,
-			ForeignKey_: "value", // TODO: This is a hack to not delete any labels.
-		},
-		database.HasMany[ReplicaSetLabel]{
-			Entities:    r.ReplicaSetLabels,
-			ForeignKey_: "replica_set_id",
-		},
+func (r *ReplicaSet) Relations() []database.Relation {
+	fk := database.WithForeignKey("replica_set_id")
+
+	return []database.Relation{
+		database.HasMany(r.Conditions, fk),
+		database.HasMany(r.Owners, fk),
+		database.HasMany(r.ReplicaSetLabels, fk),
+		database.HasMany(r.Labels, database.WithoutCascadeDelete()),
 	}
 }

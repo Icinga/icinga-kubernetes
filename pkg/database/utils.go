@@ -5,34 +5,12 @@ import (
 	"fmt"
 	"github.com/go-sql-driver/mysql"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
+	"github.com/icinga/icinga-kubernetes/pkg/types"
 	"github.com/lib/pq"
 	"github.com/pkg/errors"
 	"net"
 	"strings"
 )
-
-// Name returns the declared name of type t.
-// Name is used in combination with Key
-// to automatically guess an entity's
-// database table and Redis key.
-func Name(t interface{}) string {
-	s := strings.TrimLeft(fmt.Sprintf("%T", t), "*")
-
-	return s[strings.LastIndex(s, ".")+1:]
-}
-
-// TableName returns the table of t.
-func TableName(t interface{}) string {
-	if tn, ok := t.(TableNamer); ok {
-		return tn.TableName()
-	}
-
-	if s, ok := t.(string); ok {
-		return s
-	}
-
-	return strcase.Snake(Name(t))
-}
 
 // CantPerformQuery wraps the given error with the specified query that cannot be executed.
 func CantPerformQuery(err error, q string) error {
@@ -104,4 +82,17 @@ func IsRetryable(err error) bool {
 	}
 
 	return false
+}
+
+// TableName returns the table of t.
+func TableName(t interface{}) string {
+	if tn, ok := t.(TableNamer); ok {
+		return tn.TableName()
+	}
+
+	if s, ok := t.(string); ok {
+		return s
+	}
+
+	return strcase.Snake(types.Name(t))
 }

@@ -301,44 +301,19 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 	}
 }
 
-func (p *Pod) Relations() database.Relations {
-	return database.Relations{
-		database.HasMany[PodCondition]{
-			Entities:    p.Conditions,
-			ForeignKey_: "pod_id",
-		},
-		database.HasMany[Container]{
-			Entities:    p.Containers,
-			ForeignKey_: "pod_id",
-		},
-		database.HasMany[ContainerDevice]{
-			Entities:    p.ContainerDevices,
-			ForeignKey_: "pod_id",
-		},
-		database.HasMany[ContainerMount]{
-			Entities:    p.ContainerMounts,
-			ForeignKey_: "pod_id",
-		},
-		database.HasMany[PodOwner]{
-			Entities:    p.Owners,
-			ForeignKey_: "pod_id",
-		},
-		database.HasMany[Label]{
-			Entities:    p.Labels,
-			ForeignKey_: "value", // TODO: This is a hack to not delete any labels.
-		},
-		database.HasMany[PodLabel]{
-			Entities:    p.PodLabels,
-			ForeignKey_: "pod_id",
-		},
-		database.HasMany[PodPvc]{
-			Entities:    p.Pvcs,
-			ForeignKey_: "pod_id",
-		},
-		database.HasMany[PodVolume]{
-			Entities:    p.Volumes,
-			ForeignKey_: "pod_id",
-		},
+func (p *Pod) Relations() []database.Relation {
+	fk := database.WithForeignKey("pod_id")
+
+	return []database.Relation{
+		database.HasMany(p.Conditions, fk),
+		database.HasMany(p.Containers, fk),
+		database.HasMany(p.ContainerDevices, fk),
+		database.HasMany(p.ContainerMounts, fk),
+		database.HasMany(p.Owners, fk),
+		database.HasMany(p.Labels, database.WithoutCascadeDelete()),
+		database.HasMany(p.PodLabels, fk),
+		database.HasMany(p.Pvcs, fk),
+		database.HasMany(p.Volumes, fk),
 	}
 }
 

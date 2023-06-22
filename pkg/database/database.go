@@ -135,7 +135,7 @@ func (db *Database) BatchSizeByPlaceholders(n int) int {
 func (db *Database) BuildDeleteStmt(from interface{}) string {
 	var column string
 	if relation, ok := from.(Relation); ok {
-		column = relation.ForeignKey().(string)
+		column = relation.ForeignKey()
 	} else {
 		column = "id"
 	}
@@ -384,6 +384,10 @@ func (db *Database) DeleteStreamed(
 		for _, relation := range relations.Relations() {
 			relation := relation
 
+			if !relation.CascadeDelete() {
+				continue
+			}
+
 			ch := make(chan interface{})
 			g.Go(func() error {
 				defer runtime.HandleCrash()
@@ -436,9 +440,9 @@ func (db *Database) DeleteStreamed(
 						return nil
 					}
 
-					for _, relation := range relations.Relations() {
+					for _, ch := range streams {
 						select {
-						case streams[TableName(relation)] <- entity:
+						case ch <- entity:
 						case <-ctx.Done():
 							return ctx.Err()
 						}

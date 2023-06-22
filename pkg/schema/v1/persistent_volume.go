@@ -23,7 +23,7 @@ type PersistentVolume struct {
 	VolumeSourceType string
 	VolumeSource     string
 	ReclaimPolicy    string
-	Claims           []PersistentVolumeClaimRef `db:"-"`
+	Claim            PersistentVolumeClaimRef `db:"-"`
 }
 
 type PersistentVolumeClaimRef struct {
@@ -48,12 +48,6 @@ func (p *PersistentVolume) Obtain(k8s kmetav1.Object) {
 	p.Reason = persistentVolume.Status.Reason
 	p.Message = persistentVolume.Status.Message
 	p.AccessModes = persistentVolumeAccessModes.Bitmask(persistentVolume.Spec.AccessModes...)
-	p.Claims = append(p.Claims, PersistentVolumeClaimRef{
-		PersistentVolumeId: p.Id,
-		Kind:               persistentVolume.Spec.ClaimRef.Kind,
-		Name:               persistentVolume.Spec.ClaimRef.Name,
-		Uid:                persistentVolume.Spec.ClaimRef.UID,
-	})
 	if persistentVolume.Spec.VolumeMode != nil {
 		p.VolumeMode = sql.NullString{
 			String: string(*persistentVolume.Spec.VolumeMode),
@@ -67,13 +61,19 @@ func (p *PersistentVolume) Obtain(k8s kmetav1.Object) {
 	if err != nil {
 		panic(err)
 	}
+
+	p.Claim = PersistentVolumeClaimRef{
+		PersistentVolumeId: p.Id,
+		Kind:               persistentVolume.Spec.ClaimRef.Kind,
+		Name:               persistentVolume.Spec.ClaimRef.Name,
+		Uid:                persistentVolume.Spec.ClaimRef.UID,
+	}
 }
 
-func (p *PersistentVolume) Relations() database.Relations {
-	return database.Relations{
-		database.HasMany[PersistentVolumeClaimRef]{
-			Entities:    p.Claims,
-			ForeignKey_: "persistent_volume_id",
-		},
+func (p *PersistentVolume) Relations() []database.Relation {
+	fk := database.WithForeignKey("persistent_volume_id")
+
+	return []database.Relation{
+		database.HasOne(p.Claim, fk),
 	}
 }

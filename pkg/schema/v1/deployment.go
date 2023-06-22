@@ -99,19 +99,12 @@ func (d *Deployment) Obtain(k8s kmetav1.Object) {
 	}
 }
 
-func (d *Deployment) Relations() database.Relations {
-	return database.Relations{
-		database.HasMany[DeploymentCondition]{
-			Entities:    d.Conditions,
-			ForeignKey_: "deployment_id",
-		},
-		database.HasMany[Label]{
-			Entities:    d.Labels,
-			ForeignKey_: "value", // TODO: This is a hack to not delete any labels.
-		},
-		database.HasMany[DeploymentLabel]{
-			Entities:    d.DeploymentLabels,
-			ForeignKey_: "deployment_id",
-		},
+func (d *Deployment) Relations() []database.Relation {
+	fk := database.WithForeignKey("deployment_id")
+
+	return []database.Relation{
+		database.HasMany(d.Conditions, fk),
+		database.HasMany(d.DeploymentLabels, fk),
+		database.HasMany(d.Labels, database.WithoutCascadeDelete()),
 	}
 }

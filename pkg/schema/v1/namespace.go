@@ -48,11 +48,10 @@ func (n *Namespace) Obtain(k8s kmetav1.Object) {
 	}
 }
 
-func (n *Namespace) Relations() database.Relations {
-	return database.Relations{
-		database.HasMany[NamespaceCondition]{
-			Entities:    n.Conditions,
-			ForeignKey_: "namespace_id",
-		},
+func (n *Namespace) Relations() []database.Relation {
+	fk := database.WithForeignKey("namespace_id")
+
+	return []database.Relation{
+		database.HasMany(n.Conditions, fk),
 	}
 }

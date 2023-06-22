@@ -108,19 +108,12 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object) {
 	}
 }
 
-func (s *StatefulSet) Relations() database.Relations {
-	return database.Relations{
-		database.HasMany[StatefulSetCondition]{
-			Entities:    s.Conditions,
-			ForeignKey_: "stateful_set_id",
-		},
-		database.HasMany[Label]{
-			Entities:    s.Labels,
-			ForeignKey_: "value", // TODO: This is a hack to not delete any labels.
-		},
-		database.HasMany[StatefulSetLabel]{
-			Entities:    s.StatefulSetLabels,
-			ForeignKey_: "stateful_set_id",
-		},
+func (s *StatefulSet) Relations() []database.Relation {
+	fk := database.WithForeignKey("stateful_set_id")
+
+	return []database.Relation{
+		database.HasMany(s.Conditions, fk),
+		database.HasMany(s.StatefulSetLabels, fk),
+		database.HasMany(s.Labels, database.WithoutCascadeDelete()),
 	}
 }

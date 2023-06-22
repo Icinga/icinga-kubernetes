@@ -122,19 +122,12 @@ func (p *Pvc) Obtain(k8s kmetav1.Object) {
 	}
 }
 
-func (p *Pvc) Relations() database.Relations {
-	return database.Relations{
-		database.HasMany[PvcCondition]{
-			Entities:    p.Conditions,
-			ForeignKey_: "pvc_id",
-		},
-		database.HasMany[Label]{
-			Entities:    p.Labels,
-			ForeignKey_: "value", // TODO: This is a hack to not delete any labels.
-		},
-		database.HasMany[PvcLabel]{
-			Entities:    p.PvcLabels,
-			ForeignKey_: "pvc_id",
-		},
+func (p *Pvc) Relations() []database.Relation {
+	fk := database.WithForeignKey("pvc_id")
+
+	return []database.Relation{
+		database.HasMany(p.Conditions, fk),
+		database.HasMany(p.PvcLabels, fk),
+		database.HasMany(p.Labels, database.WithoutCascadeDelete()),
 	}
 }
