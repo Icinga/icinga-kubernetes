@@ -40,6 +40,8 @@ type Database struct {
 
 	tableSemaphores   map[string]*semaphore.Weighted
 	tableSemaphoresMu sync.Mutex
+
+	quoter *Quoter
 }
 
 // NewFromConfig returns a new Database connection from the given Config.
@@ -70,7 +72,7 @@ func NewFromConfig(c *Config, log logr.Logger) (*Database, error) {
 
 		config.DBName = c.Database
 		config.Timeout = time.Minute
-		config.Params = map[string]string{"sql_mode": "ANSI_QUOTES"}
+		config.Params = map[string]string{"sql_mode": "TRADITIONAL"}
 
 		dsn = config.FormatDSN()
 	case "pgsql":
@@ -117,6 +119,7 @@ func NewFromConfig(c *Config, log logr.Logger) (*Database, error) {
 		columnMap:       NewColumnMap(db.Mapper),
 		Options:         c.Options,
 		tableSemaphores: make(map[string]*semaphore.Weighted),
+		quoter:          NewQuoter(db),
 	}, nil
 }
 
@@ -141,8 +144,8 @@ func (db *Database) BuildDeleteStmt(from interface{}) string {
 	}
 
 	return fmt.Sprintf(
-		`DELETE FROM "%s" WHERE %s IN (?)`,
-		TableName(from),
+		`DELETE FROM %s WHERE %s IN (?)`,
+		db.quoter.QuoteIdentifier(TableName(from)),
 		column,
 	)
 }
@@ -151,9 +154,9 @@ func (db *Database) BuildDeleteStmt(from interface{}) string {
 // and the column list from the specified columns struct.
 func (db *Database) BuildSelectStmt(table interface{}, columns interface{}) string {
 	q := fmt.Sprintf(
-		`SELECT "%s" FROM "%s"`,
-		strings.Join(db.columnMap.Columns(columns), `", "`),
-		TableName(table),
+		"SELECT %s FROM %s",
+		db.quoter.QuoteColumns(db.columnMap.Columns(columns)),
+		db.quoter.QuoteIdentifier(TableName(table)),
 	)
 
 	return q
@@ -179,10 +182,11 @@ func (db *Database) BuildUpsertStmt(subject interface{}) (stmt string, placehold
 	}
 
 	var clause, setFormat string
+	quoted := db.quoter.QuoteIdentifier("%[1]s")
 	switch db.DriverName() {
 	case MySQL:
 		clause = "ON DUPLICATE KEY UPDATE"
-		setFormat = `"%[1]s" = VALUES("%[1]s")`
+		setFormat = fmt.Sprintf("%[1]s = VALUES(%[1]s)", quoted)
 	case PostgreSQL:
 		clause = fmt.Sprintf("ON CONFLICT ON CONSTRAINT pk_%s DO UPDATE SET", table)
 		setFormat = `"%[1]s" = EXCLUDED."%[1]s"`
@@ -195,9 +199,9 @@ func (db *Database) BuildUpsertStmt(subject interface{}) (stmt string, placehold
 	}
 
 	return fmt.Sprintf(
-		`INSERT INTO "%s" ("%s") VALUES (%s) %s %s`,
-		table,
-		strings.Join(insertColumns, `", "`),
+		`INSERT INTO %s (%s) VALUES (%s) %s %s`,
+		db.quoter.QuoteIdentifier(table),
+		db.quoter.QuoteColumns(insertColumns),
 		fmt.Sprintf(":%s", strings.Join(insertColumns, ", :")),
 		clause,
 		strings.Join(set, ", "),
