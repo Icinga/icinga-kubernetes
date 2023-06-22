@@ -5,7 +5,6 @@ import (
 	"database/sql/driver"
 	"encoding"
 	"encoding/json"
-	"github.com/pkg/errors"
 	"strconv"
 	"time"
 )
@@ -30,12 +29,13 @@ func (t UnixMilli) MarshalJSON() ([]byte, error) {
 
 // UnmarshalText implements the encoding.TextUnmarshaler interface.
 func (t *UnixMilli) UnmarshalText(text []byte) error {
-	parsed, err := strconv.ParseFloat(string(text), 64)
+	i, err := strToInt(string(text))
 	if err != nil {
-		return CantParseFloat64(err, string(text))
+		return err
 	}
 
-	*t = UnixMilli(FromUnixMilli(int64(parsed)))
+	*t = UnixMilli(FromUnixMilli(i))
+
 	return nil
 }
 
@@ -46,12 +46,12 @@ func (t *UnixMilli) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 
-	ms, err := strconv.ParseFloat(string(data), 64)
+	i, err := strToInt(string(data))
 	if err != nil {
-		return CantParseFloat64(err, string(data))
+		return err
 	}
-	tt := FromUnixMilli(int64(ms))
-	*t = UnixMilli(tt)
+
+	*t = UnixMilli(FromUnixMilli(i))
 
 	return nil
 }
@@ -63,12 +63,12 @@ func (t *UnixMilli) Scan(src interface{}) error {
 		return nil
 	}
 
-	v, ok := src.(int64)
-	if !ok {
-		return errors.Errorf("bad int64 type assertion from %#v", src)
+	i, err := strToInt(string(src.([]byte)))
+	if err != nil {
+		return err
 	}
-	tt := FromUnixMilli(v)
-	*t = UnixMilli(tt)
+
+	*t = UnixMilli(FromUnixMilli(i))
 
 	return nil
 }
@@ -81,6 +81,15 @@ func (t UnixMilli) Value() (driver.Value, error) {
 	}
 
 	return t.Time().UnixMilli(), nil
+}
+
+func strToInt(s string) (int64, error) {
+	i, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return 0, CantParseInt64(err, s)
+	}
+
+	return i, nil
 }
 
 // Assert interface compliance.

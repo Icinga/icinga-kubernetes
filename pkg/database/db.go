@@ -1,6 +1,7 @@
 package database
 
 import (
+	"github.com/creasty/defaults"
 	"github.com/goccy/go-yaml"
 	"github.com/pkg/errors"
 	"os"
@@ -17,6 +18,11 @@ func FromYAMLFile(file string) (*Config, error) {
 		Database Config `yaml:"database"`
 	}{}
 	decoder := yaml.NewDecoder(f)
+
+	if err := defaults.Set(c); err != nil {
+		return nil, errors.Wrap(err, "can't set config defaults")
+	}
+
 	if err := decoder.Decode(c); err != nil {
 		return nil, errors.Wrap(err, "can't parse YAML file "+file)
 	}

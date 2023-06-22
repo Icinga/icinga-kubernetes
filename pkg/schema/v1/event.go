@@ -1,41 +1,64 @@
 package v1
 
 import (
-	"fmt"
-
 	"github.com/icinga/icinga-kubernetes/pkg/types"
-	eventv1 "k8s.io/api/events/v1"
+	keventsv1 "k8s.io/api/events/v1"
+	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type Event struct {
-	Name                string          `db:"name"`
-	Namespace           string          `db:"namespace"`
-	UID                 string          `db:"uid"`
-	ReportingController string          `db:"reporting_controller"`
-	ReportingInstance   string          `db:"reporting_instance"`
-	Action              string          `db:"action"`
-	Reason              string          `db:"reason"`
-	Note                string          `db:"note"`
-	Type                string          `db:"type"`
-	Created             types.UnixMilli `db:"created"`
-	ReferenceKind       string          `db:"reference_kind"`
-	Reference           string          `db:"reference"`
+	Meta
+	Id                  types.Binary
+	ReportingController string
+	ReportingInstance   string
+	Action              string
+	Reason              string
+	Note                string
+	Type                string
+	ReferenceKind       string
+	ReferenceNamespace  string
+	ReferenceName       string
+	FirstSeen           types.UnixMilli
+	LastSeen            types.UnixMilli
+	Count               int32
 }
 
-func NewEventFromK8s(obj *eventv1.Event) Event {
-	return Event{
-		Name:                obj.Name,
-		Namespace:           obj.Namespace,
-		UID:                 string(obj.UID),
-		ReportingController: obj.ReportingController,
-		ReportingInstance:   obj.ReportingInstance,
-		Action:              obj.Action,
-		Reason:              obj.Reason,
-		Note:                obj.Note,
-		Type:                obj.Type,
-		Created:             types.UnixMilli(obj.CreationTimestamp.Time),
-		ReferenceKind:       obj.Regarding.Kind,
-		Reference:           fmt.Sprintf("%s/%s", obj.Regarding.Namespace, obj.Regarding.Name),
-	}
+func NewEvent() Resource {
+	return &Event{}
+}
 
+func (e *Event) Obtain(k8s kmetav1.Object) {
+	e.ObtainMeta(k8s)
+
+	event := k8s.(*keventsv1.Event)
+
+	e.Id = types.Checksum(event.Namespace + "/" + event.Name)
+	e.ReportingController = event.ReportingController
+	e.ReportingInstance = event.ReportingInstance
+	e.Action = event.Action
+	e.Reason = event.Reason
+	e.Note = event.Note
+	e.Type = event.Type
+	e.ReferenceKind = event.Regarding.Kind
+	e.ReferenceNamespace = event.Regarding.Namespace
+	e.ReferenceName = event.Regarding.Name
+	if event.DeprecatedFirstTimestamp.Time.IsZero() {
+		e.FirstSeen = types.UnixMilli(k8s.GetCreationTimestamp().Time)
+	} else {
+		e.FirstSeen = types.UnixMilli(event.DeprecatedFirstTimestamp.Time)
+	}
+	if event.DeprecatedLastTimestamp.Time.IsZero() {
+		e.LastSeen = types.UnixMilli(k8s.GetCreationTimestamp().Time)
+	} else {
+		e.LastSeen = types.UnixMilli(event.DeprecatedLastTimestamp.Time)
+	}
+	e.Count = event.DeprecatedCount
+	// e.FirstSeen = types.UnixMilli(event.EventTime.Time)
+	// if event.Series != nil {
+	// 	e.LastSeen = types.UnixMilli(event.Series.LastObservedTime.Time)
+	// 	e.Count = event.Series.Count
+	// } else {
+	// 	e.LastSeen = e.FirstSeen
+	// 	e.Count = 1
+	// }
 }
