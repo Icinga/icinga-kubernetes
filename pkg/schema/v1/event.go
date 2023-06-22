@@ -42,8 +42,16 @@ func (e *Event) Obtain(k8s kmetav1.Object) {
 	e.ReferenceKind = event.Regarding.Kind
 	e.ReferenceNamespace = event.Regarding.Namespace
 	e.ReferenceName = event.Regarding.Name
-	e.FirstSeen = types.UnixMilli(event.DeprecatedFirstTimestamp.Time)
-	e.LastSeen = types.UnixMilli(event.DeprecatedLastTimestamp.Time)
+	if event.DeprecatedFirstTimestamp.Time.IsZero() {
+		e.FirstSeen = types.UnixMilli(k8s.GetCreationTimestamp().Time)
+	} else {
+		e.FirstSeen = types.UnixMilli(event.DeprecatedFirstTimestamp.Time)
+	}
+	if event.DeprecatedLastTimestamp.Time.IsZero() {
+		e.LastSeen = types.UnixMilli(k8s.GetCreationTimestamp().Time)
+	} else {
+		e.LastSeen = types.UnixMilli(event.DeprecatedLastTimestamp.Time)
+	}
 	e.Count = event.DeprecatedCount
 	// e.FirstSeen = types.UnixMilli(event.EventTime.Time)
 	// if event.Series != nil {
