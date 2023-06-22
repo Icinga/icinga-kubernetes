@@ -42,11 +42,8 @@ func (c *Controller) Stream(ctx context.Context, sink *Sink) error {
 	go func() {
 		defer runtime.HandleCrash()
 
-		select {
-		case <-ctx.Done():
-			c.queue.ShutDown()
-			return
-		}
+		<-ctx.Done()
+		c.queue.ShutDown()
 	}()
 
 	go c.informer.Run(ctx.Done())
