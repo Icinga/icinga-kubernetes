@@ -22,10 +22,10 @@ CREATE TABLE namespace_condition (
 CREATE TABLE node (
   id binary(20) NOT NULL,
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
-  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
-  pod_cidr varchar(63) NOT NULL,
+  pod_cidr varchar(255) NOT NULL,
   num_ips int unsigned NOT NULL,
   unschedulable enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
   ready enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -60,11 +60,11 @@ CREATE TABLE node_volume (
 CREATE TABLE pod (
   id binary(20) NOT NULL COMMENT 'sha1(namespace/name)',
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
-  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
-  node_name varchar(63) NOT NULL,
-  nominated_node_name varchar(63) NOT NULL,
+  node_name varchar(253) NOT NULL,
+  nominated_node_name varchar(253) NOT NULL,
   ip varchar(255) NOT NULL,
   restart_policy enum('always', 'on_failure', 'never') COLLATE utf8mb4_unicode_ci NOT NULL,
   cpu_limits bigint unsigned NOT NULL,
@@ -72,8 +72,8 @@ CREATE TABLE pod (
   memory_limits bigint unsigned NOT NULL,
   memory_requests bigint unsigned NOT NULL,
   phase enum('pending', 'running', 'succeeded', 'failed') COLLATE utf8mb4_unicode_ci NOT NULL,
-  reason varchar(255) DEFAULT NULL,
-  message varchar(255) DEFAULT NULL,
+  reason varchar(255) NULL DEFAULT NULL,
+  message varchar(255) NULL DEFAULT NULL,
   qos enum('guaranteed', 'burstable', 'best_effort') COLLATE utf8mb4_unicode_ci NOT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY(id)
@@ -93,7 +93,7 @@ CREATE TABLE pod_condition (
 CREATE TABLE pod_owner (
   pod_id binary(20) NOT NULL,
   kind enum('daemon_set', 'node', 'replica_set', 'stateful_set') COLLATE utf8mb4_unicode_ci NOT NULL,
-  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   controller enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
   block_owner_deletion enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -113,19 +113,19 @@ CREATE TABLE pod_volume (
   volume_name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   source longtext NOT NULL,
-  PRIMARY KEY (pod_id, name)
+  PRIMARY KEY (pod_id, volume_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE container (
   id binary(20) NOT NULL COMMENT 'sha1(pod.namespace/pod.name/name)',
   pod_id binary(20) NOT NULL,
   name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
-  image varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  image varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   cpu_limits bigint unsigned NOT NULL,
   cpu_requests bigint unsigned NOT NULL,
   memory_limits bigint unsigned NOT NULL,
   memory_requests bigint unsigned NOT NULL,
-  state enum('waiting', 'running', 'terminated') COLLATE utf8mb4_unicode_ci NOT NULL,
+  state enum('waiting', 'running', 'terminated') COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   state_details longtext NOT NULL,
   ready enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
   started enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -138,7 +138,7 @@ CREATE TABLE container_device (
   container_id binary(20) NOT NULL,
   pod_id binary(20) NOT NULL,
   name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
-  path varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  path varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (container_id, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
@@ -146,8 +146,8 @@ CREATE TABLE container_mount (
   container_id binary(20) NOT NULL,
   pod_id binary(20) NOT NULL,
   volume_name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
-  path varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
-  sub_path varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  path varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  sub_path varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   read_only enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (container_id, volume_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
@@ -155,7 +155,7 @@ CREATE TABLE container_mount (
 CREATE TABLE deployment (
   id binary(20) NOT NULL,
   namespace varchar(63) COLLATE utf8mb4_unicode_ci  NOT NULL,
-  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
   desired_replicas int unsigned NOT NULL,
@@ -185,7 +185,7 @@ CREATE TABLE deployment_condition (
 
 CREATE TABLE service (
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
-  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -197,7 +197,7 @@ CREATE TABLE service (
 CREATE TABLE replica_set (
   id binary(20) NOT NULL,
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
-  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
   desired_replicas int unsigned NOT NULL,
@@ -223,7 +223,7 @@ CREATE TABLE replica_set_condition (
 CREATE TABLE replica_set_owner (
   replica_set_id binary(20) NOT NULL,
   kind enum('deployment') COLLATE utf8mb4_unicode_ci NOT NULL,
-  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   controller enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
   block_owner_deletion enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -233,7 +233,7 @@ CREATE TABLE replica_set_owner (
 CREATE TABLE daemon_set (
   id binary(20) NOT NULL,
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
-  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
   update_strategy enum('rolling_update', 'on_delete') COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -262,11 +262,11 @@ CREATE TABLE daemon_set_condition (
 CREATE TABLE stateful_set (
   id binary(20) NOT NULL,
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
-  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
   desired_replicas int unsigned NOT NULL,
-  service_name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  service_name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   pod_management_policy enum('ordered_ready', 'parallel') COLLATE utf8mb4_unicode_ci NOT NULL,
   update_strategy enum('rolling_update', 'on_delete') COLLATE utf8mb4_unicode_ci NOT NULL,
   min_ready_seconds int unsigned NOT NULL,
@@ -338,20 +338,20 @@ CREATE TABLE pvc_label (
 CREATE TABLE event (
   id binary(20) NOT NULL,
   namespace varchar(63) NOT NULL,
-  name varchar(63) NOT NULL,
-  uid varchar(63) NOT NULL,
+  name varchar(253) NOT NULL,
+  uid varchar(255) NOT NULL,
   resource_version varchar(255) NOT NULL,
-  reporting_controller varchar(63) NOT NULL,
-  reporting_instance varchar(128) NOT NULL,
-  action varchar(128) NOT NULL,
-  reason varchar(128) NOT NULL,
+  reporting_controller varchar(253) NOT NULL,
+  reporting_instance varchar(253) NOT NULL,
+  action varchar(255) NOT NULL,
+  reason varchar(255) NOT NULL,
   note text NOT NULL,
   type varchar(255) NOT NULL,
   reference_kind varchar(255) NOT NULL,
   reference_namespace varchar(63) NOT NULL,
-  reference_name varchar(63) NOT NULL,
-  first_seen bigint unsigned not null,
-  last_seen bigint unsigned not null,
+  reference_name varchar(253) NOT NULL,
+  first_seen bigint unsigned NOT NULL,
+  last_seen bigint unsigned NOT NULL,
   count int unsigned NOT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (id)
@@ -359,7 +359,7 @@ CREATE TABLE event (
 
 CREATE TABLE pod_metrics (
   namespace varchar(63) NOT NULL,
-  pod_name varchar(63) NOT NULL,
+  pod_name varchar(253) NOT NULL,
   container_name varchar(63) NOT NULL,
   timestamp bigint unsigned NOT NULL,
   duration bigint unsigned NOT NULL,
@@ -381,7 +381,7 @@ CREATE TABLE pvc (
   minimum_capacity bigint unsigned NULL DEFAULT NULL,
   actual_capacity bigint unsigned NOT NULL,
   phase enum('pending', 'available', 'bound', 'released', 'failed') COLLATE utf8mb4_unicode_ci NOT NULL,
-  volume_name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  volume_name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   volume_mode enum('block', 'filesystem') COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   storage_class varchar(255) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   created bigint unsigned NOT NULL,
@@ -421,7 +421,7 @@ CREATE TABLE persistent_volume (
 
 CREATE TABLE persistent_volume_claim_ref (
   persistent_volume_id binary(20) NOT NULL,
-  kind varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  kind varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (persistent_volume_id, uid)
