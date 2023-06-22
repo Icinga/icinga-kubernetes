@@ -13,16 +13,16 @@ import (
 type PersistentVolume struct {
 	Meta
 	Id               types.Binary
+	AccessModes      types.Bitmask[kpersistentVolumeAccessModesSize]
 	Capacity         int64
+	ReclaimPolicy    string
+	StorageClass     string
+	VolumeMode       sql.NullString
+	VolumeSourceType string
+	VolumeSource     string
 	Phase            string
 	Reason           string
 	Message          string
-	AccessModes      types.Bitmask[kpersistentVolumeAccessModesSize]
-	VolumeMode       sql.NullString
-	StorageClass     string
-	VolumeSourceType string
-	VolumeSource     string
-	ReclaimPolicy    string
 	Claim            PersistentVolumeClaimRef `db:"-"`
 }
 
@@ -43,19 +43,19 @@ func (p *PersistentVolume) Obtain(k8s kmetav1.Object) {
 	persistentVolume := k8s.(*kcorev1.PersistentVolume)
 
 	p.Id = types.Checksum(persistentVolume.Namespace + "/" + persistentVolume.Name)
+	p.AccessModes = persistentVolumeAccessModes.Bitmask(persistentVolume.Spec.AccessModes...)
 	p.Capacity = persistentVolume.Spec.Capacity.Storage().MilliValue()
+	p.ReclaimPolicy = strcase.Snake(string(persistentVolume.Spec.PersistentVolumeReclaimPolicy))
+	p.StorageClass = persistentVolume.Spec.StorageClassName
 	p.Phase = strcase.Snake(string(persistentVolume.Status.Phase))
 	p.Reason = persistentVolume.Status.Reason
 	p.Message = persistentVolume.Status.Message
-	p.AccessModes = persistentVolumeAccessModes.Bitmask(persistentVolume.Spec.AccessModes...)
 	if persistentVolume.Spec.VolumeMode != nil {
 		p.VolumeMode = sql.NullString{
 			String: string(*persistentVolume.Spec.VolumeMode),
 			Valid:  true,
 		}
 	}
-	p.StorageClass = persistentVolume.Spec.StorageClassName
-
 	var err error
 	p.VolumeSourceType, p.VolumeSource, err = MarshalFirstNonNilStructFieldToJSON(persistentVolume.Spec.PersistentVolumeSource)
 	if err != nil {
