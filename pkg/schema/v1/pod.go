@@ -2,6 +2,7 @@ package v1
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
@@ -23,7 +24,7 @@ type Container struct {
 	CpuRequests    int64
 	MemoryLimits   int64
 	MemoryRequests int64
-	State          string
+	State          sql.NullString
 	StateDetails   string
 	Ready          types.Bool
 	Started        types.Bool
@@ -175,6 +176,11 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 			fmt.Println(err)
 			logs = ""
 		}
+		var containerState sql.NullString
+		if state != "" {
+			containerState.String = strcase.Snake(state)
+			containerState.Valid = true
+		}
 		p.Containers = append(p.Containers, Container{
 			Id:             types.Checksum(pod.Namespace + "/" + pod.Name + "/" + container.Name),
 			PodId:          p.Id,
@@ -193,7 +199,7 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 				Valid: true,
 			},
 			RestartCount: containerStatuses[container.Name].RestartCount,
-			State:        strcase.Snake(state),
+			State:        containerState,
 			StateDetails: stateDetails,
 			Logs:         logs,
 		})
