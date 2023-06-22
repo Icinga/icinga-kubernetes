@@ -22,7 +22,7 @@ func convert(s string, _case int, sep byte) string {
 	n := strings.Builder{}
 	n.Grow(len(s) + 2) // nominal 2 bytes of extra space for inserted delimiters
 
-	for _, r := range []rune(s) {
+	for _, r := range s {
 		if _, ok := separators[r]; ok || wasLower && unicode.IsUpper(r) {
 			n.WriteByte(sep)
 		}
