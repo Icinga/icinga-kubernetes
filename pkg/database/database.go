@@ -262,6 +262,12 @@ func (db *Database) BulkExec(
 
 							counter.Add(uint64(len(b)))
 
+							if f.onSuccess != nil {
+								if err := f.onSuccess(ctx, b); err != nil {
+									return err
+								}
+							}
+
 							return nil
 						},
 						IsRetryable,
