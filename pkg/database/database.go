@@ -645,7 +645,7 @@ func (db *Database) query(ctx context.Context, query string, scope ...interface{
 	if len(scope) == 1 && IsStruct(scope[0]) {
 		rows, err = db.NamedQueryContext(ctx, query, scope[0])
 	} else {
-		rows, err = db.QueryxContext(ctx, query, scope...)
+		rows, err = db.QueryxContext(ctx, db.Rebind(query), scope...)
 	}
 
 	return
