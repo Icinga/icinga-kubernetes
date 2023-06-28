@@ -130,7 +130,6 @@ CREATE TABLE container (
   ready enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
   started enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
   restart_count smallint unsigned NOT NULL,
-  logs longtext NOT NULL,
   PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
@@ -150,6 +149,15 @@ CREATE TABLE container_mount (
   sub_path varchar(255) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   read_only enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (container_id, volume_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE container_log (
+  container_id binary(20) NOT NULL,
+  pod_id binary(20) NOT NULL,
+  logs longtext NOT NULL,
+  last_update bigint NOT NULL,
+
+  PRIMARY KEY (container_id, pod_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE deployment (

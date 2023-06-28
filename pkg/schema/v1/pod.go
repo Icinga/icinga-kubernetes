@@ -165,7 +165,7 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 		p.MemoryRequests += k8sContainer.Resources.Requests.Memory().MilliValue()
 
 		for _, device := range k8sContainer.VolumeDevices {
-			container.ContainerDevices = append(container.ContainerDevices, ContainerDevice{
+			container.Devices = append(container.Devices, ContainerDevice{
 				ContainerId: container.Id,
 				PodId:       p.Id,
 				Name:        device.Name,
@@ -179,7 +179,7 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 				subPath.String = mount.SubPath
 				subPath.Valid = true
 			}
-			container.ContainerMounts = append(container.ContainerMounts, ContainerMount{
+			container.Mounts = append(container.Mounts, ContainerMount{
 				ContainerId: container.Id,
 				PodId:       p.Id,
 				VolumeName:  mount.Name,
@@ -274,7 +274,7 @@ func (p *Pod) Relations() []database.Relation {
 
 	return []database.Relation{
 		database.HasMany(p.Conditions, fk),
-		database.HasMany(p.Containers, fk),
+		database.HasMany(p.Containers, database.WithoutCascadeDelete()),
 		database.HasMany(p.Owners, fk),
 		database.HasMany(p.Labels, database.WithoutCascadeDelete()),
 		database.HasMany(p.PodLabels, fk),
