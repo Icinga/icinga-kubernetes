@@ -19,14 +19,9 @@ var nullBinary Binary
 
 // Equal returns whether the binaries are the same length and
 // contain the same bytes.
-// func (binary Binary) Equal(equaler contracts.Equaler) bool {
-// 	b, ok := equaler.(Binary)
-// 	if !ok {
-// 		panic("bad Binary type assertion")
-// 	}
-//
-// 	return bytes.Equal(binary, b)
-// }
+func (binary Binary) Equal(other Binary) bool {
+	return bytes.Equal(binary, other)
+}
 
 // Valid returns whether the Binary is valid.
 func (binary Binary) Valid() bool {
@@ -64,7 +59,7 @@ func (binary *Binary) UnmarshalText(text []byte) error {
 // Supports JSON null.
 func (binary Binary) MarshalJSON() ([]byte, error) {
 	if !binary.Valid() {
-		return nil, nil
+		return []byte("null"), nil
 	}
 
 	return MarshalJSON(binary.String())
