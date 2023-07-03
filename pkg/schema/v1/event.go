@@ -1,14 +1,14 @@
 package v1
 
 import (
+	"github.com/icinga/icinga-kubernetes/pkg/contracts"
 	"github.com/icinga/icinga-kubernetes/pkg/types"
 	keventsv1 "k8s.io/api/events/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type Event struct {
-	Meta
-	Id                  types.Binary
+	ResourceMeta
 	ReportingController string
 	ReportingInstance   string
 	Action              string
@@ -23,12 +23,15 @@ type Event struct {
 	Count               int32
 }
 
-func NewEvent() Resource {
+func NewEvent() contracts.Entity {
 	return &Event{}
 }
 
 func (e *Event) Obtain(k8s kmetav1.Object) {
 	e.ObtainMeta(k8s)
+	defer func() {
+		e.PropertiesChecksum = types.Checksum(MustMarshalJSON(e))
+	}()
 
 	event := k8s.(*keventsv1.Event)
 

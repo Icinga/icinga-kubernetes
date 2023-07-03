@@ -1,17 +1,16 @@
 package v1
 
 import (
+	"github.com/icinga/icinga-kubernetes/pkg/contracts"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
 	"github.com/icinga/icinga-kubernetes/pkg/types"
 	kappsv1 "k8s.io/api/apps/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"strings"
 )
 
 type DaemonSet struct {
-	Meta
-	Id                     types.Binary
+	ResourceMeta
 	UpdateStrategy         string
 	MinReadySeconds        int32
 	DesiredNumberScheduled int32
@@ -21,13 +20,25 @@ type DaemonSet struct {
 	UpdateNumberScheduled  int32
 	NumberAvailable        int32
 	NumberUnavailable      int32
-	Conditions             []DaemonSetCondition `db:"-"`
-	Labels                 []Label              `db:"-"`
-	DaemonSetLabels        []DaemonSetLabel     `db:"-"`
+	Conditions             []*DaemonSetCondition `json:"-" db:"-"`
+	Labels                 []*Label              `json:"-" db:"-"`
+}
+
+type DaemonSetMeta struct {
+	contracts.Meta
+	DaemonSetId types.Binary
+}
+
+func (dm *DaemonSetMeta) Fingerprint() contracts.FingerPrinter {
+	return dm
+}
+
+func (dm *DaemonSetMeta) ParentID() types.Binary {
+	return dm.DaemonSetId
 }
 
 type DaemonSetCondition struct {
-	DaemonSetId    types.Binary
+	DaemonSetMeta
 	Type           string
 	Status         string
 	LastTransition types.UnixMilli
@@ -35,12 +46,7 @@ type DaemonSetCondition struct {
 	Message        string
 }
 
-type DaemonSetLabel struct {
-	DaemonSetId types.Binary
-	LabelId     types.Binary
-}
-
-func NewDaemonSet() Resource {
+func NewDaemonSet() contracts.Entity {
 	return &DaemonSet{}
 }
 
@@ -60,28 +66,31 @@ func (d *DaemonSet) Obtain(k8s kmetav1.Object) {
 	d.NumberAvailable = daemonSet.Status.NumberAvailable
 	d.NumberUnavailable = daemonSet.Status.NumberUnavailable
 
+	d.PropertiesChecksum = types.Checksum(MustMarshalJSON(d))
+
 	for _, condition := range daemonSet.Status.Conditions {
-		d.Conditions = append(d.Conditions, DaemonSetCondition{
-			DaemonSetId:    d.Id,
+		daemonCond := &DaemonSetCondition{
+			DaemonSetMeta: DaemonSetMeta{
+				DaemonSetId: d.Id,
+				Meta:        contracts.Meta{Id: types.Checksum(types.MustPackSlice(d.Id, condition.Type))},
+			},
 			Type:           string(condition.Type),
 			Status:         string(condition.Status),
 			LastTransition: types.UnixMilli(condition.LastTransitionTime.Time),
 			Reason:         condition.Reason,
 			Message:        condition.Message,
-		})
+		}
+		daemonCond.PropertiesChecksum = types.Checksum(MustMarshalJSON(daemonCond))
+
+		d.Conditions = append(d.Conditions, daemonCond)
 	}
 
 	for labelName, labelValue := range daemonSet.Labels {
-		labelId := types.Checksum(strings.ToLower(labelName + ":" + labelValue))
-		d.Labels = append(d.Labels, Label{
-			Id:    labelId,
-			Name:  labelName,
-			Value: labelValue,
-		})
-		d.DaemonSetLabels = append(d.DaemonSetLabels, DaemonSetLabel{
-			DaemonSetId: d.Id,
-			LabelId:     labelId,
-		})
+		label := NewLabel(labelName, labelValue)
+		label.DaemonSetId = d.Id
+		label.PropertiesChecksum = types.Checksum(MustMarshalJSON(label))
+
+		d.Labels = append(d.Labels, label)
 	}
 }
 
@@ -90,7 +99,6 @@ func (d *DaemonSet) Relations() []database.Relation {
 
 	return []database.Relation{
 		database.HasMany(d.Conditions, fk),
-		database.HasMany(d.DaemonSetLabels, fk),
-		database.HasMany(d.Labels, database.WithoutCascadeDelete()),
+		database.HasMany(d.Labels, fk),
 	}
 }

@@ -1,17 +1,16 @@
 package v1
 
 import (
+	"github.com/icinga/icinga-kubernetes/pkg/contracts"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
 	"github.com/icinga/icinga-kubernetes/pkg/types"
 	kappsv1 "k8s.io/api/apps/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"strings"
 )
 
 type StatefulSet struct {
-	Meta
-	Id                                              types.Binary
+	ResourceMeta
 	DesiredReplicas                                 int32
 	ServiceName                                     string
 	PodManagementPolicy                             string
@@ -25,13 +24,25 @@ type StatefulSet struct {
 	CurrentReplicas                                 int32
 	UpdatedReplicas                                 int32
 	AvailableReplicas                               int32
-	Conditions                                      []StatefulSetCondition `db:"-"`
-	Labels                                          []Label                `db:"-"`
-	StatefulSetLabels                               []StatefulSetLabel     `db:"-"`
+	Conditions                                      []*StatefulSetCondition `json:"-" db:"-"`
+	Labels                                          []*Label                `json:"-" db:"-"`
+}
+
+type StatefulSetMeta struct {
+	contracts.Meta
+	StatefulSetId types.Binary
+}
+
+func (sm *StatefulSetMeta) Fingerprint() contracts.FingerPrinter {
+	return sm
+}
+
+func (sm *StatefulSetMeta) ParentID() types.Binary {
+	return sm.StatefulSetId
 }
 
 type StatefulSetCondition struct {
-	StatefulSetId  types.Binary
+	StatefulSetMeta
 	Type           string
 	Status         string
 	LastTransition types.UnixMilli
@@ -39,12 +50,7 @@ type StatefulSetCondition struct {
 	Message        string
 }
 
-type StatefulSetLabel struct {
-	StatefulSetId types.Binary
-	LabelId       types.Binary
-}
-
-func NewStatefulSet() Resource {
+func NewStatefulSet() contracts.Entity {
 	return &StatefulSet{}
 }
 
@@ -83,28 +89,31 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object) {
 	s.UpdatedReplicas = statefulSet.Status.UpdatedReplicas
 	s.AvailableReplicas = statefulSet.Status.AvailableReplicas
 
+	s.PropertiesChecksum = types.Checksum(MustMarshalJSON(s))
+
 	for _, condition := range statefulSet.Status.Conditions {
-		s.Conditions = append(s.Conditions, StatefulSetCondition{
-			StatefulSetId:  s.Id,
+		cond := &StatefulSetCondition{
+			StatefulSetMeta: StatefulSetMeta{
+				StatefulSetId: s.Id,
+				Meta:          contracts.Meta{Id: types.Checksum(types.MustPackSlice(s.Id, condition.Type))},
+			},
 			Type:           string(condition.Type),
 			Status:         string(condition.Status),
 			LastTransition: types.UnixMilli(condition.LastTransitionTime.Time),
 			Reason:         condition.Reason,
 			Message:        condition.Message,
-		})
+		}
+		cond.PropertiesChecksum = types.Checksum(MustMarshalJSON(cond))
+
+		s.Conditions = append(s.Conditions, cond)
 	}
 
 	for labelName, labelValue := range statefulSet.Labels {
-		labelId := types.Checksum(strings.ToLower(labelName + ":" + labelValue))
-		s.Labels = append(s.Labels, Label{
-			Id:    labelId,
-			Name:  labelName,
-			Value: labelValue,
-		})
-		s.StatefulSetLabels = append(s.StatefulSetLabels, StatefulSetLabel{
-			StatefulSetId: s.Id,
-			LabelId:       labelId,
-		})
+		label := NewLabel(labelName, labelValue)
+		label.StatefulSetId = s.Id
+		label.PropertiesChecksum = types.Checksum(MustMarshalJSON(label))
+
+		s.Labels = append(s.Labels, label)
 	}
 }
 
@@ -113,7 +122,6 @@ func (s *StatefulSet) Relations() []database.Relation {
 
 	return []database.Relation{
 		database.HasMany(s.Conditions, fk),
-		database.HasMany(s.StatefulSetLabels, fk),
-		database.HasMany(s.Labels, database.WithoutCascadeDelete()),
+		database.HasMany(s.Labels, fk),
 	}
 }

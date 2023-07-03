@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"github.com/icinga/icinga-kubernetes/pkg/contracts"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/types"
 	kcorev1 "k8s.io/api/core/v1"
@@ -9,14 +10,26 @@ import (
 )
 
 type Namespace struct {
-	Meta
-	Id         types.Binary
+	ResourceMeta
 	Phase      string
-	Conditions []NamespaceCondition `db:"-"`
+	Conditions []*NamespaceCondition `json:"-" db:"-"`
+}
+
+type NamespaceMeta struct {
+	contracts.Meta
+	NamespaceId types.Binary
+}
+
+func (nm *NamespaceMeta) Fingerprint() contracts.FingerPrinter {
+	return nm
+}
+
+func (nm *NamespaceMeta) ParentID() types.Binary {
+	return nm.NamespaceId
 }
 
 type NamespaceCondition struct {
-	NamespaceId    types.Binary
+	NamespaceMeta
 	Type           string
 	Status         string
 	LastTransition types.UnixMilli
@@ -24,7 +37,7 @@ type NamespaceCondition struct {
 	Message        string
 }
 
-func NewNamespace() Resource {
+func NewNamespace() contracts.Entity {
 	return &Namespace{}
 }
 
@@ -36,15 +49,23 @@ func (n *Namespace) Obtain(k8s kmetav1.Object) {
 	n.Id = types.Checksum(namespace.Name)
 	n.Phase = strings.ToLower(string(namespace.Status.Phase))
 
+	n.PropertiesChecksum = types.Checksum(MustMarshalJSON(n))
+
 	for _, condition := range namespace.Status.Conditions {
-		n.Conditions = append(n.Conditions, NamespaceCondition{
-			NamespaceId:    n.Id,
+		namespaceCond := &NamespaceCondition{
+			NamespaceMeta: NamespaceMeta{
+				NamespaceId: n.Id,
+				Meta:        contracts.Meta{Id: types.Checksum(types.MustPackSlice(n.Id, condition.Type))},
+			},
 			Type:           string(condition.Type),
 			Status:         string(condition.Status),
 			LastTransition: types.UnixMilli(condition.LastTransitionTime.Time),
 			Reason:         condition.Reason,
 			Message:        condition.Message,
-		})
+		}
+		namespaceCond.PropertiesChecksum = types.Checksum(MustMarshalJSON(namespaceCond))
+
+		n.Conditions = append(n.Conditions, namespaceCond)
 	}
 }
 

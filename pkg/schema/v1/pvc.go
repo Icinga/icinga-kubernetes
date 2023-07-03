@@ -2,12 +2,12 @@ package v1
 
 import (
 	"database/sql"
+	"github.com/icinga/icinga-kubernetes/pkg/contracts"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
 	"github.com/icinga/icinga-kubernetes/pkg/types"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"strings"
 )
 
 type kpersistentVolumeAccessModesSize byte
@@ -32,8 +32,7 @@ var persistentVolumeAccessModes = kpersistentVolumeAccessModes{
 }
 
 type Pvc struct {
-	Meta
-	Id                 types.Binary
+	ResourceMeta
 	DesiredAccessModes types.Bitmask[kpersistentVolumeAccessModesSize]
 	ActualAccessModes  types.Bitmask[kpersistentVolumeAccessModesSize]
 	MinimumCapacity    sql.NullInt64
@@ -42,13 +41,25 @@ type Pvc struct {
 	VolumeName         string
 	VolumeMode         sql.NullString
 	StorageClass       sql.NullString
-	Conditions         []PvcCondition `db:"-"`
-	Labels             []Label        `db:"-"`
-	PvcLabels          []PvcLabel     `db:"-"`
+	Conditions         []*PvcCondition `json:"-" db:"-"`
+	Labels             []*Label        `json:"-" db:"-"`
+}
+
+type PvcMeta struct {
+	contracts.Meta
+	PvcId types.Binary
+}
+
+func (pm *PvcMeta) Fingerprint() contracts.FingerPrinter {
+	return pm
+}
+
+func (pm *PvcMeta) ParentID() types.Binary {
+	return pm.PvcId
 }
 
 type PvcCondition struct {
-	PvcId          types.Binary
+	PvcMeta
 	Type           string
 	Status         string
 	LastProbe      types.UnixMilli
@@ -57,12 +68,7 @@ type PvcCondition struct {
 	Message        string
 }
 
-type PvcLabel struct {
-	PvcId   types.Binary
-	LabelId types.Binary
-}
-
-func NewPvc() Resource {
+func NewPvc() contracts.Entity {
 	return &Pvc{}
 }
 
@@ -96,29 +102,32 @@ func (p *Pvc) Obtain(k8s kmetav1.Object) {
 		}
 	}
 
+	p.PropertiesChecksum = types.Checksum(MustMarshalJSON(p))
+
 	for _, condition := range pvc.Status.Conditions {
-		p.Conditions = append(p.Conditions, PvcCondition{
-			PvcId:          p.Id,
+		pvcCond := &PvcCondition{
+			PvcMeta: PvcMeta{
+				PvcId: p.Id,
+				Meta:  contracts.Meta{Id: types.Checksum(types.MustPackSlice(p.Id, condition.Type))},
+			},
 			Type:           strcase.Snake(string(condition.Type)),
 			Status:         string(condition.Status),
 			LastProbe:      types.UnixMilli(condition.LastProbeTime.Time),
 			LastTransition: types.UnixMilli(condition.LastTransitionTime.Time),
 			Reason:         condition.Reason,
 			Message:        condition.Message,
-		})
+		}
+		pvcCond.PropertiesChecksum = types.Checksum(MustMarshalJSON(pvcCond))
+
+		p.Conditions = append(p.Conditions, pvcCond)
 	}
 
 	for labelName, labelValue := range pvc.Labels {
-		labelId := types.Checksum(strings.ToLower(labelName + ":" + labelValue))
-		p.Labels = append(p.Labels, Label{
-			Id:    labelId,
-			Name:  labelName,
-			Value: labelValue,
-		})
-		p.PvcLabels = append(p.PvcLabels, PvcLabel{
-			PvcId:   p.Id,
-			LabelId: labelId,
-		})
+		label := NewLabel(labelName, labelValue)
+		label.PvcId = p.Id
+		label.PropertiesChecksum = types.Checksum(MustMarshalJSON(label))
+
+		p.Labels = append(p.Labels, label)
 	}
 }
 
@@ -127,7 +136,6 @@ func (p *Pvc) Relations() []database.Relation {
 
 	return []database.Relation{
 		database.HasMany(p.Conditions, fk),
-		database.HasMany(p.PvcLabels, fk),
-		database.HasMany(p.Labels, database.WithoutCascadeDelete()),
+		database.HasMany(p.Labels, fk),
 	}
 }

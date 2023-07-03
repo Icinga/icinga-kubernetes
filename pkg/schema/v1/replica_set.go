@@ -1,32 +1,43 @@
 package v1
 
 import (
+	"github.com/icinga/icinga-kubernetes/pkg/contracts"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
 	"github.com/icinga/icinga-kubernetes/pkg/types"
 	kappsv1 "k8s.io/api/apps/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ktypes "k8s.io/apimachinery/pkg/types"
-	"strings"
 )
 
 type ReplicaSet struct {
-	Meta
-	Id                   types.Binary
+	ResourceMeta
 	DesiredReplicas      int32
 	MinReadySeconds      int32
 	ActualReplicas       int32
 	FullyLabeledReplicas int32
 	ReadyReplicas        int32
 	AvailableReplicas    int32
-	Conditions           []ReplicaSetCondition `db:"-"`
-	Owners               []ReplicaSetOwner     `db:"-"`
-	Labels               []Label               `db:"-"`
-	ReplicaSetLabels     []ReplicaSetLabel     `db:"-"`
+	Conditions           []*ReplicaSetCondition `json:"-" db:"-"`
+	Owners               []*ReplicaSetOwner     `json:"-" db:"-"`
+	Labels               []*Label               `json:"-" db:"-"`
+}
+
+type ReplicaSetMeta struct {
+	contracts.Meta
+	ReplicaSetId types.Binary
+}
+
+func (rm *ReplicaSetMeta) Fingerprint() contracts.FingerPrinter {
+	return rm
+}
+
+func (rm *ReplicaSetMeta) ParentID() types.Binary {
+	return rm.ReplicaSetId
 }
 
 type ReplicaSetCondition struct {
-	ReplicaSetId   types.Binary
+	ReplicaSetMeta
 	Type           string
 	Status         string
 	LastTransition types.UnixMilli
@@ -35,7 +46,7 @@ type ReplicaSetCondition struct {
 }
 
 type ReplicaSetOwner struct {
-	ReplicaSetId       types.Binary
+	ReplicaSetMeta
 	Kind               string
 	Name               string
 	Uid                ktypes.UID
@@ -43,12 +54,7 @@ type ReplicaSetOwner struct {
 	BlockOwnerDeletion types.Bool
 }
 
-type ReplicaSetLabel struct {
-	ReplicaSetId types.Binary
-	LabelId      types.Binary
-}
-
-func NewReplicaSet() Resource {
+func NewReplicaSet() contracts.Entity {
 	return &ReplicaSet{}
 }
 
@@ -69,15 +75,23 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object) {
 	r.ReadyReplicas = replicaSet.Status.ReadyReplicas
 	r.AvailableReplicas = replicaSet.Status.AvailableReplicas
 
+	r.PropertiesChecksum = types.Checksum(MustMarshalJSON(r))
+
 	for _, condition := range replicaSet.Status.Conditions {
-		r.Conditions = append(r.Conditions, ReplicaSetCondition{
-			ReplicaSetId:   r.Id,
+		replicaSetCond := &ReplicaSetCondition{
+			ReplicaSetMeta: ReplicaSetMeta{
+				ReplicaSetId: r.Id,
+				Meta:         contracts.Meta{Id: types.Checksum(types.MustPackSlice(r.Id, condition.Type))},
+			},
 			Type:           strcase.Snake(string(condition.Type)),
 			Status:         string(condition.Status),
 			LastTransition: types.UnixMilli(condition.LastTransitionTime.Time),
 			Reason:         condition.Reason,
 			Message:        condition.Message,
-		})
+		}
+		replicaSetCond.PropertiesChecksum = types.Checksum(MustMarshalJSON(replicaSetCond))
+
+		r.Conditions = append(r.Conditions, replicaSetCond)
 	}
 
 	for _, ownerReference := range replicaSet.OwnerReferences {
@@ -88,11 +102,15 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object) {
 		if ownerReference.Controller != nil {
 			controller = *ownerReference.Controller
 		}
-		r.Owners = append(r.Owners, ReplicaSetOwner{
-			ReplicaSetId: r.Id,
-			Kind:         strcase.Snake(ownerReference.Kind),
-			Name:         ownerReference.Name,
-			Uid:          ownerReference.UID,
+
+		owner := &ReplicaSetOwner{
+			ReplicaSetMeta: ReplicaSetMeta{
+				ReplicaSetId: r.Id,
+				Meta:         contracts.Meta{Id: types.Checksum(types.MustPackSlice(r.Id, ownerReference.UID))},
+			},
+			Kind: strcase.Snake(ownerReference.Kind),
+			Name: ownerReference.Name,
+			Uid:  ownerReference.UID,
 			BlockOwnerDeletion: types.Bool{
 				Bool:  blockOwnerDeletion,
 				Valid: true,
@@ -101,20 +119,18 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object) {
 				Bool:  controller,
 				Valid: true,
 			},
-		})
+		}
+		owner.PropertiesChecksum = types.Checksum(MustMarshalJSON(owner))
+
+		r.Owners = append(r.Owners, owner)
 	}
 
 	for labelName, labelValue := range replicaSet.Labels {
-		labelId := types.Checksum(strings.ToLower(labelName + ":" + labelValue))
-		r.Labels = append(r.Labels, Label{
-			Id:    labelId,
-			Name:  labelName,
-			Value: labelValue,
-		})
-		r.ReplicaSetLabels = append(r.ReplicaSetLabels, ReplicaSetLabel{
-			ReplicaSetId: r.Id,
-			LabelId:      labelId,
-		})
+		label := NewLabel(labelName, labelValue)
+		label.ReplicaSetId = r.Id
+		label.PropertiesChecksum = types.Checksum(MustMarshalJSON(label))
+
+		r.Labels = append(r.Labels, label)
 	}
 }
 
@@ -124,7 +140,6 @@ func (r *ReplicaSet) Relations() []database.Relation {
 	return []database.Relation{
 		database.HasMany(r.Conditions, fk),
 		database.HasMany(r.Owners, fk),
-		database.HasMany(r.ReplicaSetLabels, fk),
-		database.HasMany(r.Labels, database.WithoutCascadeDelete()),
+		database.HasMany(r.Labels, fk),
 	}
 }

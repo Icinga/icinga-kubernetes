@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"github.com/icinga/icinga-kubernetes/pkg/contracts"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/types"
 	"github.com/pkg/errors"
@@ -11,8 +12,7 @@ import (
 )
 
 type Node struct {
-	Meta
-	Id                types.Binary
+	ResourceMeta
 	PodCIDR           string
 	NumIps            int64
 	Unschedulable     types.Bool
@@ -22,12 +22,25 @@ type Node struct {
 	MemoryCapacity    int64
 	MemoryAllocatable int64
 	PodCapacity       int64
-	Conditions        []NodeCondition `db:"-"`
-	Volumes           []NodeVolume    `db:"-"`
+	Conditions        []*NodeCondition `json:"-" db:"-"`
+	Volumes           []*NodeVolume    `json:"-" db:"-"`
+}
+
+type NodeMeta struct {
+	contracts.Meta
+	NodeId types.Binary
+}
+
+func (nm *NodeMeta) Fingerprint() contracts.FingerPrinter {
+	return nm
+}
+
+func (nm *NodeMeta) ParentID() types.Binary {
+	return nm.NodeId
 }
 
 type NodeCondition struct {
-	NodeId         types.Binary
+	NodeMeta
 	Type           string
 	Status         string
 	LastHeartbeat  types.UnixMilli
@@ -37,13 +50,13 @@ type NodeCondition struct {
 }
 
 type NodeVolume struct {
-	NodeId     types.Binary
+	NodeMeta
 	name       kcorev1.UniqueVolumeName
 	DevicePath string
 	Mounted    types.Bool
 }
 
-func NewNode() Resource {
+func NewNode() contracts.Entity {
 	return &Node{}
 }
 
@@ -55,6 +68,7 @@ func (n *Node) Obtain(k8s kmetav1.Object) {
 	n.Id = types.Checksum(n.Namespace + "/" + n.Name)
 	n.PodCIDR = node.Spec.PodCIDR
 	_, cidr, err := net.ParseCIDR(n.PodCIDR)
+	// TODO(yh): Make field NumIps nullable and don't panic here!
 	if err != nil {
 		panic(errors.Wrapf(err, "failed to parse CIDR %s", n.PodCIDR))
 	}
@@ -73,16 +87,24 @@ func (n *Node) Obtain(k8s kmetav1.Object) {
 	n.MemoryAllocatable = node.Status.Allocatable.Memory().MilliValue()
 	n.PodCapacity = node.Status.Allocatable.Pods().Value()
 
+	n.PropertiesChecksum = types.Checksum(MustMarshalJSON(n))
+
 	for _, condition := range node.Status.Conditions {
-		n.Conditions = append(n.Conditions, NodeCondition{
-			NodeId:         n.Id,
+		nodeCond := &NodeCondition{
+			NodeMeta: NodeMeta{
+				NodeId: n.Id,
+				Meta:   contracts.Meta{Id: types.Checksum(types.MustPackSlice(n.Id, condition.Type))},
+			},
 			Type:           string(condition.Type),
 			Status:         string(condition.Status),
 			LastHeartbeat:  types.UnixMilli(condition.LastHeartbeatTime.Time),
 			LastTransition: types.UnixMilli(condition.LastTransitionTime.Time),
 			Reason:         condition.Reason,
 			Message:        condition.Message,
-		})
+		}
+		nodeCond.PropertiesChecksum = types.Checksum(MustMarshalJSON(nodeCond))
+
+		n.Conditions = append(n.Conditions, nodeCond)
 	}
 
 	volumesMounted := make(map[kcorev1.UniqueVolumeName]interface{}, len(node.Status.VolumesInUse))
@@ -91,15 +113,21 @@ func (n *Node) Obtain(k8s kmetav1.Object) {
 	}
 	for _, volume := range node.Status.VolumesAttached {
 		_, mounted := volumesMounted[volume.Name]
-		n.Volumes = append(n.Volumes, NodeVolume{
-			NodeId:     n.Id,
+		nodeVolume := &NodeVolume{
+			NodeMeta: NodeMeta{
+				NodeId: n.Id,
+				Meta:   contracts.Meta{Id: types.Checksum(types.MustPackSlice(n.Id, volume.Name))},
+			},
 			name:       volume.Name,
 			DevicePath: volume.DevicePath,
 			Mounted: types.Bool{
 				Bool:  mounted,
 				Valid: true,
 			},
-		})
+		}
+		nodeVolume.PropertiesChecksum = types.Checksum(MustMarshalJSON(nodeVolume))
+
+		n.Volumes = append(n.Volumes, nodeVolume)
 	}
 }
 
