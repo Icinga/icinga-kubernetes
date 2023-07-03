@@ -52,8 +52,8 @@ func (s *Sync) Run(ctx context.Context, features ...sync.Feature) error {
 func (s *Sync) warmup(ctx context.Context, c *sync.Controller) error {
 	g, ctx := errgroup.WithContext(ctx)
 
-	entities, errs := s.db.YieldAll(ctx, func() (interface{}, error) {
-		return s.factory(), nil
+	entities, errs := s.db.YieldAll(ctx, func() (interface{}, bool, error) {
+		return s.factory(), true, nil
 	}, s.db.BuildSelectStmt(s.factory(), &schemav1.Meta{}))
 	// Let errors from YieldAll() cancel the group.
 	com.ErrgroupReceive(g, errs)

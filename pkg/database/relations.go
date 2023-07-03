@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"reflect"
 )
 
 type Relation interface {
@@ -9,8 +10,11 @@ type Relation interface {
 	SetForeignKey(fk string)
 	CascadeDelete() bool
 	WithoutCascadeDelete()
+	CascadeSelect() bool
+	WithoutCascadeSelect()
 	StreamInto(context.Context, chan interface{}) error
 	TableName() string
+	TypePointer() any
 }
 
 type HasRelations interface {
@@ -31,9 +35,16 @@ func WithoutCascadeDelete() RelationOption {
 	}
 }
 
+func WithoutCascadeSelect() RelationOption {
+	return func(r Relation) {
+		r.WithoutCascadeSelect()
+	}
+}
+
 type relation[T any] struct {
 	foreignKey           string
 	withoutCascadeDelete bool
+	withoutCascadeSelect bool
 }
 
 func (r *relation[T]) ForeignKey() string {
@@ -52,8 +63,25 @@ func (r *relation[T]) WithoutCascadeDelete() {
 	r.withoutCascadeDelete = true
 }
 
+func (r *relation[T]) CascadeSelect() bool {
+	return !r.withoutCascadeSelect
+}
+
+func (r *relation[T]) WithoutCascadeSelect() {
+	r.withoutCascadeSelect = true
+}
+
 func (r *relation[T]) TableName() string {
 	return TableName(*new(T))
+}
+
+func (r *relation[T]) TypePointer() any {
+	var typ T
+	if reflect.ValueOf(typ).Kind() == reflect.Ptr {
+		return reflect.New(reflect.TypeOf(typ).Elem()).Interface()
+	}
+
+	return &typ
 }
 
 type hasMany[T any] struct {

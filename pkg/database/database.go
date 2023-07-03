@@ -7,6 +7,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/icinga/icinga-kubernetes/pkg/backoff"
 	"github.com/icinga/icinga-kubernetes/pkg/com"
+	"github.com/icinga/icinga-kubernetes/pkg/contracts"
 	"github.com/icinga/icinga-kubernetes/pkg/periodic"
 	"github.com/icinga/icinga-kubernetes/pkg/retry"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
@@ -26,6 +27,8 @@ import (
 )
 
 var registerDriversOnce sync.Once
+
+type FactoryFunc func() (interface{}, bool, error)
 
 // Database is a wrapper around sqlx.DB with bulk execution,
 // statement building, streaming and logging capabilities.
@@ -589,7 +592,7 @@ func (db *Database) UpsertStreamed(
 // YieldAll executes the query with the supplied scope,
 // scans each resulting row into an entity returned by the factory function,
 // and streams them into a returned channel.
-func (db *Database) YieldAll(ctx context.Context, factoryFunc func() (interface{}, error), query string, scope ...interface{}) (<-chan interface{}, <-chan error) {
+func (db *Database) YieldAll(ctx context.Context, factoryFunc FactoryFunc, query string, scope ...interface{}) (<-chan interface{}, <-chan error) {
 	g, ctx := errgroup.WithContext(ctx)
 	entities := make(chan interface{}, 1)
 
@@ -597,35 +600,62 @@ func (db *Database) YieldAll(ctx context.Context, factoryFunc func() (interface{
 		defer runtime.HandleCrash()
 		defer close(entities)
 
-		var counter com.Counter
-		defer db.periodicLog(ctx, query, &counter).Stop()
+		var run func(ctx context.Context, factory FactoryFunc, query string, scope ...interface{}) error
 
-		rows, err := db.query(ctx, query, scope...)
-		if err != nil {
-			return CantPerformQuery(err, query)
-		}
+		run = func(ctx context.Context, factory FactoryFunc, query string, scope ...interface{}) error {
+			g, ctx := errgroup.WithContext(ctx)
+			var counter com.Counter
+			defer db.periodicLog(ctx, query, &counter).Stop()
 
-		defer rows.Close()
-
-		for rows.Next() {
-			e, err := factoryFunc()
+			rows, err := db.query(ctx, query, scope...)
 			if err != nil {
-				return errors.Wrap(err, "can't create entity")
+				return CantPerformQuery(err, query)
+			}
+			defer func() { _ = rows.Close() }()
+
+			for rows.Next() {
+				e, selectRecursive, err := factory()
+				if err != nil {
+					return errors.Wrap(err, "can't create entity")
+				}
+
+				if err = rows.StructScan(e); err != nil {
+					return errors.Wrapf(err, "can't store query result into a %T: %s", e, query)
+				}
+
+				select {
+				case entities <- e:
+					counter.Inc()
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+
+				if relations, ok := e.(HasRelations); ok && selectRecursive {
+					for _, relation := range relations.Relations() {
+						relation := relation
+						fingerprint, ok := relation.TypePointer().(contracts.FingerPrinter)
+						if !ok || !relation.CascadeSelect() {
+							continue
+						}
+
+						g.Go(func() error {
+							query := db.BuildSelectStmt(relation.TypePointer(), fingerprint.Fingerprint())
+							query += fmt.Sprintf(` WHERE %s=?`, db.quoter.QuoteIdentifier(relation.ForeignKey()))
+
+							factory := func() (interface{}, bool, error) {
+								return relation.TypePointer().(contracts.Entity), true, nil
+							}
+
+							return run(ctx, factory, query, e.(contracts.IDer).ID())
+						})
+					}
+				}
 			}
 
-			if err = rows.StructScan(e); err != nil {
-				return errors.Wrapf(err, "can't store query result into a %T: %s", e, query)
-			}
-
-			select {
-			case entities <- e:
-				counter.Inc()
-			case <-ctx.Done():
-				return ctx.Err()
-			}
+			return g.Wait()
 		}
 
-		return nil
+		return run(ctx, factoryFunc, query, scope...)
 	})
 
 	return entities, com.WaitAsync(g)
