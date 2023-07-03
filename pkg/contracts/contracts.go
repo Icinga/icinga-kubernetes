@@ -51,7 +51,7 @@ type Resource interface {
 
 type Meta struct {
 	Id                 types.Binary `db:"id"`
-	PropertiesChecksum types.Binary `json:"-"`
+	PropertiesChecksum types.Binary `hash:"-"`
 }
 
 func (m *Meta) Checksum() types.Binary {

@@ -41,8 +41,8 @@ type Pvc struct {
 	VolumeName         string
 	VolumeMode         sql.NullString
 	StorageClass       sql.NullString
-	Conditions         []*PvcCondition `json:"-" db:"-"`
-	Labels             []*Label        `json:"-" db:"-"`
+	Conditions         []*PvcCondition `db:"-" hash:"-"`
+	Labels             []*Label        `db:"-" hash:"-"`
 }
 
 type PvcMeta struct {
@@ -102,7 +102,7 @@ func (p *Pvc) Obtain(k8s kmetav1.Object) {
 		}
 	}
 
-	p.PropertiesChecksum = types.Checksum(MustMarshalJSON(p))
+	p.PropertiesChecksum = types.HashStruct(p)
 
 	for _, condition := range pvc.Status.Conditions {
 		pvcCond := &PvcCondition{
@@ -117,7 +117,7 @@ func (p *Pvc) Obtain(k8s kmetav1.Object) {
 			Reason:         condition.Reason,
 			Message:        condition.Message,
 		}
-		pvcCond.PropertiesChecksum = types.Checksum(MustMarshalJSON(pvcCond))
+		pvcCond.PropertiesChecksum = types.HashStruct(pvcCond)
 
 		p.Conditions = append(p.Conditions, pvcCond)
 	}
@@ -125,7 +125,7 @@ func (p *Pvc) Obtain(k8s kmetav1.Object) {
 	for labelName, labelValue := range pvc.Labels {
 		label := NewLabel(labelName, labelValue)
 		label.PvcId = p.Id
-		label.PropertiesChecksum = types.Checksum(MustMarshalJSON(label))
+		label.PropertiesChecksum = types.HashStruct(label)
 
 		p.Labels = append(p.Labels, label)
 	}

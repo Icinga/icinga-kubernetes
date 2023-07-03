@@ -22,8 +22,8 @@ type Node struct {
 	MemoryCapacity    int64
 	MemoryAllocatable int64
 	PodCapacity       int64
-	Conditions        []*NodeCondition `json:"-" db:"-"`
-	Volumes           []*NodeVolume    `json:"-" db:"-"`
+	Conditions        []*NodeCondition `db:"-" hash:"-"`
+	Volumes           []*NodeVolume    `db:"-" hash:"-"`
 }
 
 type NodeMeta struct {
@@ -87,7 +87,7 @@ func (n *Node) Obtain(k8s kmetav1.Object) {
 	n.MemoryAllocatable = node.Status.Allocatable.Memory().MilliValue()
 	n.PodCapacity = node.Status.Allocatable.Pods().Value()
 
-	n.PropertiesChecksum = types.Checksum(MustMarshalJSON(n))
+	n.PropertiesChecksum = types.HashStruct(n)
 
 	for _, condition := range node.Status.Conditions {
 		nodeCond := &NodeCondition{
@@ -102,7 +102,7 @@ func (n *Node) Obtain(k8s kmetav1.Object) {
 			Reason:         condition.Reason,
 			Message:        condition.Message,
 		}
-		nodeCond.PropertiesChecksum = types.Checksum(MustMarshalJSON(nodeCond))
+		nodeCond.PropertiesChecksum = types.HashStruct(nodeCond)
 
 		n.Conditions = append(n.Conditions, nodeCond)
 	}
@@ -125,7 +125,7 @@ func (n *Node) Obtain(k8s kmetav1.Object) {
 				Valid: true,
 			},
 		}
-		nodeVolume.PropertiesChecksum = types.Checksum(MustMarshalJSON(nodeVolume))
+		nodeVolume.PropertiesChecksum = types.HashStruct(nodeVolume)
 
 		n.Volumes = append(n.Volumes, nodeVolume)
 	}

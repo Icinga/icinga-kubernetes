@@ -21,8 +21,8 @@ type Deployment struct {
 	ReadyReplicas           int32
 	AvailableReplicas       int32
 	UnavailableReplicas     int32
-	Conditions              []*DeploymentCondition `json:"-" db:"-"`
-	Labels                  []*Label               `json:"-" db:"-"`
+	Conditions              []*DeploymentCondition `db:"-" hash:"-"`
+	Labels                  []*Label               `db:"-" hash:"-"`
 }
 
 type DeploymentConditionMeta struct {
@@ -79,7 +79,7 @@ func (d *Deployment) Obtain(k8s kmetav1.Object) {
 	d.ReadyReplicas = deployment.Status.ReadyReplicas
 	d.UnavailableReplicas = deployment.Status.UnavailableReplicas
 
-	d.PropertiesChecksum = types.Checksum(MustMarshalJSON(d))
+	d.PropertiesChecksum = types.HashStruct(d)
 
 	for _, condition := range deployment.Status.Conditions {
 		deploymentCond := &DeploymentCondition{
@@ -94,7 +94,7 @@ func (d *Deployment) Obtain(k8s kmetav1.Object) {
 			Reason:         condition.Reason,
 			Message:        condition.Message,
 		}
-		deploymentCond.PropertiesChecksum = types.Checksum(MustMarshalJSON(deploymentCond))
+		deploymentCond.PropertiesChecksum = types.HashStruct(deploymentCond)
 
 		d.Conditions = append(d.Conditions, deploymentCond)
 	}
@@ -102,7 +102,7 @@ func (d *Deployment) Obtain(k8s kmetav1.Object) {
 	for labelName, labelValue := range deployment.Labels {
 		label := NewLabel(labelName, labelValue)
 		label.DeploymentId = d.Id
-		label.PropertiesChecksum = types.Checksum(MustMarshalJSON(label))
+		label.PropertiesChecksum = types.HashStruct(label)
 
 		d.Labels = append(d.Labels, label)
 	}

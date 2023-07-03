@@ -20,8 +20,9 @@ type Container struct {
 	Ready          types.Bool
 	Started        types.Bool
 	RestartCount   int32
-	Devices        []*ContainerDevice `db:"-"`
-	Mounts         []*ContainerMount  `db:"-"`
+	Logs           string
+	Devices        []*ContainerDevice `db:"-" hash:"-"`
+	Mounts         []*ContainerMount  `db:"-" hash:"-"`
 }
 
 func (c *Container) Relations() []database.Relation {

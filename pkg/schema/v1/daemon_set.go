@@ -20,8 +20,8 @@ type DaemonSet struct {
 	UpdateNumberScheduled  int32
 	NumberAvailable        int32
 	NumberUnavailable      int32
-	Conditions             []*DaemonSetCondition `json:"-" db:"-"`
-	Labels                 []*Label              `json:"-" db:"-"`
+	Conditions             []*DaemonSetCondition `db:"-" hash:"-"`
+	Labels                 []*Label              `db:"-" hash:"-"`
 }
 
 type DaemonSetMeta struct {
@@ -66,7 +66,7 @@ func (d *DaemonSet) Obtain(k8s kmetav1.Object) {
 	d.NumberAvailable = daemonSet.Status.NumberAvailable
 	d.NumberUnavailable = daemonSet.Status.NumberUnavailable
 
-	d.PropertiesChecksum = types.Checksum(MustMarshalJSON(d))
+	d.PropertiesChecksum = types.HashStruct(d)
 
 	for _, condition := range daemonSet.Status.Conditions {
 		daemonCond := &DaemonSetCondition{
@@ -80,7 +80,7 @@ func (d *DaemonSet) Obtain(k8s kmetav1.Object) {
 			Reason:         condition.Reason,
 			Message:        condition.Message,
 		}
-		daemonCond.PropertiesChecksum = types.Checksum(MustMarshalJSON(daemonCond))
+		daemonCond.PropertiesChecksum = types.HashStruct(daemonCond)
 
 		d.Conditions = append(d.Conditions, daemonCond)
 	}
@@ -88,7 +88,7 @@ func (d *DaemonSet) Obtain(k8s kmetav1.Object) {
 	for labelName, labelValue := range daemonSet.Labels {
 		label := NewLabel(labelName, labelValue)
 		label.DaemonSetId = d.Id
-		label.PropertiesChecksum = types.Checksum(MustMarshalJSON(label))
+		label.PropertiesChecksum = types.HashStruct(label)
 
 		d.Labels = append(d.Labels, label)
 	}

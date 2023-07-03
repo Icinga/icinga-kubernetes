@@ -5,10 +5,73 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/pkg/errors"
+	"golang.org/x/exp/slices"
 	"io"
 	"reflect"
 	"sort"
+	"sync"
 )
+
+var (
+	structFields = map[reflect.Type][]StructField{}
+	mu           sync.Mutex
+)
+
+// StructField represents a single struct field, just like reflect.StructField, but with way less member fields.
+type StructField struct {
+	Name  string // This field name is only used for sorting struct fields slice.
+	Index []int  // This index is just used for lookup.
+}
+
+// HashStruct generates the SHA-1 checksum of all extracted fields of the given struct.
+// By default, this will hash all struct fields except an embedded struct, anonymous and unexported fields.
+// Additionally, you can also exclude some struct fields by using the `hash:"-"` tag.
+func HashStruct(subject interface{}) Binary {
+	v := reflect.ValueOf(subject)
+	if v.Kind() == reflect.Pointer {
+		v = v.Elem()
+	}
+
+	fields := getFields(v)
+	values := make([]interface{}, len(fields))
+	for _, field := range fields {
+		values = append(values, v.FieldByIndex(field.Index).Interface())
+	}
+
+	return Checksum(MustPackSlice(values...))
+}
+
+// getFields returns a slice of StructField extracted from the given subject.
+// By default, this will hash all struct fields except an embedded struct, anonymous and unexported fields.
+// Additionally, you can also exclude some struct fields by using the `hash:"-"` tag.
+func getFields(subject reflect.Value) []StructField {
+	mu.Lock()
+	defer mu.Unlock()
+
+	var fields []StructField
+
+	fields = structFields[subject.Type()]
+	if fields == nil {
+		for _, field := range reflect.VisibleFields(subject.Type()) {
+			// We don't want an embedded struct to be part of the generated hash!
+			if field.Type.Kind() == reflect.Struct || !field.IsExported() || field.Anonymous {
+				continue
+			}
+
+			if field.Tag.Get("hash") != "ignore" && field.Tag.Get("hash") != "-" {
+				fields = append(fields, StructField{Name: field.Name, Index: field.Index})
+			}
+		}
+
+		slices.SortStableFunc(fields, func(a, b StructField) bool {
+			return a.Name < b.Name
+		})
+
+		structFields[subject.Type()] = fields
+	}
+
+	return fields
+}
 
 // MustPackSlice calls PackAny using items and panics if there was an error.
 func MustPackSlice(items ...interface{}) []byte {
@@ -28,6 +91,8 @@ func MustPackSlice(items ...interface{}) []byte {
 // PackAny(false)          => 0x1
 // PackAny(true)           => 0x2
 // PackAny(float64(42))    => 0x3 ieee754_binary64_bigendian(42)
+// PackAny(int(42))    	   => 0x7 int64_binary64_bigendian(42)
+// PackAny(uint(42))       => 0x8 uint64_binary64_bigendian(42)
 // PackAny("exämple")      => 0x4 uint64_bigendian(len([]byte("exämple"))) []byte("exämple")
 // PackAny([]uint8{0x42})  => 0x4 uint64_bigendian(len([]uint8{0x42})) []uint8{0x42}
 // PackAny([1]uint8{0x42}) => 0x4 uint64_bigendian(len([1]uint8{0x42})) [1]uint8{0x42}
@@ -66,6 +131,18 @@ func packValue(in reflect.Value, out io.Writer) error {
 		}
 
 		return binary.Write(out, binary.BigEndian, in.Float())
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		if _, err := out.Write([]byte{7}); err != nil {
+			return err
+		}
+
+		return binary.Write(out, binary.BigEndian, in.Int())
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		if _, err := out.Write([]byte{8}); err != nil {
+			return err
+		}
+
+		return binary.Write(out, binary.BigEndian, in.Uint())
 	case reflect.Array, reflect.Slice:
 		if typ := in.Type(); typ.Elem() == tByte {
 			if kind == reflect.Array {

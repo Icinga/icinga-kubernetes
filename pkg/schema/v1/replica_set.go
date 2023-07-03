@@ -18,9 +18,9 @@ type ReplicaSet struct {
 	FullyLabeledReplicas int32
 	ReadyReplicas        int32
 	AvailableReplicas    int32
-	Conditions           []*ReplicaSetCondition `json:"-" db:"-"`
-	Owners               []*ReplicaSetOwner     `json:"-" db:"-"`
-	Labels               []*Label               `json:"-" db:"-"`
+	Conditions           []*ReplicaSetCondition `hash:"-" db:"-"`
+	Owners               []*ReplicaSetOwner     `hash:"-" db:"-"`
+	Labels               []*Label               `hash:"-" db:"-"`
 }
 
 type ReplicaSetMeta struct {
@@ -75,7 +75,7 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object) {
 	r.ReadyReplicas = replicaSet.Status.ReadyReplicas
 	r.AvailableReplicas = replicaSet.Status.AvailableReplicas
 
-	r.PropertiesChecksum = types.Checksum(MustMarshalJSON(r))
+	r.PropertiesChecksum = types.HashStruct(r)
 
 	for _, condition := range replicaSet.Status.Conditions {
 		replicaSetCond := &ReplicaSetCondition{
@@ -89,7 +89,7 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object) {
 			Reason:         condition.Reason,
 			Message:        condition.Message,
 		}
-		replicaSetCond.PropertiesChecksum = types.Checksum(MustMarshalJSON(replicaSetCond))
+		replicaSetCond.PropertiesChecksum = types.HashStruct(replicaSetCond)
 
 		r.Conditions = append(r.Conditions, replicaSetCond)
 	}
@@ -120,7 +120,7 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object) {
 				Valid: true,
 			},
 		}
-		owner.PropertiesChecksum = types.Checksum(MustMarshalJSON(owner))
+		owner.PropertiesChecksum = types.HashStruct(owner)
 
 		r.Owners = append(r.Owners, owner)
 	}
@@ -128,7 +128,7 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object) {
 	for labelName, labelValue := range replicaSet.Labels {
 		label := NewLabel(labelName, labelValue)
 		label.ReplicaSetId = r.Id
-		label.PropertiesChecksum = types.Checksum(MustMarshalJSON(label))
+		label.PropertiesChecksum = types.HashStruct(label)
 
 		r.Labels = append(r.Labels, label)
 	}

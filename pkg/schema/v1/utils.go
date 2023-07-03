@@ -21,16 +21,3 @@ func MarshalFirstNonNilStructFieldToJSON(i any) (string, string, error) {
 
 	return "", "", nil
 }
-
-// MustMarshalJSON json encodes the given object.
-// TODO: This is just used to generate the checksum of the object properties.
-//   - This should no longer be necessary once we have implemented a more sophisticated
-//   - method for hashing a structure.
-func MustMarshalJSON(v interface{}) []byte {
-	b, err := types.MarshalJSON(v)
-	if err != nil {
-		panic(err)
-	}
-
-	return b
-}

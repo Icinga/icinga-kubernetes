@@ -29,9 +29,6 @@ func NewEvent() contracts.Entity {
 
 func (e *Event) Obtain(k8s kmetav1.Object) {
 	e.ObtainMeta(k8s)
-	defer func() {
-		e.PropertiesChecksum = types.Checksum(MustMarshalJSON(e))
-	}()
 
 	event := k8s.(*keventsv1.Event)
 
@@ -56,6 +53,7 @@ func (e *Event) Obtain(k8s kmetav1.Object) {
 		e.LastSeen = types.UnixMilli(event.DeprecatedLastTimestamp.Time)
 	}
 	e.Count = event.DeprecatedCount
+	e.PropertiesChecksum = types.HashStruct(e)
 	// e.FirstSeen = types.UnixMilli(event.EventTime.Time)
 	// if event.Series != nil {
 	// 	e.LastSeen = types.UnixMilli(event.Series.LastObservedTime.Time)

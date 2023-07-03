@@ -12,7 +12,7 @@ import (
 type Namespace struct {
 	ResourceMeta
 	Phase      string
-	Conditions []*NamespaceCondition `json:"-" db:"-"`
+	Conditions []*NamespaceCondition `db:"-" hash:"-"`
 }
 
 type NamespaceMeta struct {
@@ -49,7 +49,7 @@ func (n *Namespace) Obtain(k8s kmetav1.Object) {
 	n.Id = types.Checksum(namespace.Name)
 	n.Phase = strings.ToLower(string(namespace.Status.Phase))
 
-	n.PropertiesChecksum = types.Checksum(MustMarshalJSON(n))
+	n.PropertiesChecksum = types.HashStruct(n)
 
 	for _, condition := range namespace.Status.Conditions {
 		namespaceCond := &NamespaceCondition{
@@ -63,7 +63,7 @@ func (n *Namespace) Obtain(k8s kmetav1.Object) {
 			Reason:         condition.Reason,
 			Message:        condition.Message,
 		}
-		namespaceCond.PropertiesChecksum = types.Checksum(MustMarshalJSON(namespaceCond))
+		namespaceCond.PropertiesChecksum = types.HashStruct(namespaceCond)
 
 		n.Conditions = append(n.Conditions, namespaceCond)
 	}

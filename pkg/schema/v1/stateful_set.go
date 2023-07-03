@@ -24,8 +24,8 @@ type StatefulSet struct {
 	CurrentReplicas                                 int32
 	UpdatedReplicas                                 int32
 	AvailableReplicas                               int32
-	Conditions                                      []*StatefulSetCondition `json:"-" db:"-"`
-	Labels                                          []*Label                `json:"-" db:"-"`
+	Conditions                                      []*StatefulSetCondition `db:"-" hash:"-"`
+	Labels                                          []*Label                `db:"-" hash:"-"`
 }
 
 type StatefulSetMeta struct {
@@ -89,7 +89,7 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object) {
 	s.UpdatedReplicas = statefulSet.Status.UpdatedReplicas
 	s.AvailableReplicas = statefulSet.Status.AvailableReplicas
 
-	s.PropertiesChecksum = types.Checksum(MustMarshalJSON(s))
+	s.PropertiesChecksum = types.HashStruct(s)
 
 	for _, condition := range statefulSet.Status.Conditions {
 		cond := &StatefulSetCondition{
@@ -103,7 +103,7 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object) {
 			Reason:         condition.Reason,
 			Message:        condition.Message,
 		}
-		cond.PropertiesChecksum = types.Checksum(MustMarshalJSON(cond))
+		cond.PropertiesChecksum = types.HashStruct(cond)
 
 		s.Conditions = append(s.Conditions, cond)
 	}
@@ -111,7 +111,7 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object) {
 	for labelName, labelValue := range statefulSet.Labels {
 		label := NewLabel(labelName, labelValue)
 		label.StatefulSetId = s.Id
-		label.PropertiesChecksum = types.Checksum(MustMarshalJSON(label))
+		label.PropertiesChecksum = types.HashStruct(label)
 
 		s.Labels = append(s.Labels, label)
 	}

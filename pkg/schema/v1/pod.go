@@ -1,11 +1,15 @@
 package v1
 
 import (
+	"context"
 	"database/sql"
+	"fmt"
 	"github.com/icinga/icinga-kubernetes/pkg/contracts"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
 	"github.com/icinga/icinga-kubernetes/pkg/types"
+	"golang.org/x/sync/errgroup"
+	"io"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ktypes "k8s.io/apimachinery/pkg/types"
@@ -30,12 +34,12 @@ type Pod struct {
 	Message           string
 	Qos               string
 	RestartPolicy     string
-	Conditions        []*PodCondition `db:"-"`
-	Containers        []*Container    `db:"-"`
-	Owners            []*PodOwner     `db:"-"`
-	Labels            []*Label        `db:"-"`
-	Pvcs              []*PodPvc       `db:"-"`
-	Volumes           []*PodVolume    `db:"-"`
+	Conditions        []*PodCondition `db:"-" hash:"-"`
+	Containers        []*Container    `db:"-" hash:"-"`
+	Owners            []*PodOwner     `db:"-" hash:"-"`
+	Labels            []*Label        `db:"-" hash:"-"`
+	Pvcs              []*PodPvc       `db:"-" hash:"-"`
+	Volumes           []*PodVolume    `db:"-" hash:"-"`
 	factory           *PodFactory
 }
 
@@ -98,7 +102,7 @@ func (f *PodFactory) New() contracts.Entity {
 func (p *Pod) Obtain(k8s kmetav1.Object) {
 	p.ObtainMeta(k8s)
 	defer func() {
-		p.PropertiesChecksum = types.Checksum(MustMarshalJSON(p))
+		p.PropertiesChecksum = types.HashStruct(p)
 	}()
 
 	pod := k8s.(*kcorev1.Pod)
@@ -113,205 +117,249 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 	p.Qos = strcase.Snake(string(pod.Status.QOSClass))
 	p.RestartPolicy = strcase.Snake(string(pod.Spec.RestartPolicy))
 
-	for _, condition := range pod.Status.Conditions {
-		podCond := &PodCondition{
-			PodMeta: PodMeta{
-				PodId: p.Id,
-				Meta:  contracts.Meta{Id: types.Checksum(types.MustPackSlice(p.Id, condition.Type))},
-			},
-			Type:           string(condition.Type),
-			Status:         string(condition.Status),
-			LastProbe:      types.UnixMilli(condition.LastProbeTime.Time),
-			LastTransition: types.UnixMilli(condition.LastTransitionTime.Time),
-			Reason:         condition.Reason,
-			Message:        condition.Message,
-		}
-		podCond.PropertiesChecksum = types.Checksum(MustMarshalJSON(podCond))
-
-		p.Conditions = append(p.Conditions, podCond)
-	}
-
-	containerStatuses := make(map[string]kcorev1.ContainerStatus, len(pod.Spec.Containers))
-	for _, containerStatus := range pod.Status.ContainerStatuses {
-		containerStatuses[containerStatus.Name] = containerStatus
-	}
-	for _, k8sContainer := range pod.Spec.Containers {
-		var started bool
-		if containerStatuses[k8sContainer.Name].Started != nil {
-			started = *containerStatuses[k8sContainer.Name].Started
-		}
-		state, stateDetails, err := MarshalFirstNonNilStructFieldToJSON(containerStatuses[k8sContainer.Name].State)
-		if err != nil {
-			panic(err)
-		}
-
-		var containerState sql.NullString
-		if state != "" {
-			containerState.String = strcase.Snake(state)
-			containerState.Valid = true
-		}
-
-		container := &Container{
-			PodMeta: PodMeta{
-				PodId: p.Id,
-				Meta:  contracts.Meta{Id: types.Checksum(pod.Namespace + "/" + pod.Name + "/" + k8sContainer.Name)},
-			},
-			Name:           k8sContainer.Name,
-			Image:          k8sContainer.Image,
-			CpuLimits:      k8sContainer.Resources.Limits.Cpu().MilliValue(),
-			CpuRequests:    k8sContainer.Resources.Requests.Cpu().MilliValue(),
-			MemoryLimits:   k8sContainer.Resources.Limits.Memory().MilliValue(),
-			MemoryRequests: k8sContainer.Resources.Requests.Memory().MilliValue(),
-			Ready: types.Bool{
-				Bool:  containerStatuses[k8sContainer.Name].Ready,
-				Valid: true,
-			},
-			Started: types.Bool{
-				Bool:  started,
-				Valid: true,
-			},
-			RestartCount: containerStatuses[k8sContainer.Name].RestartCount,
-			State:        containerState,
-			StateDetails: stateDetails,
-		}
-		container.PropertiesChecksum = types.Checksum(MustMarshalJSON(container))
-
-		p.CpuLimits += k8sContainer.Resources.Limits.Cpu().MilliValue()
-		p.CpuRequests += k8sContainer.Resources.Requests.Cpu().MilliValue()
-		p.MemoryLimits += k8sContainer.Resources.Limits.Memory().MilliValue()
-		p.MemoryRequests += k8sContainer.Resources.Requests.Memory().MilliValue()
-
-		for _, device := range k8sContainer.VolumeDevices {
-			cd := &ContainerDevice{
-				ContainerMeta: ContainerMeta{
-					Meta:        contracts.Meta{Id: types.Checksum(types.MustPackSlice(p.Id, container.Id, device.Name))},
-					ContainerId: container.Id,
-				},
-				Name: device.Name,
-				Path: device.DevicePath,
-			}
-			cd.PropertiesChecksum = types.Checksum(MustMarshalJSON(cd))
-
-			container.Devices = append(container.Devices, cd)
-		}
-
-		for _, mount := range k8sContainer.VolumeMounts {
-			cm := &ContainerMount{
-				ContainerMeta: ContainerMeta{
-					Meta:        contracts.Meta{Id: types.Checksum(types.MustPackSlice(p.Id, container.Id, mount.Name))},
-					ContainerId: container.Id,
-				},
-				VolumeName: mount.Name,
-				Path:       mount.MountPath,
-				SubPath:    mount.SubPath,
-				ReadOnly: types.Bool{
-					Bool:  mount.ReadOnly,
-					Valid: true,
-				},
-			}
-			cm.PropertiesChecksum = types.Checksum(MustMarshalJSON(cm))
-
-			container.Mounts = append(container.Mounts, cm)
-		}
-	}
-
-	for labelName, labelValue := range pod.Labels {
-		label := NewLabel(labelName, labelValue)
-		label.PodId = p.Id
-		label.PropertiesChecksum = types.Checksum(MustMarshalJSON(label))
-
-		p.Labels = append(p.Labels, label)
-	}
-
-	for _, ownerReference := range pod.OwnerReferences {
-		var blockOwnerDeletion, controller bool
-		if ownerReference.BlockOwnerDeletion != nil {
-			blockOwnerDeletion = *ownerReference.BlockOwnerDeletion
-		}
-		if ownerReference.Controller != nil {
-			controller = *ownerReference.Controller
-		}
-		owner := &PodOwner{
-			PodMeta: PodMeta{
-				PodId: p.Id,
-				Meta:  contracts.Meta{Id: types.Checksum(types.MustPackSlice(p.Id, ownerReference.UID))},
-			},
-			Kind: strcase.Snake(ownerReference.Kind),
-			Name: ownerReference.Name,
-			Uid:  ownerReference.UID,
-			BlockOwnerDeletion: types.Bool{
-				Bool:  blockOwnerDeletion,
-				Valid: true,
-			},
-			Controller: types.Bool{
-				Bool:  controller,
-				Valid: true,
-			},
-		}
-		owner.PropertiesChecksum = types.Checksum(MustMarshalJSON(owner))
-
-		p.Owners = append(p.Owners, owner)
-	}
-
-	// https://kubernetes.io/docs/concepts/workloads/pods/init-containers/#resources
-	for _, container := range pod.Spec.InitContainers {
-		// Init container must complete successfully before the next one starts,
-		// so we don't have to sum their resources.
-		p.CpuLimits = types.MaxInt(p.CpuLimits, container.Resources.Limits.Cpu().MilliValue())
-		p.CpuRequests = types.MaxInt(p.CpuRequests, container.Resources.Requests.Cpu().MilliValue())
-		p.MemoryLimits = types.MaxInt(p.MemoryLimits, container.Resources.Limits.Memory().MilliValue())
-		p.MemoryRequests = types.MaxInt(p.MemoryRequests, container.Resources.Requests.Memory().MilliValue())
-	}
-
-	for _, volume := range pod.Spec.Volumes {
-		if volume.PersistentVolumeClaim != nil {
-			pvc := &PodPvc{
+	g := &errgroup.Group{}
+	g.Go(func() error {
+		for _, condition := range pod.Status.Conditions {
+			podCond := &PodCondition{
 				PodMeta: PodMeta{
 					PodId: p.Id,
-					Meta:  contracts.Meta{Id: types.Checksum(types.MustPackSlice(p.Id, volume.Name, volume.PersistentVolumeClaim.ClaimName))},
+					Meta:  contracts.Meta{Id: types.Checksum(types.MustPackSlice(p.Id, condition.Type))},
 				},
-				VolumeName: volume.Name,
-				ClaimName:  volume.PersistentVolumeClaim.ClaimName,
-				ReadOnly: types.Bool{
-					Bool:  volume.PersistentVolumeClaim.ReadOnly,
-					Valid: true,
-				},
+				Type:           string(condition.Type),
+				Status:         string(condition.Status),
+				LastProbe:      types.UnixMilli(condition.LastProbeTime.Time),
+				LastTransition: types.UnixMilli(condition.LastTransitionTime.Time),
+				Reason:         condition.Reason,
+				Message:        condition.Message,
 			}
-			pvc.PropertiesChecksum = types.Checksum(MustMarshalJSON(pvc))
+			podCond.PropertiesChecksum = types.HashStruct(podCond)
 
-			p.Pvcs = append(p.Pvcs, pvc)
-		} else {
-			t, source, err := MarshalFirstNonNilStructFieldToJSON(volume.VolumeSource)
+			p.Conditions = append(p.Conditions, podCond)
+		}
+
+		return nil
+	})
+
+	g.Go(func() error {
+		containerStatuses := make(map[string]kcorev1.ContainerStatus, len(pod.Spec.Containers))
+		for _, containerStatus := range pod.Status.ContainerStatuses {
+			containerStatuses[containerStatus.Name] = containerStatus
+		}
+		for _, k8sContainer := range pod.Spec.Containers {
+			var started bool
+			if containerStatuses[k8sContainer.Name].Started != nil {
+				started = *containerStatuses[k8sContainer.Name].Started
+			}
+			state, stateDetails, err := MarshalFirstNonNilStructFieldToJSON(containerStatuses[k8sContainer.Name].State)
 			if err != nil {
 				panic(err)
 			}
 
-			vol := &PodVolume{
+			logs, err := getContainerLogs(p.factory.clientset, pod, k8sContainer)
+			if err != nil {
+				// ContainerCreating, NotFound, ...
+				fmt.Println(err)
+				logs = ""
+			}
+
+			var containerState sql.NullString
+			if state != "" {
+				containerState.String = strcase.Snake(state)
+				containerState.Valid = true
+			}
+
+			container := &Container{
 				PodMeta: PodMeta{
 					PodId: p.Id,
-					Meta:  contracts.Meta{Id: types.Checksum(types.MustPackSlice(p.Id, volume.Name))},
+					Meta:  contracts.Meta{Id: types.Checksum(pod.Namespace + "/" + pod.Name + "/" + k8sContainer.Name)},
 				},
-				VolumeName: volume.Name,
-				Type:       t,
-				Source:     source,
+				Name:           k8sContainer.Name,
+				Image:          k8sContainer.Image,
+				CpuLimits:      k8sContainer.Resources.Limits.Cpu().MilliValue(),
+				CpuRequests:    k8sContainer.Resources.Requests.Cpu().MilliValue(),
+				MemoryLimits:   k8sContainer.Resources.Limits.Memory().MilliValue(),
+				MemoryRequests: k8sContainer.Resources.Requests.Memory().MilliValue(),
+				Logs:           logs,
+				Ready: types.Bool{
+					Bool:  containerStatuses[k8sContainer.Name].Ready,
+					Valid: true,
+				},
+				Started: types.Bool{
+					Bool:  started,
+					Valid: true,
+				},
+				RestartCount: containerStatuses[k8sContainer.Name].RestartCount,
+				State:        containerState,
+				StateDetails: stateDetails,
 			}
-			vol.PropertiesChecksum = types.Checksum(MustMarshalJSON(vol))
+			container.PropertiesChecksum = types.HashStruct(container)
+			p.Containers = append(p.Containers, container)
 
-			p.Volumes = append(p.Volumes, vol)
+			p.CpuLimits += k8sContainer.Resources.Limits.Cpu().MilliValue()
+			p.CpuRequests += k8sContainer.Resources.Requests.Cpu().MilliValue()
+			p.MemoryLimits += k8sContainer.Resources.Limits.Memory().MilliValue()
+			p.MemoryRequests += k8sContainer.Resources.Requests.Memory().MilliValue()
+
+			for _, device := range k8sContainer.VolumeDevices {
+				cd := &ContainerDevice{
+					ContainerMeta: ContainerMeta{
+						Meta:        contracts.Meta{Id: types.Checksum(types.MustPackSlice(p.Id, container.Id, device.Name))},
+						ContainerId: container.Id,
+					},
+					Name: device.Name,
+					Path: device.DevicePath,
+				}
+				cd.PropertiesChecksum = types.HashStruct(cd)
+
+				container.Devices = append(container.Devices, cd)
+			}
+
+			for _, mount := range k8sContainer.VolumeMounts {
+				cm := &ContainerMount{
+					ContainerMeta: ContainerMeta{
+						Meta:        contracts.Meta{Id: types.Checksum(types.MustPackSlice(p.Id, container.Id, mount.Name))},
+						ContainerId: container.Id,
+					},
+					VolumeName: mount.Name,
+					Path:       mount.MountPath,
+					SubPath:    mount.SubPath,
+					ReadOnly: types.Bool{
+						Bool:  mount.ReadOnly,
+						Valid: true,
+					},
+				}
+				cm.PropertiesChecksum = types.HashStruct(cm)
+
+				container.Mounts = append(container.Mounts, cm)
+			}
 		}
-	}
+
+		return nil
+	})
+
+	g.Go(func() error {
+		for labelName, labelValue := range pod.Labels {
+			label := NewLabel(labelName, labelValue)
+			label.PodId = p.Id
+			label.PropertiesChecksum = types.HashStruct(label)
+
+			p.Labels = append(p.Labels, label)
+		}
+
+		for _, ownerReference := range pod.OwnerReferences {
+			var blockOwnerDeletion, controller bool
+			if ownerReference.BlockOwnerDeletion != nil {
+				blockOwnerDeletion = *ownerReference.BlockOwnerDeletion
+			}
+			if ownerReference.Controller != nil {
+				controller = *ownerReference.Controller
+			}
+			owner := &PodOwner{
+				PodMeta: PodMeta{
+					PodId: p.Id,
+					Meta:  contracts.Meta{Id: types.Checksum(types.MustPackSlice(p.Id, ownerReference.UID))},
+				},
+				Kind: strcase.Snake(ownerReference.Kind),
+				Name: ownerReference.Name,
+				Uid:  ownerReference.UID,
+				BlockOwnerDeletion: types.Bool{
+					Bool:  blockOwnerDeletion,
+					Valid: true,
+				},
+				Controller: types.Bool{
+					Bool:  controller,
+					Valid: true,
+				},
+			}
+			owner.PropertiesChecksum = types.HashStruct(owner)
+
+			p.Owners = append(p.Owners, owner)
+		}
+
+		return nil
+	})
+
+	g.Go(func() error {
+		// https://kubernetes.io/docs/concepts/workloads/pods/init-containers/#resources
+		for _, container := range pod.Spec.InitContainers {
+			// Init container must complete successfully before the next one starts,
+			// so we don't have to sum their resources.
+			p.CpuLimits = types.MaxInt(p.CpuLimits, container.Resources.Limits.Cpu().MilliValue())
+			p.CpuRequests = types.MaxInt(p.CpuRequests, container.Resources.Requests.Cpu().MilliValue())
+			p.MemoryLimits = types.MaxInt(p.MemoryLimits, container.Resources.Limits.Memory().MilliValue())
+			p.MemoryRequests = types.MaxInt(p.MemoryRequests, container.Resources.Requests.Memory().MilliValue())
+		}
+
+		for _, volume := range pod.Spec.Volumes {
+			if volume.PersistentVolumeClaim != nil {
+				pvc := &PodPvc{
+					PodMeta: PodMeta{
+						PodId: p.Id,
+						Meta:  contracts.Meta{Id: types.Checksum(types.MustPackSlice(p.Id, volume.Name, volume.PersistentVolumeClaim.ClaimName))},
+					},
+					VolumeName: volume.Name,
+					ClaimName:  volume.PersistentVolumeClaim.ClaimName,
+					ReadOnly: types.Bool{
+						Bool:  volume.PersistentVolumeClaim.ReadOnly,
+						Valid: true,
+					},
+				}
+				pvc.PropertiesChecksum = types.HashStruct(pvc)
+
+				p.Pvcs = append(p.Pvcs, pvc)
+			} else {
+				t, source, err := MarshalFirstNonNilStructFieldToJSON(volume.VolumeSource)
+				if err != nil {
+					panic(err)
+				}
+
+				vol := &PodVolume{
+					PodMeta: PodMeta{
+						PodId: p.Id,
+						Meta:  contracts.Meta{Id: types.Checksum(types.MustPackSlice(p.Id, volume.Name))},
+					},
+					VolumeName: volume.Name,
+					Type:       t,
+					Source:     source,
+				}
+				vol.PropertiesChecksum = types.HashStruct(vol)
+
+				p.Volumes = append(p.Volumes, vol)
+			}
+		}
+
+		return nil
+	})
+
+	_ = g.Wait() // We don't expect any errors here
 }
 
 func (p *Pod) Relations() []database.Relation {
 	fk := database.WithForeignKey("pod_id")
 
 	return []database.Relation{
-		database.HasMany(p.Containers, fk, database.WithoutCascadeDelete()),
+		database.HasMany(p.Conditions, fk),
+		database.HasMany(p.Containers, fk),
 		database.HasMany(p.Owners, fk),
 		database.HasMany(p.Labels, fk),
 		database.HasMany(p.Pvcs, fk),
 		database.HasMany(p.Volumes, fk),
 	}
+}
+
+func getContainerLogs(clientset *kubernetes.Clientset, pod *kcorev1.Pod, container kcorev1.Container) (string, error) {
+	req := clientset.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, &kcorev1.PodLogOptions{Container: container.Name})
+	body, err := req.Stream(context.TODO())
+	if err != nil {
+		return "", err
+	}
+	defer body.Close()
+	logs, err := io.ReadAll(body)
+	if err != nil {
+		return "", err
+	}
+
+	return string(logs), nil
 }
 
 var (

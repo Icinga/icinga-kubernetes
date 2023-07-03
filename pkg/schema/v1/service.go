@@ -25,5 +25,5 @@ func (s *Service) Obtain(k8s kmetav1.Object) {
 	s.Id = types.Checksum(s.Namespace + "/" + s.Name)
 	s.Type = string(service.Spec.Type)
 	s.ClusterIP = service.Spec.ClusterIP
-	s.PropertiesChecksum = types.Checksum(MustMarshalJSON(s))
+	s.PropertiesChecksum = types.HashStruct(s)
 }

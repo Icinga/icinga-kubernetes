@@ -23,7 +23,7 @@ type PersistentVolume struct {
 	Phase            string
 	Reason           string
 	Message          string
-	Claim            *PersistentVolumeClaimRef `json:"-" db:"-"`
+	Claim            *PersistentVolumeClaimRef `db:"-" hash:"-"`
 }
 
 type PersistentVolumeMeta struct {
@@ -75,7 +75,7 @@ func (p *PersistentVolume) Obtain(k8s kmetav1.Object) {
 		panic(err)
 	}
 
-	p.PropertiesChecksum = types.Checksum(MustMarshalJSON(p))
+	p.PropertiesChecksum = types.HashStruct(p)
 
 	p.Claim = &PersistentVolumeClaimRef{
 		PersistentVolumeMeta: PersistentVolumeMeta{
@@ -86,7 +86,7 @@ func (p *PersistentVolume) Obtain(k8s kmetav1.Object) {
 		Name: persistentVolume.Spec.ClaimRef.Name,
 		Uid:  persistentVolume.Spec.ClaimRef.UID,
 	}
-	p.Claim.PropertiesChecksum = types.Checksum(MustMarshalJSON(p.Claim))
+	p.Claim.PropertiesChecksum = types.HashStruct(p.Claim)
 }
 
 func (p *PersistentVolume) Relations() []database.Relation {
