@@ -55,6 +55,13 @@ func (s *Sink) ErrorCh() <-chan error {
 }
 
 func (s *Sink) Upsert(ctx context.Context, item *Item) error {
+	if !item.Item.GetDeletionTimestamp().IsZero() {
+		// K8s might dispatch an update event for an object that is already marked for
+		// deletion due to its sub-resources being deleted/modified. However, neither event
+		// matters to us as their parent object is going to be deleted soon.
+		return nil
+	}
+
 	select {
 	case s.upsert <- s.upsertFunc(item):
 		return nil
