@@ -2,6 +2,7 @@ package v1
 
 import (
 	"database/sql"
+	"github.com/icinga/icinga-kubernetes/pkg/contracts"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
 	"github.com/icinga/icinga-kubernetes/pkg/types"
@@ -11,8 +12,7 @@ import (
 )
 
 type PersistentVolume struct {
-	Meta
-	Id               types.Binary
+	ResourceMeta
 	AccessModes      types.Bitmask[kpersistentVolumeAccessModesSize]
 	Capacity         int64
 	ReclaimPolicy    string
@@ -23,17 +23,30 @@ type PersistentVolume struct {
 	Phase            string
 	Reason           string
 	Message          string
-	Claim            PersistentVolumeClaimRef `db:"-"`
+	Claim            *PersistentVolumeClaimRef `db:"-" hash:"-"`
+}
+
+type PersistentVolumeMeta struct {
+	contracts.Meta
+	PersistentVolumeId types.Binary
+}
+
+func (pvm *PersistentVolumeMeta) Fingerprint() contracts.FingerPrinter {
+	return pvm
+}
+
+func (pvm *PersistentVolumeMeta) ParentID() types.Binary {
+	return pvm.PersistentVolumeId
 }
 
 type PersistentVolumeClaimRef struct {
-	PersistentVolumeId types.Binary
-	Kind               string
-	Name               string
-	Uid                ktypes.UID
+	PersistentVolumeMeta
+	Kind string
+	Name string
+	Uid  ktypes.UID
 }
 
-func NewPersistentVolume() Resource {
+func NewPersistentVolume() contracts.Entity {
 	return &PersistentVolume{}
 }
 
@@ -62,12 +75,18 @@ func (p *PersistentVolume) Obtain(k8s kmetav1.Object) {
 		panic(err)
 	}
 
-	p.Claim = PersistentVolumeClaimRef{
-		PersistentVolumeId: p.Id,
-		Kind:               persistentVolume.Spec.ClaimRef.Kind,
-		Name:               persistentVolume.Spec.ClaimRef.Name,
-		Uid:                persistentVolume.Spec.ClaimRef.UID,
+	p.PropertiesChecksum = types.HashStruct(p)
+
+	p.Claim = &PersistentVolumeClaimRef{
+		PersistentVolumeMeta: PersistentVolumeMeta{
+			PersistentVolumeId: p.Id,
+			Meta:               contracts.Meta{Id: types.Checksum(types.MustPackSlice(p.Id, persistentVolume.Spec.ClaimRef.UID))},
+		},
+		Kind: persistentVolume.Spec.ClaimRef.Kind,
+		Name: persistentVolume.Spec.ClaimRef.Name,
+		Uid:  persistentVolume.Spec.ClaimRef.UID,
 	}
+	p.Claim.PropertiesChecksum = types.HashStruct(p.Claim)
 }
 
 func (p *PersistentVolume) Relations() []database.Relation {

@@ -1,5 +1,6 @@
 CREATE TABLE namespace (
   id binary(20) NOT NULL COMMENT 'sha1(name)',
+  properties_checksum binary(20) NOT NULL COMMENT 'sha1(all properties)',
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL, /* TODO: Remove. A namespace does not have a namespace. */
   name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -10,17 +11,20 @@ CREATE TABLE namespace (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE namespace_condition (
+  id binary(20) NOT NULL COMMENT 'sha1(namespace.id + type)',
   namespace_id binary(20) NOT NULL,
+  properties_checksum binary(20) NOT NULL COMMENT 'sha1(all properties)',
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   status varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   last_transition bigint unsigned NOT NULL,
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   message varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  PRIMARY KEY (namespace_id, type)
+  PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE node (
   id binary(20) NOT NULL,
+  properties_checksum binary(20) NOT NULL COMMENT 'sha1(all properties)',
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -39,26 +43,31 @@ CREATE TABLE node (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE node_condition (
+  id binary(20) NOT NULL COMMENT 'sha1(node.id + type)',
   node_id binary(20) NOT NULL,
+  properties_checksum binary(20) NOT NULL COMMENT 'sha1(all properties)',
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   status varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   last_heartbeat bigint unsigned NOT NULL,
   last_transition bigint unsigned NOT NULL,
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   message varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  PRIMARY KEY (node_id, type)
+  PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE node_volume (
+  id binary(20) NOT NULL COMMENT 'sha1(node.id + name)',
   node_id binary(20) NOT NULL,
+  properties_checksum binary(20) NOT NULL COMMENT 'sha1(all properties)',
   name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   device_path varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   mounted enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
-  PRIMARY KEY (node_id, name)
+  PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE pod (
   id binary(20) NOT NULL COMMENT 'sha1(namespace/name)',
+  properties_checksum binary(20) NOT NULL COMMENT 'sha1(all properties)',
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -80,44 +89,53 @@ CREATE TABLE pod (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE pod_condition (
+  id binary(20) NOT NULL COMMENT 'sha1(pod.id + type)',
   pod_id binary(20) NOT NULL,
+  properties_checksum binary(20) NOT NULL COMMENT 'sha1(all properties)',
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   status varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   last_probe bigint unsigned NULL DEFAULT NULL,
   last_transition bigint unsigned NOT NULL,
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   message varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  PRIMARY KEY (pod_id, type)
+  PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE pod_owner (
+  id binary(20) NOT NULL COMMENT 'sha1(pod.id + uid)',
   pod_id binary(20) NOT NULL,
+  properties_checksum binary(20) NOT NULL COMMENT 'sha1(all properties)',
   kind enum('daemon_set', 'node', 'replica_set', 'stateful_set') COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   controller enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
   block_owner_deletion enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
-  PRIMARY KEY (pod_id, uid)
+  PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE pod_pvc (
+  id binary(20) NOT NULL COMMENT 'sha1(pod.id + volume_name + claim_name)',
   pod_id binary(20) NOT NULL,
+  properties_checksum binary(20) NOT NULL COMMENT 'sha1(all properties)',
   volume_name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   claim_name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   read_only enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
-  PRIMARY KEY (pod_id, volume_name, claim_name)
+  PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE pod_volume (
+  id binary(20) NOT NULL COMMENT 'sha1(pod.id + volume_name)',
   pod_id binary(20) NOT NULL,
+  properties_checksum binary(20) NOT NULL COMMENT 'sha1(all properties)',
   volume_name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   source longtext NOT NULL,
-  PRIMARY KEY (pod_id, volume_name)
+  PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE container (
   id binary(20) NOT NULL COMMENT 'sha1(pod.namespace/pod.name/name)',
+  properties_checksum binary(20) NOT NULL COMMENT 'sha1(all properties)',
   pod_id binary(20) NOT NULL,
   name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   image varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -135,25 +153,28 @@ CREATE TABLE container (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE container_device (
+  id binary(20) NOT NULL COMMENT 'sha1(pod.id + container.id + name)',
   container_id binary(20) NOT NULL,
-  pod_id binary(20) NOT NULL,
+  properties_checksum binary(20) NOT NULL COMMENT 'sha1(all properties)',
   name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   path varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  PRIMARY KEY (container_id, name)
+  PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE container_mount (
+  id binary(20) NOT NULL COMMENT 'sha1(pod.id + container.id + volume_name)',
   container_id binary(20) NOT NULL,
-  pod_id binary(20) NOT NULL,
+  properties_checksum binary(20) NOT NULL COMMENT 'sha1(all properties)',
   volume_name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   path varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   sub_path varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   read_only enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
-  PRIMARY KEY (container_id, volume_name)
+  PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE deployment (
   id binary(20) NOT NULL,
+  properties_checksum binary(20) NOT NULL COMMENT 'sha1(all properties)',
   namespace varchar(63) COLLATE utf8mb4_unicode_ci  NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -173,17 +194,21 @@ CREATE TABLE deployment (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE deployment_condition (
+  id binary(20) NOT NULL COMMENT 'sha1(deployment.id + type)',
   deployment_id binary(20) NOT NULL,
+  properties_checksum binary(20) NOT NULL COMMENT 'sha1(all properties)',
   type enum('available', 'progressing', 'replica_failure') COLLATE utf8mb4_unicode_ci NOT NULL,
   status varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   last_update bigint unsigned NOT NULL,
   last_transition bigint unsigned NOT NULL,
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   message varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  PRIMARY KEY (deployment_id, type)
+  PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE service (
+  id binary(20) NOT NULL COMMENT 'sha1(namespace/name)',
+  properties_checksum binary(20) NOT NULL COMMENT 'sha1(all properties)',
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -191,11 +216,12 @@ CREATE TABLE service (
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   cluster_ip varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   created bigint unsigned NOT NULL,
-  PRIMARY KEY (namespace, name)
+  PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE replica_set (
   id binary(20) NOT NULL,
+  properties_checksum binary(20) NOT NULL COMMENT 'sha1(all properties)',
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -211,17 +237,21 @@ CREATE TABLE replica_set (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE replica_set_condition (
+  id binary(20) NOT NULL COMMENT 'sha1(replica_set.id + type)',
   replica_set_id binary(20) NOT NULL,
+  properties_checksum binary(20) NOT NULL COMMENT 'sha1(all properties)',
   type enum('replica_failure') COLLATE utf8mb4_unicode_ci NOT NULL,
   status varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   last_transition bigint unsigned NOT NULL,
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   message varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  PRIMARY KEY (replica_set_id, type)
+  PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE replica_set_owner (
+  id binary(20) NOT NULL COMMENT 'sha1(replica_set.id + uuid)',
   replica_set_id binary(20) NOT NULL,
+  properties_checksum binary(20) NOT NULL COMMENT 'sha1(all properties)',
   kind enum('deployment') COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -232,6 +262,7 @@ CREATE TABLE replica_set_owner (
 
 CREATE TABLE daemon_set (
   id binary(20) NOT NULL,
+  properties_checksum binary(20) NOT NULL COMMENT 'sha1(all properties)',
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -250,17 +281,20 @@ CREATE TABLE daemon_set (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE daemon_set_condition (
+  id binary(20) NOT NULL COMMENT 'sha1(daemon_set.id + type)',
   daemon_set_id binary(20) NOT NULL,
+  properties_checksum binary(20) NOT NULL COMMENT 'sha1(all properties)',
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   status varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   last_transition bigint unsigned NOT NULL,
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   message varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  PRIMARY KEY (daemon_set_id, type)
+  PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE stateful_set (
   id binary(20) NOT NULL,
+  properties_checksum binary(20) NOT NULL COMMENT 'sha1(all properties)',
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -283,60 +317,41 @@ CREATE TABLE stateful_set (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE stateful_set_condition (
+  id binary(20) NOT NULL COMMENT 'sha1(stateful_set.id + type)',
   stateful_set_id binary(20) NOT NULL,
+  properties_checksum binary(20) NOT NULL COMMENT 'sha1(all properties)',
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   status varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   last_transition bigint unsigned NOT NULL,
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   message varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  PRIMARY KEY (stateful_set_id, type)
+  PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE label (
   id binary(20) NOT NULL,
+  properties_checksum binary(20) NOT NULL COMMENT 'sha1(all properties)',
+  pod_id binary(20) DEFAULT NULL,
+  replica_set_id binary(20) DEFAULT NULL,
+  deployment_id binary(20) DEFAULT NULL,
+  daemon_set_id binary(20) DEFAULT NULL,
+  stateful_set_id binary(20) DEFAULT NULL,
+  pvc_id binary(20) DEFAULT NULL,
   name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   value varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  PRIMARY KEY (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
-CREATE TABLE pod_label (
-  pod_id binary(20) NOT NULL,
-  label_id binary(20) NOT NULL,
-  PRIMARY KEY (pod_id, label_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+  PRIMARY KEY (id),
 
-CREATE TABLE replica_set_label (
-  replica_set_id binary(20) NOT NULL,
-  label_id binary(20) NOT NULL,
-  PRIMARY KEY (replica_set_id, label_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
-CREATE TABLE deployment_label (
-  deployment_id binary(20) NOT NULL,
-  label_id binary(20) NOT NULL,
-  PRIMARY KEY (deployment_id, label_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
-CREATE TABLE daemon_set_label (
-  daemon_set_id binary(20) NOT NULL,
-  label_id binary(20) NOT NULL,
-  PRIMARY KEY (daemon_set_id, label_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
-CREATE TABLE stateful_set_label (
-  stateful_set_id binary(20) NOT NULL,
-  label_id binary(20) NOT NULL,
-  PRIMARY KEY (stateful_set_id, label_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
-CREATE TABLE pvc_label (
-  pvc_id binary(20) NOT NULL,
-  label_id binary(20) NOT NULL,
-  PRIMARY KEY (pvc_id, label_id)
+  -- The CONSTRAINT below ensures that each row is allowed to have non-NULL values in one of these constraints at a time.
+  CONSTRAINT nonnulls_label_consumers_check CHECK (
+    (pod_id IS NOT NULL) + (replica_set_id IS NOT NULL) + (deployment_id IS NOT NULL) + (daemon_set_id IS NOT NULL)
+      + (stateful_set_id IS NOT NULL) + (pvc_id IS NOT NULL) = 1
+  )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE event (
   id binary(20) NOT NULL,
+  properties_checksum binary(20) NOT NULL COMMENT 'sha1(all properties)',
   namespace varchar(63) NOT NULL,
   name varchar(253) NOT NULL,
   uid varchar(255) NOT NULL,
@@ -372,6 +387,7 @@ CREATE TABLE pod_metrics (
 
 CREATE TABLE pvc (
   id binary(20) NOT NULL,
+  properties_checksum binary(20) NOT NULL COMMENT 'sha1(all properties)',
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -389,18 +405,21 @@ CREATE TABLE pvc (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE pvc_condition (
+  id binary(20) NOT NULL COMMENT 'sha1(pvc.id + type)',
   pvc_id binary(20) NOT NULL,
+  properties_checksum binary(20) NOT NULL COMMENT 'sha1(all properties)',
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   status varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   last_probe bigint unsigned NULL DEFAULT NULL,
   last_transition bigint unsigned NOT NULL,
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   message varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  PRIMARY KEY (pvc_id, type)
+  PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE persistent_volume (
   id binary(20) NOT NULL,
+  properties_checksum binary(20) NOT NULL COMMENT 'sha1(all properties)',
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -420,7 +439,9 @@ CREATE TABLE persistent_volume (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE persistent_volume_claim_ref (
+  id binary(20) NOT NULL COMMENT 'sha1(persistent_volume.id + uuid)',
   persistent_volume_id binary(20) NOT NULL,
+  properties_checksum binary(20) NOT NULL COMMENT 'sha1(all properties)',
   kind varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,

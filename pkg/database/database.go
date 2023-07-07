@@ -7,6 +7,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/icinga/icinga-kubernetes/pkg/backoff"
 	"github.com/icinga/icinga-kubernetes/pkg/com"
+	"github.com/icinga/icinga-kubernetes/pkg/contracts"
 	"github.com/icinga/icinga-kubernetes/pkg/periodic"
 	"github.com/icinga/icinga-kubernetes/pkg/retry"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
@@ -26,6 +27,8 @@ import (
 )
 
 var registerDriversOnce sync.Once
+
+type FactoryFunc func() (interface{}, bool, error)
 
 // Database is a wrapper around sqlx.DB with bulk execution,
 // statement building, streaming and logging capabilities.
@@ -259,6 +262,12 @@ func (db *Database) BulkExec(
 
 							counter.Add(uint64(len(b)))
 
+							if f.onSuccess != nil {
+								if err := f.onSuccess(ctx, b); err != nil {
+									return err
+								}
+							}
+
 							return nil
 						},
 						IsRetryable,
@@ -397,7 +406,7 @@ func (db *Database) DeleteStreamed(
 				defer runtime.HandleCrash()
 				defer close(ch)
 
-				return db.DeleteStreamed(ctx, relation, ch, features...)
+				return db.DeleteStreamed(ctx, relation, ch, WithCascading(), WithBlocking())
 			})
 			streams[TableName(relation)] = ch
 		}
@@ -485,8 +494,33 @@ func (db *Database) DeleteStreamed(
 
 // UpsertStreamed bulk upserts the specified entities via NamedBulkExec.
 // The upsert statement is created using BuildUpsertStmt with the first entity from the entities stream.
-// Bulk size is controlled via Options.MaxPlaceholdersPerStatement and
-// concurrency is controlled via Options.MaxConnectionsPerTable.
+// Bulk size is controlled via Options.MaxPlaceholdersPerStatement and concurrency is controlled via
+// Options.MaxConnectionsPerTable.
+//
+// This sync process consists of the following steps:
+//
+//   - It initially copies the first item from the specified stream and checks if this entity type provides relations.
+//     If so, it first traverses all these relations recursively and starts a separate goroutine and caches the streams
+//     for the started goroutine/relations type.
+//
+//   - After the relations have been resolved, another goroutine is started which consumes from the specified `entities`
+//     chan and performs the following actions for each of the streamed entities:
+//
+//   - If the consumed entity doesn't satisfy the contracts.Entity interface, it will just forward that entity to the
+//     next stage.
+//
+//   - When the entity does satisfy the contracts.Entity, it applies the filter func on this entity (which hopefully
+//     should check for its checksums), and forwards the entity to the `forward` chan only if the filter function
+//     returns true and initiates a database upsert stream. Regardless, whether the function returns true, it will
+//     stream each of the child entity with the `relation.Stream()` method to the respective cached stream of the relation.
+//
+// However, when the first item doesn't satisfy the database.HasRelations interface, it will just use only two
+// stages for the streamed entities to be upserted:
+//
+//   - The first stage just consumes from the source stream (the `entities` chan) and applies the filter function (if any)
+//     on each of the entities. This won't forward entities for which the filter function didn't also return true as well.
+//
+//   - The second stage just performs a database upsert queries for entities that were forwarded from the previous one.
 func (db *Database) UpsertStreamed(
 	ctx context.Context, entities <-chan interface{}, features ...Feature,
 ) error {
@@ -511,7 +545,7 @@ func (db *Database) UpsertStreamed(
 				defer runtime.HandleCrash()
 				defer close(ch)
 
-				return db.UpsertStreamed(ctx, ch)
+				return db.UpsertStreamed(ctx, ch, WithCascading(), WithPreExecution(with.preExecution))
 			})
 			streams[TableName(relation)] = ch
 		}
@@ -526,19 +560,30 @@ func (db *Database) UpsertStreamed(
 
 			for {
 				select {
-				case entity, more := <-source:
+				case e, more := <-source:
 					if !more {
 						return nil
 					}
 
-					select {
-					case forward <- entity:
-					case <-ctx.Done():
-						return ctx.Err()
+					entity, ok := e.(contracts.Entity)
+					shouldUpsert := true
+					if ok && with.preExecution != nil {
+						shouldUpsert, err = with.preExecution(entity)
+						if err != nil {
+							return err
+						}
+					}
+
+					if shouldUpsert {
+						select {
+						case forward <- e:
+						case <-ctx.Done():
+							return ctx.Err()
+						}
 					}
 
 					select {
-					case dup <- entity:
+					case dup <- e:
 					case <-ctx.Done():
 						return ctx.Err()
 					}
@@ -582,14 +627,56 @@ func (db *Database) UpsertStreamed(
 		return g.Wait()
 	}
 
-	return db.NamedBulkExec(
-		ctx, stmt, db.BatchSizeByPlaceholders(placeholders), sem, forward, com.NeverSplit[any], features...)
+	upsertEntities := make(chan interface{})
+	g, ctx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		defer runtime.HandleCrash()
+		defer close(upsertEntities)
+
+		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case e, ok := <-forward:
+				if !ok {
+					return nil
+				}
+
+				entity, ok := e.(contracts.Entity)
+				shouldUpsert := true
+				if ok && with.preExecution != nil {
+					shouldUpsert, err = with.preExecution(entity)
+					if err != nil {
+						return err
+					}
+				}
+
+				if shouldUpsert {
+					select {
+					case upsertEntities <- entity:
+					case <-ctx.Done():
+						return ctx.Err()
+					}
+				}
+			}
+		}
+	})
+
+	g.Go(func() error {
+		defer runtime.HandleCrash()
+
+		return db.NamedBulkExec(
+			ctx, stmt, db.BatchSizeByPlaceholders(placeholders), sem, upsertEntities, com.NeverSplit[any], features...,
+		)
+	})
+
+	return g.Wait()
 }
 
 // YieldAll executes the query with the supplied scope,
 // scans each resulting row into an entity returned by the factory function,
 // and streams them into a returned channel.
-func (db *Database) YieldAll(ctx context.Context, factoryFunc func() (interface{}, error), query string, scope ...interface{}) (<-chan interface{}, <-chan error) {
+func (db *Database) YieldAll(ctx context.Context, factoryFunc FactoryFunc, query string, scope ...interface{}) (<-chan interface{}, <-chan error) {
 	g, ctx := errgroup.WithContext(ctx)
 	entities := make(chan interface{}, 1)
 
@@ -597,35 +684,62 @@ func (db *Database) YieldAll(ctx context.Context, factoryFunc func() (interface{
 		defer runtime.HandleCrash()
 		defer close(entities)
 
-		var counter com.Counter
-		defer db.periodicLog(ctx, query, &counter).Stop()
+		var run func(ctx context.Context, factory FactoryFunc, query string, scope ...interface{}) error
 
-		rows, err := db.query(ctx, query, scope...)
-		if err != nil {
-			return CantPerformQuery(err, query)
-		}
+		run = func(ctx context.Context, factory FactoryFunc, query string, scope ...interface{}) error {
+			g, ctx := errgroup.WithContext(ctx)
+			var counter com.Counter
+			defer db.periodicLog(ctx, query, &counter).Stop()
 
-		defer rows.Close()
-
-		for rows.Next() {
-			e, err := factoryFunc()
+			rows, err := db.query(ctx, query, scope...)
 			if err != nil {
-				return errors.Wrap(err, "can't create entity")
+				return CantPerformQuery(err, query)
+			}
+			defer func() { _ = rows.Close() }()
+
+			for rows.Next() {
+				e, selectRecursive, err := factory()
+				if err != nil {
+					return errors.Wrap(err, "can't create entity")
+				}
+
+				if err = rows.StructScan(e); err != nil {
+					return errors.Wrapf(err, "can't store query result into a %T: %s", e, query)
+				}
+
+				select {
+				case entities <- e:
+					counter.Inc()
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+
+				if relations, ok := e.(HasRelations); ok && selectRecursive {
+					for _, relation := range relations.Relations() {
+						relation := relation
+						fingerprint, ok := relation.TypePointer().(contracts.FingerPrinter)
+						if !ok || !relation.CascadeSelect() {
+							continue
+						}
+
+						g.Go(func() error {
+							query := db.BuildSelectStmt(relation.TypePointer(), fingerprint.Fingerprint())
+							query += fmt.Sprintf(` WHERE %s=?`, db.quoter.QuoteIdentifier(relation.ForeignKey()))
+
+							factory := func() (interface{}, bool, error) {
+								return relation.TypePointer().(contracts.Entity), true, nil
+							}
+
+							return run(ctx, factory, query, e.(contracts.IDer).ID())
+						})
+					}
+				}
 			}
 
-			if err = rows.StructScan(e); err != nil {
-				return errors.Wrapf(err, "can't store query result into a %T: %s", e, query)
-			}
-
-			select {
-			case entities <- e:
-				counter.Inc()
-			case <-ctx.Done():
-				return ctx.Err()
-			}
+			return g.Wait()
 		}
 
-		return nil
+		return run(ctx, factoryFunc, query, scope...)
 	})
 
 	return entities, com.WaitAsync(g)

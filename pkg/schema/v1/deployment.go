@@ -1,17 +1,16 @@
 package v1
 
 import (
+	"github.com/icinga/icinga-kubernetes/pkg/contracts"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
 	"github.com/icinga/icinga-kubernetes/pkg/types"
 	kappsv1 "k8s.io/api/apps/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"strings"
 )
 
 type Deployment struct {
-	Meta
-	Id                      types.Binary
+	ResourceMeta
 	DesiredReplicas         int32
 	Strategy                string
 	MinReadySeconds         int32
@@ -22,13 +21,25 @@ type Deployment struct {
 	ReadyReplicas           int32
 	AvailableReplicas       int32
 	UnavailableReplicas     int32
-	Conditions              []DeploymentCondition `db:"-"`
-	Labels                  []Label               `db:"-"`
-	DeploymentLabels        []DeploymentLabel     `db:"-"`
+	Conditions              []*DeploymentCondition `db:"-" hash:"-"`
+	Labels                  []*Label               `db:"-" hash:"-"`
+}
+
+type DeploymentConditionMeta struct {
+	contracts.Meta
+	DeploymentId types.Binary
+}
+
+func (dm *DeploymentConditionMeta) Fingerprint() contracts.FingerPrinter {
+	return dm
+}
+
+func (dm *DeploymentConditionMeta) ParentID() types.Binary {
+	return dm.DeploymentId
 }
 
 type DeploymentCondition struct {
-	DeploymentId   types.Binary
+	DeploymentConditionMeta
 	Type           string
 	Status         string
 	LastUpdate     types.UnixMilli
@@ -37,12 +48,7 @@ type DeploymentCondition struct {
 	Message        string
 }
 
-type DeploymentLabel struct {
-	DeploymentId types.Binary
-	LabelId      types.Binary
-}
-
-func NewDeployment() Resource {
+func NewDeployment() contracts.Entity {
 	return &Deployment{}
 }
 
@@ -73,29 +79,32 @@ func (d *Deployment) Obtain(k8s kmetav1.Object) {
 	d.ReadyReplicas = deployment.Status.ReadyReplicas
 	d.UnavailableReplicas = deployment.Status.UnavailableReplicas
 
+	d.PropertiesChecksum = types.HashStruct(d)
+
 	for _, condition := range deployment.Status.Conditions {
-		d.Conditions = append(d.Conditions, DeploymentCondition{
-			DeploymentId:   d.Id,
+		deploymentCond := &DeploymentCondition{
+			DeploymentConditionMeta: DeploymentConditionMeta{
+				DeploymentId: d.Id,
+				Meta:         contracts.Meta{Id: types.Checksum(types.MustPackSlice(d.Id, condition.Type))},
+			},
 			Type:           strcase.Snake(string(condition.Type)),
 			Status:         string(condition.Status),
 			LastUpdate:     types.UnixMilli(condition.LastUpdateTime.Time),
 			LastTransition: types.UnixMilli(condition.LastTransitionTime.Time),
 			Reason:         condition.Reason,
 			Message:        condition.Message,
-		})
+		}
+		deploymentCond.PropertiesChecksum = types.HashStruct(deploymentCond)
+
+		d.Conditions = append(d.Conditions, deploymentCond)
 	}
 
 	for labelName, labelValue := range deployment.Labels {
-		labelId := types.Checksum(strings.ToLower(labelName + ":" + labelValue))
-		d.Labels = append(d.Labels, Label{
-			Id:    labelId,
-			Name:  labelName,
-			Value: labelValue,
-		})
-		d.DeploymentLabels = append(d.DeploymentLabels, DeploymentLabel{
-			DeploymentId: d.Id,
-			LabelId:      labelId,
-		})
+		label := NewLabel(labelName, labelValue)
+		label.DeploymentId = d.Id
+		label.PropertiesChecksum = types.HashStruct(label)
+
+		d.Labels = append(d.Labels, label)
 	}
 }
 
@@ -104,7 +113,6 @@ func (d *Deployment) Relations() []database.Relation {
 
 	return []database.Relation{
 		database.HasMany(d.Conditions, fk),
-		database.HasMany(d.DeploymentLabels, fk),
-		database.HasMany(d.Labels, database.WithoutCascadeDelete()),
+		database.HasMany(d.Labels, fk),
 	}
 }

@@ -2,14 +2,18 @@ package database
 
 import (
 	"github.com/icinga/icinga-kubernetes/pkg/com"
+	"github.com/icinga/icinga-kubernetes/pkg/contracts"
 )
 
 type Feature func(*Features)
 
+type PreExecFunc func(contracts.Entity) (bool, error)
+
 type Features struct {
-	blocking  bool
-	cascading bool
-	onSuccess com.ProcessBulk[any]
+	blocking     bool
+	cascading    bool
+	onSuccess    com.ProcessBulk[any]
+	preExecution PreExecFunc
 }
 
 func NewFeatures(features ...Feature) *Features {
@@ -30,6 +34,12 @@ func WithBlocking() Feature {
 func WithCascading() Feature {
 	return func(f *Features) {
 		f.cascading = true
+	}
+}
+
+func WithPreExecution(preExec PreExecFunc) Feature {
+	return func(f *Features) {
+		f.preExecution = preExec
 	}
 }
 
