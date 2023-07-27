@@ -149,11 +149,23 @@ func main() {
 					pod := entity.(*schemav1.Pod)
 					posturl := "http://localhost:5680/process-event"
 
+					sev := "ok"
+					message := "Containers ready"
+
+					for _, c := range pod.Conditions {
+						if c.Type == string(kcorev1.ContainersReady) && c.Status != string(kcorev1.ConditionTrue) {
+							sev = "crit"
+							message = c.Message
+
+							break
+						}
+					}
+
 					data := map[string]any{
 						"source_id": 2,
-						"message":   "test",
+						"message":   message,
 						"username":  "Icinga Kubernetes",
-						"severity":  "crit",
+						"severity":  sev,
 						"tags": map[string]any{
 							"host": pod.Name,
 						},
