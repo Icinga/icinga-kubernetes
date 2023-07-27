@@ -174,8 +174,9 @@ func main() {
 					r.Header.Add("Content-Type", "application/json")
 
 					client := &http.Client{}
-					_, err := client.Do(r)
+					_, err = client.Do(r)
 					if err != nil {
+						fmt.Println(err)
 						panic(err)
 					}
 
