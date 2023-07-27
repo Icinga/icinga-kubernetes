@@ -143,56 +143,60 @@ func main() {
 			defer runtime.HandleCrash()
 			defer close(pods)
 
+			client := &http.Client{}
+
 			for {
 				select {
 				case entity, more := <-pods:
 					pod := entity.(*schemav1.Pod)
 					posturl := "http://localhost:5680/process-event"
 
-					sev := "ok"
+					sev := make([]string, 0, 2)
+					sev = append(sev, "ok")
 					message := "Containers ready"
 
 					for _, c := range pod.Conditions {
 						if c.Type == string(kcorev1.ContainersReady) && c.Status != string(kcorev1.ConditionTrue) {
-							sev = "crit"
+							sev = append(sev, "crit")
 							message = c.Message
 
 							break
 						}
 					}
 
-					data := map[string]any{
-						"source_id": 2,
-						"message":   message,
-						"username":  "Icinga Kubernetes",
-						"severity":  sev,
-						"tags": map[string]any{
-							"host": pod.Name,
-						},
-						"extra_tags": map[string]any{
-							"namespace": pod.Namespace,
-							"name":      pod.Name,
-							"resource":  "pod",
-						},
-						"name": pod.Name,
-					}
-					body, err := json.Marshal(data)
-					if err != nil {
-						panic(err)
-					}
+					for _, s := range sev {
+						data := map[string]any{
+							"source_id": 2,
+							"message":   message,
+							"username":  "Icinga Kubernetes",
+							"severity":  s,
+							"tags": map[string]any{
+								"host": pod.Name,
+							},
+							"extra_tags": map[string]any{
+								"namespace": pod.Namespace,
+								"name":      pod.Name,
+								"resource":  "pod",
+							},
+							"name": pod.Name,
+						}
+						body, err := json.Marshal(data)
+						if err != nil {
+							panic(err)
+						}
 
-					r, err := http.NewRequest("POST", posturl, bytes.NewBuffer(body))
-					if err != nil {
-						panic(err)
-					}
+						r, err := http.NewRequest("POST", posturl, bytes.NewBuffer(body))
+						if err != nil {
+							panic(err)
+						}
 
-					r.Header.Add("Content-Type", "application/json")
+						r.Header.Add("Content-Type", "application/json")
 
-					client := &http.Client{}
-					_, err = client.Do(r)
-					if err != nil {
-						fmt.Println(err)
-						panic(err)
+						_, err = client.Do(r)
+						if err != nil {
+							fmt.Println(err)
+							panic(err)
+						}
 					}
 
 					if !more {
