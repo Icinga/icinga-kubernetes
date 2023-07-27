@@ -161,10 +161,22 @@ func main() {
 						},
 						"name": pod.Name,
 					}
-					body, _ := json.Marshal(data)
-
-					_, err := http.NewRequest("POST", posturl, bytes.NewBuffer(body))
+					body, err := json.Marshal(data)
 					if err != nil {
+						panic(err)
+					}
+
+					r, err := http.NewRequest("POST", posturl, bytes.NewBuffer(body))
+					if err != nil {
+						panic(err)
+					}
+
+					r.Header.Add("Content-Type", "application/json")
+
+					client := &http.Client{}
+					res, err := client.Do(r)
+					if err != nil {
+						res.Body.Close()
 						panic(err)
 					}
 
