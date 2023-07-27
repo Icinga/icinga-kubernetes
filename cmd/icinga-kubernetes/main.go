@@ -147,7 +147,7 @@ func main() {
 				select {
 				case entity, more := <-pods:
 					pod := entity.(*schemav1.Pod)
-					posturl := "http://notifications:5680/process-event"
+					posturl := "http://localhost:5680/process-event"
 
 					data := map[string]any{
 						"source_id": 2,
