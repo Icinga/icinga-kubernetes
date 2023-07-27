@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
@@ -25,6 +27,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	kmetrics "k8s.io/metrics/pkg/client/clientset/versioned"
+	"net/http"
 	"os"
 	"path/filepath"
 	"time"
@@ -142,7 +145,29 @@ func main() {
 
 			for {
 				select {
-				case _, more := <-pods:
+				case entity, more := <-pods:
+					pod := entity.(*schemav1.Pod)
+					posturl := "http://notifications:5680/process-event"
+
+					data := map[string]any{
+						"source_id": 2,
+						"message":   "test",
+						"username":  "Icinga Kubernetes",
+						"severity":  "crit",
+						"tags": map[string]any{
+							"namespace": pod.Namespace,
+							"name":      pod.Name,
+							"resource":  "pod",
+						},
+						"name": pod.Name,
+					}
+					body, _ := json.Marshal(data)
+
+					_, err := http.NewRequest("POST", posturl, bytes.NewBuffer(body))
+					if err != nil {
+						panic(err)
+					}
+
 					if !more {
 						return nil
 					}
