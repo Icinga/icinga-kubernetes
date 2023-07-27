@@ -158,6 +158,7 @@ func main() {
 							"namespace": pod.Namespace,
 							"name":      pod.Name,
 							"resource":  "pod",
+							"host":      pod.Name,
 						},
 						"name": pod.Name,
 					}
