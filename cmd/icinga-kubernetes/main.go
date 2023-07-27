@@ -155,10 +155,12 @@ func main() {
 						"username":  "Icinga Kubernetes",
 						"severity":  "crit",
 						"tags": map[string]any{
+							"host": pod.Name,
+						},
+						"extra_tags": map[string]any{
 							"namespace": pod.Namespace,
 							"name":      pod.Name,
 							"resource":  "pod",
-							"host":      pod.Name,
 						},
 						"name": pod.Name,
 					}
