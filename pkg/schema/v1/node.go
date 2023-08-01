@@ -8,6 +8,7 @@ import (
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	knet "k8s.io/utils/net"
 	"net"
+	"strings"
 )
 
 type Node struct {
@@ -24,6 +25,8 @@ type Node struct {
 	PodCapacity       int64
 	Conditions        []NodeCondition `db:"-"`
 	Volumes           []NodeVolume    `db:"-"`
+	Labels            []Label         `db:"-"`
+	NodeLabels        []NodeLabel     `db:"-"`
 }
 
 type NodeCondition struct {
@@ -41,6 +44,11 @@ type NodeVolume struct {
 	name       kcorev1.UniqueVolumeName
 	DevicePath string
 	Mounted    types.Bool
+}
+
+type NodeLabel struct {
+	NodeId  types.Binary
+	LabelId types.Binary
 }
 
 func NewNode() Resource {
@@ -101,6 +109,19 @@ func (n *Node) Obtain(k8s kmetav1.Object) {
 			},
 		})
 	}
+
+	for labelName, labelValue := range node.Labels {
+		labelId := types.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		n.Labels = append(n.Labels, Label{
+			Id:    labelId,
+			Name:  labelName,
+			Value: labelValue,
+		})
+		n.NodeLabels = append(n.NodeLabels, NodeLabel{
+			NodeId:  n.Id,
+			LabelId: labelId,
+		})
+	}
 }
 
 func (n *Node) Relations() []database.Relation {
@@ -109,6 +130,8 @@ func (n *Node) Relations() []database.Relation {
 	return []database.Relation{
 		database.HasMany(n.Conditions, fk),
 		database.HasMany(n.Volumes, fk),
+		database.HasMany(n.NodeLabels, fk),
+		database.HasMany(n.Labels, database.WithoutCascadeDelete()),
 	}
 }
 

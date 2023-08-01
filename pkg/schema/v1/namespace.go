@@ -10,9 +10,11 @@ import (
 
 type Namespace struct {
 	Meta
-	Id         types.Binary
-	Phase      string
-	Conditions []NamespaceCondition `db:"-"`
+	Id              types.Binary
+	Phase           string
+	Conditions      []NamespaceCondition `db:"-"`
+	Labels          []Label              `db:"-"`
+	NamespaceLabels []NamespaceLabel     `db:"-"`
 }
 
 type NamespaceCondition struct {
@@ -22,6 +24,11 @@ type NamespaceCondition struct {
 	LastTransition types.UnixMilli
 	Reason         string
 	Message        string
+}
+
+type NamespaceLabel struct {
+	NamespaceId types.Binary
+	LabelId     types.Binary
 }
 
 func NewNamespace() Resource {
@@ -46,6 +53,19 @@ func (n *Namespace) Obtain(k8s kmetav1.Object) {
 			Message:        condition.Message,
 		})
 	}
+
+	for labelName, labelValue := range namespace.Labels {
+		labelId := types.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		n.Labels = append(n.Labels, Label{
+			Id:    labelId,
+			Name:  labelName,
+			Value: labelValue,
+		})
+		n.NamespaceLabels = append(n.NamespaceLabels, NamespaceLabel{
+			NamespaceId: n.Id,
+			LabelId:     labelId,
+		})
+	}
 }
 
 func (n *Namespace) Relations() []database.Relation {
@@ -53,5 +73,7 @@ func (n *Namespace) Relations() []database.Relation {
 
 	return []database.Relation{
 		database.HasMany(n.Conditions, fk),
+		database.HasMany(n.NamespaceLabels, fk),
+		database.HasMany(n.Labels, database.WithoutCascadeDelete()),
 	}
 }
