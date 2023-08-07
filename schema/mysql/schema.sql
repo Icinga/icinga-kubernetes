@@ -304,6 +304,17 @@ CREATE TABLE secret (
   PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+CREATE TABLE config_map (
+  id binary(20) NOT NULL,
+  namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
+  uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  resource_version varchar(255) NOT NULL,
+  immutable enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
+  created bigint unsigned NOT NULL,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
 CREATE TABLE data (
   id binary(20) NOT NULL,
   name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -315,6 +326,12 @@ CREATE TABLE secret_data (
   secret_id binary(20) NOT NULL,
   data_id binary(20) NOT NULL,
   PRIMARY KEY (secret_id, data_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE config_map_data (
+  config_map_id binary(20) NOT NULL,
+  data_id binary(20) NOT NULL,
+  PRIMARY KEY (config_map_id, data_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE label (
@@ -376,6 +393,12 @@ CREATE TABLE secret_label (
   secret_id binary(20) NOT NULL,
   label_id binary(20) NOT NULL,
   PRIMARY KEY (secret_id, label_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE config_map_label (
+  config_map_id binary(20) NOT NULL,
+  label_id binary(20) NOT NULL,
+  PRIMARY KEY (config_map_id, label_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE event (
