@@ -335,6 +335,18 @@ CREATE TABLE pvc_label (
   PRIMARY KEY (pvc_id, label_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+CREATE TABLE namespace_label (
+  namespace_id binary(20) NOT NULL,
+  label_id binary(20) NOT NULL,
+  PRIMARY KEY (namespace_id, label_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE node_label (
+  node_id binary(20) NOT NULL,
+  label_id binary(20) NOT NULL,
+  PRIMARY KEY (node_id, label_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
 CREATE TABLE event (
   id binary(20) NOT NULL,
   namespace varchar(63) NOT NULL,
