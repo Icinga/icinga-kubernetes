@@ -183,6 +183,11 @@ func main() {
 		return s.Run(ctx)
 	})
 	g.Go(func() error {
+		s := syncv1.NewSync(db, factory.Core().V1().Secrets().Informer(), log.WithName("secrets"), schemav1.NewSecret)
+
+		return s.Run(ctx)
+	})
+	g.Go(func() error {
 		s := syncv1.NewSync(db, factory.Events().V1().Events().Informer(), log.WithName("events"), schemav1.NewEvent)
 
 		return s.Run(ctx, sync.WithNoDelete(), sync.WithNoWarumup())

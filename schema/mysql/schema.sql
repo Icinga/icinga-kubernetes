@@ -292,6 +292,31 @@ CREATE TABLE stateful_set_condition (
   PRIMARY KEY (stateful_set_id, type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+CREATE TABLE secret (
+  id binary(20) NOT NULL,
+  namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
+  uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  resource_version varchar(255) NOT NULL,
+  type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  immutable enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
+  created bigint unsigned NOT NULL,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE data (
+  id binary(20) NOT NULL,
+  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  value mediumblob NOT NULL,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE secret_data (
+  secret_id binary(20) NOT NULL,
+  data_id binary(20) NOT NULL,
+  PRIMARY KEY (secret_id, data_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
 CREATE TABLE label (
   id binary(20) NOT NULL,
   name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -345,6 +370,12 @@ CREATE TABLE node_label (
   node_id binary(20) NOT NULL,
   label_id binary(20) NOT NULL,
   PRIMARY KEY (node_id, label_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE secret_label (
+  secret_id binary(20) NOT NULL,
+  label_id binary(20) NOT NULL,
+  PRIMARY KEY (secret_id, label_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE event (
