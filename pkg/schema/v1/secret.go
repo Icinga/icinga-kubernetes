@@ -3,7 +3,6 @@ package v1
 import (
 	b64 "encoding/base64"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
-	"github.com/icinga/icinga-kubernetes/pkg/strcase"
 	"github.com/icinga/icinga-kubernetes/pkg/types"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -41,7 +40,7 @@ func (s *Secret) Obtain(k8s kmetav1.Object) {
 	secret := k8s.(*kcorev1.Secret)
 
 	s.Id = types.Checksum(s.Namespace + "/" + s.Name)
-	s.Type = strcase.Snake(string(secret.Type))
+	s.Type = string(secret.Type)
 
 	var immutable bool
 	if secret.Immutable != nil {
