@@ -184,6 +184,10 @@ func main() {
 	})
 	g.Go(func() error {
 		s := syncv1.NewSync(db, factory.Core().V1().Secrets().Informer(), log.WithName("secrets"), schemav1.NewSecret)
+		return s.Run(ctx)
+	})
+	g.Go(func() error {
+		s := syncv1.NewSync(db, factory.Core().V1().ConfigMaps().Informer(), log.WithName("config-maps"), schemav1.NewConfigMap)
 
 		return s.Run(ctx)
 	})
