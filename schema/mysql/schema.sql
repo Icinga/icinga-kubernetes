@@ -147,7 +147,7 @@ CREATE TABLE container_mount (
   pod_id binary(20) NOT NULL,
   volume_name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   path varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  sub_path varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  sub_path varchar(255) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   read_only enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (container_id, volume_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
