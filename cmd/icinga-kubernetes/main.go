@@ -211,6 +211,11 @@ func main() {
 
 		return s.Run(ctx)
 	})
+	g.Go(func() error {
+		s := syncv1.NewSync(db, factory.Batch().V1().CronJobs().Informer(), log.WithName("cron-jobs"), schemav1.NewCronJob)
+
+		return s.Run(ctx)
+	})
 	if err := g.Wait(); err != nil {
 		klog.Fatal(err)
 	}

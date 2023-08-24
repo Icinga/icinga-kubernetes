@@ -531,3 +531,29 @@ CREATE TABLE job_label (
   label_id binary(20) NOT NULL,
   PRIMARY KEY (job_id, label_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE cron_job (
+  id binary(20) NOT NULL,
+  namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  resource_version varchar(255) NOT NULL,
+  schedule varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  timezone varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  starting_deadline_seconds bigint unsigned NOT NULL,
+  concurrency_policy enum('allow', 'forbid', 'replace') COLLATE utf8mb4_unicode_ci NOT NULL,
+  suspend enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
+  active int unsigned NOT NULL,
+  successful_jobs_history_limit int unsigned NOT NULL,
+  failed_jobs_history_limit int unsigned NOT NULL,
+  last_schedule_time bigint unsigned NULL DEFAULT NULL,
+  last_successful_time bigint unsigned NULL DEFAULT NULL,
+  created bigint unsigned NOT NULL,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE cron_job_label (
+  cron_job_id binary(20) NOT NULL,
+  label_id binary(20) NOT NULL,
+  PRIMARY KEY (cron_job_id, label_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
