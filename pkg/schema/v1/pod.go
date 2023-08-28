@@ -44,7 +44,7 @@ type ContainerMount struct {
 	PodId       types.Binary
 	VolumeName  string
 	Path        string
-	SubPath     string
+	SubPath     sql.NullString
 	ReadOnly    types.Bool
 }
 
@@ -219,12 +219,18 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 		}
 
 		for _, mount := range container.VolumeMounts {
+			var subPath sql.NullString
+			if mount.SubPath != "" {
+				subPath.String = mount.SubPath
+				subPath.Valid = true
+			}
+
 			p.ContainerMounts = append(p.ContainerMounts, ContainerMount{
 				ContainerId: types.Checksum(pod.Namespace + "/" + pod.Name + "/" + container.Name),
 				PodId:       p.Id,
 				VolumeName:  mount.Name,
 				Path:        mount.MountPath,
-				SubPath:     mount.SubPath,
+				SubPath:     subPath,
 				ReadOnly: types.Bool{
 					Bool:  mount.ReadOnly,
 					Valid: true,
