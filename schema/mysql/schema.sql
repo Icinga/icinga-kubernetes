@@ -446,7 +446,7 @@ CREATE TABLE pvc (
   actual_access_modes tinyint unsigned NOT NULL,
   minimum_capacity bigint unsigned NULL DEFAULT NULL,
   actual_capacity bigint unsigned NOT NULL,
-  phase enum('pending', 'available', 'bound', 'released', 'failed') COLLATE utf8mb4_unicode_ci NOT NULL,
+  phase enum('pending', 'bound', 'lost') COLLATE utf8mb4_unicode_ci NOT NULL,
   volume_name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   volume_mode enum('block', 'filesystem') COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   storage_class varchar(255) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
