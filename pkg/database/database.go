@@ -662,3 +662,6 @@ func IsStruct(subject interface{}) bool {
 		return false
 	}
 }
+
+// OnSuccess is a callback for successful (bulk) DML operations.
+type OnSuccess[T any] func(ctx context.Context, affectedRows []T) (err error)

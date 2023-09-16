@@ -7,6 +7,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
+	"github.com/icinga/icinga-kubernetes/pkg/periodic"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
 	"github.com/icinga/icinga-kubernetes/pkg/sync"
 	syncv1 "github.com/icinga/icinga-kubernetes/pkg/sync/v1"
@@ -226,6 +227,29 @@ func main() {
 
 		return s.Run(ctx)
 	})
+
+	errs := make(chan error, 1)
+	defer periodic.Start(ctx, time.Hour, func(tick periodic.Tick) {
+		olderThan := tick.Time.AddDate(0, 0, -1)
+
+		_, err := db.CleanupOlderThan(
+			ctx, database.CleanupStmt{
+				Table:  "event",
+				PK:     "id",
+				Column: "created",
+			}, 5000, olderThan,
+		)
+		if err != nil {
+			select {
+			case errs <- err:
+			case <-ctx.Done():
+			}
+
+			return
+		}
+	}, periodic.Immediate()).Stop()
+	com.ErrgroupReceive(g, errs)
+
 	if err := g.Wait(); err != nil {
 		klog.Fatal(err)
 	}
