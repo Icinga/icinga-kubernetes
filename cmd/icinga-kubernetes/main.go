@@ -1,7 +1,9 @@
 package main
 
 import (
+	"github.com/icinga/icinga-go-library/config"
 	"github.com/icinga/icinga-go-library/logging"
+	"github.com/icinga/icinga-kubernetes/internal"
 	"github.com/pkg/errors"
 	"k8s.io/client-go/kubernetes"
 	kclientcmd "k8s.io/client-go/tools/clientcmd"
@@ -17,5 +19,10 @@ func main() {
 	_, err = kubernetes.NewForConfig(kconfig)
 	if err != nil {
 		logging.Fatal(errors.Wrap(err, "can't create Kubernetes client"))
+	}
+
+	_, err = config.ParseFlags[internal.Flags]()
+	if err != nil {
+		logging.Fatal(errors.Wrap(err, "can't parse flags"))
 	}
 }
