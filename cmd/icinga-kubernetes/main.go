@@ -21,8 +21,13 @@ func main() {
 		logging.Fatal(errors.Wrap(err, "can't create Kubernetes client"))
 	}
 
-	_, err = config.ParseFlags[internal.Flags]()
+	flags, err := config.ParseFlags[internal.Flags]()
 	if err != nil {
 		logging.Fatal(errors.Wrap(err, "can't parse flags"))
+	}
+
+	_, err = config.FromYAMLFile[internal.Config](flags.Config)
+	if err != nil {
+		logging.Fatal(errors.Wrap(err, "can't create configuration"))
 	}
 }
