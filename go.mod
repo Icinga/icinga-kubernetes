@@ -4,6 +4,7 @@ go 1.18
 
 require (
 	github.com/icinga/icinga-go-library v0.0.0-20231010133022-ee8ee635e589
+	github.com/okzk/sdnotify v0.0.0-20180710141335-d9becc38acbd
 	github.com/pkg/errors v0.9.1
 	k8s.io/client-go v0.28.2
 )
