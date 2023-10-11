@@ -1,0 +1,41 @@
+# This is the configuration file for Icinga Kubernetes.
+
+# Connection configuration for the database to which Icinga Kubernetes synchronizes Kubernetes data.
+# This is also the database used in Icinga Kubernetes Web to view and work with the data.
+database:
+  # Database type. Either 'mysql' for MySQL or 'pgsql' for PostgreSQL.
+  # Defaults to 'mysql'.
+#  type: mysql
+
+  # Database host or absolute Unix socket path.
+  host: localhost
+
+  # Database port. By default, the MySQL or PostgreSQL port, depending on the database type.
+#  port:
+
+  # Database name.
+  database: kubernetes
+
+  # Database user.
+  user: kubernetes
+
+  # Database password.
+  password: CHANGEME
+
+# Icinga Kubernetes logs its activities at various severity levels and any errors that occur either
+# on the console or in systemd's journal. The latter is used automatically when running under systemd.
+# In any case, the default log level is 'info'.
+logging:
+  # Default logging level. Can be set to 'fatal', 'error', 'warn', 'info' or 'debug'.
+  # If not set, defaults to 'info'.
+#  level: info
+
+  # Logging output. Can be set to 'console' (stderr) or 'systemd-journald'.
+  # If not set, logs to systemd-journald when running under systemd, otherwise stderr.
+#  output:
+
+  # Interval for periodic logging defined as duration string.
+  # A duration string is a sequence of decimal numbers and a unit suffix, such as "20s".
+  # Valid units are "ms", "s", "m", "h".
+  # Defaults to "20s".
+#  interval: 20s
