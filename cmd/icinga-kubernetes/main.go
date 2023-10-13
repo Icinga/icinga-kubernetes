@@ -82,6 +82,12 @@ func main() {
 		).Run(ctx)
 	})
 
+	g.Go(func() error {
+		return sync.NewSync(
+			db, schema.NewPod, informers.Core().V1().Pods().Informer(), logs.GetChildLogger("Pods"),
+		).Run(ctx)
+	})
+
 	if err := g.Wait(); err != nil {
 		logging.Fatal(errors.Wrap(err, "can't sync"))
 	}
