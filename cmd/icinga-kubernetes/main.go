@@ -7,8 +7,12 @@ import (
 	"github.com/icinga/icinga-go-library/driver"
 	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-kubernetes/internal"
+	"github.com/icinga/icinga-kubernetes/pkg/schema"
+	"github.com/icinga/icinga-kubernetes/pkg/sync"
 	"github.com/okzk/sdnotify"
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
+	kinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	kclientcmd "k8s.io/client-go/tools/clientcmd"
 )
@@ -20,7 +24,7 @@ func main() {
 		logging.Fatal(errors.Wrap(err, "can't configure Kubernetes client"))
 	}
 
-	_, err = kubernetes.NewForConfig(kconfig)
+	k, err := kubernetes.NewForConfig(kconfig)
 	if err != nil {
 		logging.Fatal(errors.Wrap(err, "can't create Kubernetes client"))
 	}
@@ -60,5 +64,19 @@ func main() {
 		if err != nil {
 			logger.Fatalf("%+v", errors.Wrap(err, "can't connect to database"))
 		}
+	}
+
+	informers := kinformers.NewSharedInformerFactory(k, 0)
+
+	g, ctx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		return sync.NewSync(
+			db, schema.NewNode, informers.Core().V1().Nodes().Informer(), logs.GetChildLogger("Nodes"),
+		).Run(ctx)
+	})
+
+	if err := g.Wait(); err != nil {
+		logging.Fatal(errors.Wrap(err, "can't sync"))
 	}
 }
