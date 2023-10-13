@@ -1,7 +1,10 @@
 package main
 
 import (
+	"context"
 	"github.com/icinga/icinga-go-library/config"
+	"github.com/icinga/icinga-go-library/database"
+	"github.com/icinga/icinga-go-library/driver"
 	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-kubernetes/internal"
 	"github.com/okzk/sdnotify"
@@ -44,4 +47,18 @@ func main() {
 	defer logger.Sync()
 
 	logger.Info("Starting up")
+
+	driver.Register(logs.GetChildLogger("Database Driver"))
+
+	ctx := context.Background()
+
+	db, err := database.NewDbFromConfig(&cfg.Database, logs.GetChildLogger("Database"))
+	defer db.Close()
+	{
+		logger.Info("Connecting to database")
+		err := db.PingContext(ctx)
+		if err != nil {
+			logger.Fatalf("%+v", errors.Wrap(err, "can't connect to database"))
+		}
+	}
 }
