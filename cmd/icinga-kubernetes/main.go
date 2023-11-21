@@ -70,22 +70,10 @@ func main() {
 
 	g, ctx := errgroup.WithContext(ctx)
 
-	forwardUpsertNodesChannel := make(chan<- any)
-	defer close(forwardUpsertNodesChannel)
-
-	forwardDeleteNodesChannel := make(chan<- any)
-	defer close(forwardDeleteNodesChannel)
-
-	forwardUpsertNamespacesChannel := make(chan<- any)
-	defer close(forwardUpsertNamespacesChannel)
-
-	forwardDeleteNamespacesChannel := make(chan<- any)
-	defer close(forwardDeleteNamespacesChannel)
-
-	forwardUpsertPodsChannel := make(chan<- any)
+	forwardUpsertPodsChannel := make(chan database.Entity)
 	defer close(forwardUpsertPodsChannel)
 
-	forwardDeletePodsChannel := make(chan<- any)
+	forwardDeletePodsChannel := make(chan any)
 	defer close(forwardDeletePodsChannel)
 
 	g.Go(func() error {
@@ -94,8 +82,6 @@ func main() {
 			schema.NewNode,
 			informers.Core().V1().Nodes().Informer(),
 			logs.GetChildLogger("Nodes"),
-			sync.WithForwardUpsert(forwardUpsertNodesChannel),
-			sync.WithForwardDelete(forwardDeleteNodesChannel),
 		).Run(ctx)
 	})
 
@@ -105,10 +91,17 @@ func main() {
 			schema.NewNamespace,
 			informers.Core().V1().Namespaces().Informer(),
 			logs.GetChildLogger("Namespaces"),
-			sync.WithForwardUpsert(forwardUpsertNamespacesChannel),
-			sync.WithForwardDelete(forwardDeleteNamespacesChannel),
 		).Run(ctx)
 	})
+
+	upsertPodChannelSpreader := sync.NewChannelSpreader[database.Entity](forwardUpsertPodsChannel)
+	deletePodChannelSpreader := sync.NewChannelSpreader[any](forwardDeletePodsChannel)
+
+	upsertPodChannel := upsertPodChannelSpreader.NewChannel()
+	deletePodChannel := deletePodChannelSpreader.NewChannel()
+
+	forwardUpsertPodsToLogChannel := upsertPodChannelSpreader.NewChannel()
+	forwardDeletePodsToLogChannel := deletePodChannelSpreader.NewChannel()
 
 	g.Go(func() error {
 		return sync.NewSync(
@@ -118,7 +111,27 @@ func main() {
 			logs.GetChildLogger("Pods"),
 			sync.WithForwardUpsert(forwardUpsertPodsChannel),
 			sync.WithForwardDelete(forwardDeletePodsChannel),
+			sync.WithUpsertChannel(upsertPodChannel),
+			sync.WithDeleteChannel(deletePodChannel),
 		).Run(ctx)
+	})
+
+	logSync := sync.NewLogSync(k, db, logs.GetChildLogger("ContainerLogs"))
+
+	g.Go(func() error {
+		return upsertPodChannelSpreader.Run(ctx)
+	})
+
+	g.Go(func() error {
+		return deletePodChannelSpreader.Run(ctx)
+	})
+
+	g.Go(func() error {
+		return logSync.MaintainList(ctx, forwardUpsertPodsToLogChannel, forwardDeletePodsToLogChannel)
+	})
+
+	g.Go(func() error {
+		return logSync.Run(ctx)
 	})
 
 	if err := g.Wait(); err != nil {

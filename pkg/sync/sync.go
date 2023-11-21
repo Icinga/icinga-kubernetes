@@ -16,7 +16,7 @@ import (
 
 type Option func(s *sync)
 
-func WithForwardUpsert(channel chan<- any) Option {
+func WithForwardUpsert(channel chan<- database.Entity) Option {
 	return func(s *sync) {
 		s.forwardUpsertChannel = channel
 	}
@@ -25,6 +25,18 @@ func WithForwardUpsert(channel chan<- any) Option {
 func WithForwardDelete(channel chan<- any) Option {
 	return func(s *sync) {
 		s.forwardDeleteChannel = channel
+	}
+}
+
+func WithUpsertChannel(channel <-chan database.Entity) Option {
+	return func(s *sync) {
+		s.upsertChannel = channel
+	}
+}
+
+func WithDeleteChannel(channel <-chan any) Option {
+	return func(s *sync) {
+		s.deleteChannel = channel
 	}
 }
 
@@ -37,8 +49,10 @@ type sync struct {
 	factory              func() contracts.Resource
 	informer             kcache.SharedInformer
 	logger               *logging.Logger
-	forwardUpsertChannel chan<- any
+	forwardUpsertChannel chan<- database.Entity
 	forwardDeleteChannel chan<- any
+	upsertChannel        <-chan database.Entity
+	deleteChannel        <-chan any
 }
 
 func NewSync(
@@ -88,8 +102,13 @@ func (s *sync) Run(ctx context.Context) error {
 
 	s.logger.Debug("Finished warming up")
 
-	upserts := make(chan database.Entity)
-	defer close(upserts)
+	upsertChannel := make(chan database.Entity)
+	defer close(upsertChannel)
+
+	if s.forwardUpsertChannel == nil {
+		s.forwardUpsertChannel = upsertChannel
+		s.upsertChannel = upsertChannel
+	}
 
 	for _, ch := range []<-chan contracts.KUpsert{changes.Adds(), changes.Updates()} {
 		ch := ch
@@ -108,7 +127,7 @@ func (s *sync) Run(ctx context.Context) error {
 					entity.Obtain(kupsert.KObject())
 
 					select {
-					case upserts <- entity:
+					case s.forwardUpsertChannel <- entity:
 						s.logger.Debugw(
 							fmt.Sprintf("Sync: Upserted %s", kupsert.GetCanonicalName()),
 							zap.String("id", kupsert.ID().String()))
@@ -123,11 +142,16 @@ func (s *sync) Run(ctx context.Context) error {
 	}
 
 	g.Go(func() error {
-		return s.db.UpsertStreamed(ctx, upserts)
+		return s.db.UpsertStreamed(ctx, s.upsertChannel)
 	})
 
-	deletes := make(chan any)
-	defer close(deletes)
+	deleteChannel := make(chan any)
+	defer close(deleteChannel)
+
+	if s.forwardDeleteChannel == nil {
+		s.forwardDeleteChannel = deleteChannel
+		s.deleteChannel = deleteChannel
+	}
 
 	g.Go(func() error {
 		for {
@@ -138,7 +162,7 @@ func (s *sync) Run(ctx context.Context) error {
 				}
 
 				select {
-				case deletes <- kdelete.ID():
+				case s.forwardDeleteChannel <- kdelete.ID():
 					s.logger.Debugw(
 						fmt.Sprintf("Sync: Deleted %s", kdelete.GetCanonicalName()),
 						zap.String("id", kdelete.ID().String()))
@@ -152,7 +176,7 @@ func (s *sync) Run(ctx context.Context) error {
 	})
 
 	g.Go(func() error {
-		return s.db.DeleteStreamed(ctx, s.factory(), deletes)
+		return s.db.DeleteStreamed(ctx, s.factory(), s.deleteChannel)
 	})
 
 	g.Go(func() error {
