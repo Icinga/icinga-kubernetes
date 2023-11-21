@@ -71,13 +71,22 @@ func main() {
 	g, ctx := errgroup.WithContext(ctx)
 
 	forwardUpsertNodesChannel := make(chan<- any)
+	defer close(forwardUpsertNodesChannel)
+
 	forwardDeleteNodesChannel := make(chan<- any)
+	defer close(forwardDeleteNodesChannel)
 
 	forwardUpsertNamespacesChannel := make(chan<- any)
+	defer close(forwardUpsertNamespacesChannel)
+
 	forwardDeleteNamespacesChannel := make(chan<- any)
+	defer close(forwardDeleteNamespacesChannel)
 
 	forwardUpsertPodsChannel := make(chan<- any)
+	defer close(forwardUpsertPodsChannel)
+
 	forwardDeletePodsChannel := make(chan<- any)
+	defer close(forwardDeletePodsChannel)
 
 	g.Go(func() error {
 		return sync.NewSync(
