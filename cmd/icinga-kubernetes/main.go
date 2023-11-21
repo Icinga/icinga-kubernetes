@@ -70,21 +70,45 @@ func main() {
 
 	g, ctx := errgroup.WithContext(ctx)
 
+	forwardUpsertNodesChannel := make(chan<- any)
+	forwardDeleteNodesChannel := make(chan<- any)
+
+	forwardUpsertNamespacesChannel := make(chan<- any)
+	forwardDeleteNamespacesChannel := make(chan<- any)
+
+	forwardUpsertPodsChannel := make(chan<- any)
+	forwardDeletePodsChannel := make(chan<- any)
+
 	g.Go(func() error {
 		return sync.NewSync(
-			db, schema.NewNode, informers.Core().V1().Nodes().Informer(), logs.GetChildLogger("Nodes"),
+			db,
+			schema.NewNode,
+			informers.Core().V1().Nodes().Informer(),
+			logs.GetChildLogger("Nodes"),
+			sync.WithForwardUpsert(forwardUpsertNodesChannel),
+			sync.WithForwardDelete(forwardDeleteNodesChannel),
 		).Run(ctx)
 	})
 
 	g.Go(func() error {
 		return sync.NewSync(
-			db, schema.NewNamespace, informers.Core().V1().Namespaces().Informer(), logs.GetChildLogger("Namespaces"),
+			db,
+			schema.NewNamespace,
+			informers.Core().V1().Namespaces().Informer(),
+			logs.GetChildLogger("Namespaces"),
+			sync.WithForwardUpsert(forwardUpsertNamespacesChannel),
+			sync.WithForwardDelete(forwardDeleteNamespacesChannel),
 		).Run(ctx)
 	})
 
 	g.Go(func() error {
 		return sync.NewSync(
-			db, schema.NewPod, informers.Core().V1().Pods().Informer(), logs.GetChildLogger("Pods"),
+			db,
+			schema.NewPod,
+			informers.Core().V1().Pods().Informer(),
+			logs.GetChildLogger("Pods"),
+			sync.WithForwardUpsert(forwardUpsertPodsChannel),
+			sync.WithForwardDelete(forwardDeletePodsChannel),
 		).Run(ctx)
 	})
 

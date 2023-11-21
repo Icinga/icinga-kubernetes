@@ -14,15 +14,31 @@ import (
 	kcache "k8s.io/client-go/tools/cache"
 )
 
+type Option func(s *sync)
+
+func WithForwardUpsert(channel chan<- any) Option {
+	return func(s *sync) {
+		s.forwardUpsertChannel = channel
+	}
+}
+
+func WithForwardDelete(channel chan<- any) Option {
+	return func(s *sync) {
+		s.forwardDeleteChannel = channel
+	}
+}
+
 type Sync interface {
 	Run(context.Context) error
 }
 
 type sync struct {
-	db       *database.DB
-	factory  func() contracts.Resource
-	informer kcache.SharedInformer
-	logger   *logging.Logger
+	db                   *database.DB
+	factory              func() contracts.Resource
+	informer             kcache.SharedInformer
+	logger               *logging.Logger
+	forwardUpsertChannel chan<- any
+	forwardDeleteChannel chan<- any
 }
 
 func NewSync(
@@ -30,13 +46,20 @@ func NewSync(
 	factory func() contracts.Resource,
 	informer kcache.SharedInformer,
 	logger *logging.Logger,
+	options ...Option,
 ) Sync {
-	return &sync{
+	s := &sync{
 		db:       db,
 		informer: informer,
 		logger:   logger,
 		factory:  factory,
 	}
+
+	for _, option := range options {
+		option(s)
+	}
+
+	return s
 }
 
 func (s *sync) Run(ctx context.Context) error {
