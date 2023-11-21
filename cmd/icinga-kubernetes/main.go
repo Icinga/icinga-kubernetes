@@ -7,6 +7,7 @@ import (
 	"github.com/icinga/icinga-go-library/driver"
 	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-kubernetes/internal"
+	"github.com/icinga/icinga-kubernetes/pkg/contracts"
 	"github.com/icinga/icinga-kubernetes/pkg/schema"
 	"github.com/icinga/icinga-kubernetes/pkg/sync"
 	"github.com/okzk/sdnotify"
@@ -70,22 +71,10 @@ func main() {
 
 	g, ctx := errgroup.WithContext(ctx)
 
-	forwardUpsertNodesChannel := make(chan<- any)
-	defer close(forwardUpsertNodesChannel)
-
-	forwardDeleteNodesChannel := make(chan<- any)
-	defer close(forwardDeleteNodesChannel)
-
-	forwardUpsertNamespacesChannel := make(chan<- any)
-	defer close(forwardUpsertNamespacesChannel)
-
-	forwardDeleteNamespacesChannel := make(chan<- any)
-	defer close(forwardDeleteNamespacesChannel)
-
-	forwardUpsertPodsChannel := make(chan<- any)
+	forwardUpsertPodsChannel := make(chan database.Entity)
 	defer close(forwardUpsertPodsChannel)
 
-	forwardDeletePodsChannel := make(chan<- any)
+	forwardDeletePodsChannel := make(chan any)
 	defer close(forwardDeletePodsChannel)
 
 	g.Go(func() error {
@@ -94,8 +83,6 @@ func main() {
 			schema.NewNode,
 			informers.Core().V1().Nodes().Informer(),
 			logs.GetChildLogger("Nodes"),
-			sync.WithForwardUpsert(forwardUpsertNodesChannel),
-			sync.WithForwardDelete(forwardDeleteNodesChannel),
 		).Run(ctx)
 	})
 
@@ -105,20 +92,41 @@ func main() {
 			schema.NewNamespace,
 			informers.Core().V1().Namespaces().Informer(),
 			logs.GetChildLogger("Namespaces"),
-			sync.WithForwardUpsert(forwardUpsertNamespacesChannel),
-			sync.WithForwardDelete(forwardDeleteNamespacesChannel),
 		).Run(ctx)
 	})
 
+	//upsertPodChannelSpreader := sync.NewChannelSpreader[database.Entity](forwardUpsertPodsChannel)
+	//deletePodChannelSpreader := sync.NewChannelSpreader[any](forwardDeletePodsChannel)
+
+	//upsertPodChannel := upsertPodChannelSpreader.NewChannel()
+	//deletePodChannel := deletePodChannelSpreader.NewChannel()
+
+	forwardUpsertPodsToLogChannel := make(chan contracts.KUpsert)
+	forwardDeletePodsToLogChannel := make(chan contracts.KDelete)
+
 	g.Go(func() error {
+
+		defer close(forwardUpsertPodsToLogChannel)
+		defer close(forwardDeletePodsToLogChannel)
+
 		return sync.NewSync(
 			db,
 			schema.NewPod,
 			informers.Core().V1().Pods().Informer(),
 			logs.GetChildLogger("Pods"),
-			sync.WithForwardUpsert(forwardUpsertPodsChannel),
-			sync.WithForwardDelete(forwardDeletePodsChannel),
+			sync.WithForwardUpsertToLog(forwardUpsertPodsToLogChannel),
+			sync.WithForwardDeleteToLog(forwardDeletePodsToLogChannel),
 		).Run(ctx)
+	})
+
+	logSync := sync.NewLogSync(k, db, logs.GetChildLogger("ContainerLogs"))
+
+	g.Go(func() error {
+		return logSync.MaintainList(ctx, forwardUpsertPodsToLogChannel, forwardDeletePodsToLogChannel)
+	})
+
+	g.Go(func() error {
+		return logSync.Run(ctx)
 	})
 
 	if err := g.Wait(); err != nil {

@@ -16,15 +16,15 @@ import (
 
 type Option func(s *sync)
 
-func WithForwardUpsert(channel chan<- any) Option {
+func WithForwardUpsertToLog(channel chan<- contracts.KUpsert) Option {
 	return func(s *sync) {
-		s.forwardUpsertChannel = channel
+		s.forwardUpsertToLogChannel = channel
 	}
 }
 
-func WithForwardDelete(channel chan<- any) Option {
+func WithForwardDeleteToLog(channel chan<- contracts.KDelete) Option {
 	return func(s *sync) {
-		s.forwardDeleteChannel = channel
+		s.forwardDeleteToLogChannel = channel
 	}
 }
 
@@ -33,12 +33,12 @@ type Sync interface {
 }
 
 type sync struct {
-	db                   *database.DB
-	factory              func() contracts.Resource
-	informer             kcache.SharedInformer
-	logger               *logging.Logger
-	forwardUpsertChannel chan<- any
-	forwardDeleteChannel chan<- any
+	db                        *database.DB
+	factory                   func() contracts.Resource
+	informer                  kcache.SharedInformer
+	logger                    *logging.Logger
+	forwardUpsertToLogChannel chan<- contracts.KUpsert
+	forwardDeleteToLogChannel chan<- contracts.KDelete
 }
 
 func NewSync(
@@ -88,8 +88,27 @@ func (s *sync) Run(ctx context.Context) error {
 
 	s.logger.Debug("Finished warming up")
 
-	upserts := make(chan database.Entity)
-	defer close(upserts)
+	s.factory().GetResourceVersion()
+
+	// init upsert channel spreader
+	multiplexUpsertChannel := make(chan contracts.KUpsert)
+	defer close(multiplexUpsertChannel)
+
+	multiplexUpsert := NewChannelSpreader[contracts.KUpsert](multiplexUpsertChannel)
+
+	upsertChannel := multiplexUpsert.NewChannel()
+
+	if s.forwardUpsertToLogChannel != nil {
+		multiplexUpsert.AddChannel(s.forwardUpsertToLogChannel)
+	}
+
+	// run upsert channel spreader
+	g.Go(func() error {
+		return multiplexUpsert.Run(ctx)
+	})
+
+	upsertToStream := make(chan database.Entity)
+	defer close(upsertToStream)
 
 	for _, ch := range []<-chan contracts.KUpsert{changes.Adds(), changes.Updates()} {
 		ch := ch
@@ -102,13 +121,32 @@ func (s *sync) Run(ctx context.Context) error {
 						return nil
 					}
 
+					select {
+					case multiplexUpsertChannel <- kupsert:
+					case <-ctx.Done():
+						return ctx.Err()
+					}
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			}
+		})
+
+		g.Go(func() error {
+			for {
+				select {
+				case kupsert, more := <-upsertChannel:
+					if !more {
+						return nil
+					}
+
 					entity := s.factory()
 					entity.SetID(kupsert.ID())
 					entity.SetCanonicalName(kupsert.GetCanonicalName())
 					entity.Obtain(kupsert.KObject())
 
 					select {
-					case upserts <- entity:
+					case upsertToStream <- entity:
 						s.logger.Debugw(
 							fmt.Sprintf("Sync: Upserted %s", kupsert.GetCanonicalName()),
 							zap.String("id", kupsert.ID().String()))
@@ -123,11 +161,25 @@ func (s *sync) Run(ctx context.Context) error {
 	}
 
 	g.Go(func() error {
-		return s.db.UpsertStreamed(ctx, upserts)
+		return s.db.UpsertStreamed(ctx, upsertToStream)
 	})
 
-	deletes := make(chan any)
-	defer close(deletes)
+	// init delete channel spreader
+	multiplexDeleteChannel := make(chan contracts.KDelete)
+	defer close(multiplexDeleteChannel)
+
+	multiplexDelete := NewChannelSpreader[contracts.KDelete](multiplexDeleteChannel)
+
+	deleteChannel := multiplexDelete.NewChannel()
+
+	if s.forwardDeleteToLogChannel != nil {
+		multiplexDelete.AddChannel(s.forwardDeleteToLogChannel)
+	}
+
+	// run delete channel spreader
+	g.Go(func() error {
+		return multiplexDelete.Run(ctx)
+	})
 
 	g.Go(func() error {
 		for {
@@ -136,9 +188,30 @@ func (s *sync) Run(ctx context.Context) error {
 				if !more {
 					return nil
 				}
+				select {
+				case multiplexDeleteChannel <- kdelete:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+	})
+
+	deleteToStream := make(chan any)
+	g.Go(func() error {
+		defer close(deleteToStream)
+
+		for {
+			select {
+			case kdelete, more := <-deleteChannel:
+				if !more {
+					return nil
+				}
 
 				select {
-				case deletes <- kdelete.ID():
+				case deleteToStream <- kdelete.ID():
 					s.logger.Debugw(
 						fmt.Sprintf("Sync: Deleted %s", kdelete.GetCanonicalName()),
 						zap.String("id", kdelete.ID().String()))
@@ -152,7 +225,7 @@ func (s *sync) Run(ctx context.Context) error {
 	})
 
 	g.Go(func() error {
-		return s.db.DeleteStreamed(ctx, s.factory(), deletes)
+		return s.db.DeleteStreamed(ctx, s.factory(), deleteToStream)
 	})
 
 	g.Go(func() error {
