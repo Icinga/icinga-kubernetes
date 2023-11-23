@@ -16,6 +16,7 @@ import (
 	kinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	kclientcmd "k8s.io/client-go/tools/clientcmd"
+	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
 func main() {
@@ -28,6 +29,11 @@ func main() {
 	k, err := kubernetes.NewForConfig(kconfig)
 	if err != nil {
 		logging.Fatal(errors.Wrap(err, "can't create Kubernetes client"))
+	}
+
+	mk, err := metricsv.NewForConfig(kconfig)
+	if err != nil {
+		logging.Fatal(errors.Wrap(err, "can't create Kubernetes metrics client"))
 	}
 
 	flags, err := config.ParseFlags[internal.Flags]()
@@ -71,11 +77,8 @@ func main() {
 
 	g, ctx := errgroup.WithContext(ctx)
 
-	forwardUpsertPodsChannel := make(chan database.Entity)
-	defer close(forwardUpsertPodsChannel)
-
-	forwardDeletePodsChannel := make(chan any)
-	defer close(forwardDeletePodsChannel)
+	// node forward channels
+	forwardDeleteNodesToMetricChannel := make(chan contracts.KDelete)
 
 	g.Go(func() error {
 		return sync.NewSync(
@@ -83,7 +86,10 @@ func main() {
 			schema.NewNode,
 			informers.Core().V1().Nodes().Informer(),
 			logs.GetChildLogger("Nodes"),
-		).Run(ctx)
+		).Run(
+			ctx,
+			sync.WithForwardDeleteToMetric(forwardDeleteNodesToMetricChannel),
+		)
 	})
 
 	g.Go(func() error {
@@ -95,8 +101,11 @@ func main() {
 		).Run(ctx)
 	})
 
+	// pod forward channels
 	forwardUpsertPodsToLogChannel := make(chan contracts.KUpsert)
 	forwardDeletePodsToLogChannel := make(chan contracts.KDelete)
+
+	forwardDeletePodsToMetricChannel := make(chan contracts.KDelete)
 
 	g.Go(func() error {
 
@@ -115,6 +124,7 @@ func main() {
 		)
 	})
 
+	// sync logs
 	logSync := sync.NewLogSync(k, db, logs.GetChildLogger("ContainerLogs"))
 
 	g.Go(func() error {
@@ -123,6 +133,28 @@ func main() {
 
 	g.Go(func() error {
 		return logSync.Run(ctx)
+	})
+
+	// sync pod and container metrics
+	metricsSync := sync.NewMetricSync(mk, db, logs.GetChildLogger("Metrics"))
+
+	g.Go(func() error {
+		return metricsSync.Run(ctx)
+	})
+
+	g.Go(func() error {
+		return metricsSync.Clean(ctx, forwardDeletePodsToMetricChannel)
+	})
+
+	// sync node metrics
+	nodeMetricSync := sync.NewNodeMetricSync(mk, db, logs.GetChildLogger("NodeMetrics"))
+
+	g.Go(func() error {
+		return nodeMetricSync.Run(ctx)
+	})
+
+	g.Go(func() error {
+		return nodeMetricSync.Clean(ctx, forwardDeleteNodesToMetricChannel)
 	})
 
 	if err := g.Wait(); err != nil {
