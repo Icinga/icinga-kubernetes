@@ -95,12 +95,6 @@ func main() {
 		).Run(ctx)
 	})
 
-	//upsertPodChannelSpreader := sync.NewChannelSpreader[database.Entity](forwardUpsertPodsChannel)
-	//deletePodChannelSpreader := sync.NewChannelSpreader[any](forwardDeletePodsChannel)
-
-	//upsertPodChannel := upsertPodChannelSpreader.NewChannel()
-	//deletePodChannel := deletePodChannelSpreader.NewChannel()
-
 	forwardUpsertPodsToLogChannel := make(chan contracts.KUpsert)
 	forwardDeletePodsToLogChannel := make(chan contracts.KDelete)
 
@@ -114,9 +108,11 @@ func main() {
 			schema.NewPod,
 			informers.Core().V1().Pods().Informer(),
 			logs.GetChildLogger("Pods"),
+		).Run(
+			ctx,
 			sync.WithForwardUpsertToLog(forwardUpsertPodsToLogChannel),
 			sync.WithForwardDeleteToLog(forwardDeletePodsToLogChannel),
-		).Run(ctx)
+		)
 	})
 
 	logSync := sync.NewLogSync(k, db, logs.GetChildLogger("ContainerLogs"))
