@@ -21,6 +21,8 @@ import (
 	"time"
 )
 
+// LogSync syncs logs to database. Therefore, it maintains a list
+// of pod elements to get logs from
 type LogSync struct {
 	list        []*kcorev1.Pod
 	lastChecked map[[20]byte]*kmetav1.Time
@@ -30,6 +32,7 @@ type LogSync struct {
 	logger      *logging.Logger
 }
 
+// NewLogSync creates new LogSync initialized with clientset, database and logger
 func NewLogSync(clientset *kubernetes.Clientset, db *database.DB, logger *logging.Logger) *LogSync {
 	return &LogSync{
 		list:        []*kcorev1.Pod{},
@@ -41,6 +44,19 @@ func NewLogSync(clientset *kubernetes.Clientset, db *database.DB, logger *loggin
 	}
 }
 
+// upsertStmt returns database upsert statement
+func (ls *LogSync) upsertStmt() string {
+	return fmt.Sprintf(
+		"INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s",
+		"log",
+		"id, reference_id, container_name, time, log",
+		":id, :reference_id, :container_name, :time, :log",
+		"time=CONCAT(time, '\n', :time), log=CONCAT(log, '\n', :log)",
+	)
+}
+
+// splitTimestampsFromMessages takes a log as []byte and returns timestamps and messages as separate string slices.
+// Additionally, it updates the last checked timestamp for the log
 func (ls *LogSync) splitTimestampsFromMessages(log []byte, curContainerId [20]byte) (times []string, messages []string, err error) {
 
 	stringReader := strings.NewReader(string(log))
@@ -72,6 +88,7 @@ func (ls *LogSync) splitTimestampsFromMessages(log []byte, curContainerId [20]by
 	return times, messages, nil
 }
 
+// removeFromList removes pod from maintained list
 func (ls *LogSync) removeFromList(id database.ID) {
 	out := make([]*kcorev1.Pod, 0)
 
@@ -87,6 +104,7 @@ func (ls *LogSync) removeFromList(id database.ID) {
 	ls.list = out
 }
 
+// MaintainList adds pods from the addChannel to the list and deletes pods from the deleteChannel from the list
 func (ls *LogSync) MaintainList(ctx context.Context, addChannel <-chan contracts.KUpsert, deleteChannel <-chan contracts.KDelete) error {
 
 	ls.logger.Info("Starting maintain list")
@@ -149,6 +167,8 @@ func (ls *LogSync) MaintainList(ctx context.Context, addChannel <-chan contracts
 	return g.Wait()
 }
 
+// Run starts syncing the logs to the database. Therefore, it loops over all
+// containers of each pod in the maintained list every 15 seconds.
 func (ls *LogSync) Run(ctx context.Context) error {
 
 	ls.logger.Info("Starting sync")
@@ -218,7 +238,7 @@ func (ls *LogSync) Run(ctx context.Context) error {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case <-time.After(time.Second * 5):
+			case <-time.After(time.Second * 15):
 			}
 		}
 	})
@@ -228,14 +248,4 @@ func (ls *LogSync) Run(ctx context.Context) error {
 	})
 
 	return g.Wait()
-}
-
-func (ls *LogSync) upsertStmt() string {
-	return fmt.Sprintf(
-		"INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s",
-		"log",
-		"id, reference_id, container_name, time, log",
-		":id, :reference_id, :container_name, :time, :log",
-		"time=CONCAT(time, '\n', :time), log=CONCAT(log, '\n', :log)",
-	)
 }
