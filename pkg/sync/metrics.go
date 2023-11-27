@@ -17,12 +17,14 @@ import (
 	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
+// MetricSync syncs container and pod metrics to the database
 type MetricSync struct {
 	metricsClientset *metricsv.Clientset
 	db               *database.DB
 	logger           *logging.Logger
 }
 
+// NewMetricSync creates new MetricSync initialized with metricsClientset, database and logger
 func NewMetricSync(metricsClientset *metricsv.Clientset, db *database.DB, logger *logging.Logger) *MetricSync {
 	return &MetricSync{
 		metricsClientset: metricsClientset,
@@ -31,6 +33,31 @@ func NewMetricSync(metricsClientset *metricsv.Clientset, db *database.DB, logger
 	}
 }
 
+// podMetricUpsertStmt returns database upsert statement to upsert pod metrics
+func (ms *MetricSync) podMetricUpsertStmt() string {
+	return fmt.Sprintf(
+		"INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s",
+		"pod_metric",
+		"reference_id, timestamp, cpu, memory, storage",
+		":reference_id, :timestamp, :cpu, :memory, :storage",
+		"timestamp=VALUES(timestamp), cpu=VALUES(cpu), memory=VALUES(memory), storage=VALUES(storage)",
+	)
+}
+
+// containerMetricUpsertStmt returns database upsert statement to upsert container metrics
+func (ms *MetricSync) containerMetricUpsertStmt() string {
+	return fmt.Sprintf(
+		"INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s",
+		"container_metric",
+		"container_reference_id, pod_reference_id, timestamp, cpu, memory, storage",
+		":container_reference_id, :pod_reference_id, :timestamp, :cpu, :memory, :storage",
+		"timestamp=VALUES(timestamp), cpu=VALUES(cpu), memory=VALUES(memory), storage=VALUES(storage)",
+	)
+}
+
+// Run starts syncing the metrics to the database. Therefore, it gets a list of all pods
+// and the belonging containers together with their metrics from the API every minute.
+// The pod metrics are the container metrics summed up by pod.
 func (ms *MetricSync) Run(ctx context.Context) error {
 
 	ms.logger.Info("Starting sync")
@@ -85,23 +112,23 @@ func (ms *MetricSync) Run(ctx context.Context) error {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case <-time.After(time.Second * 5):
-				//case <-time.After(time.Minute):
+			case <-time.After(time.Minute):
 			}
 		}
 	})
 
 	g.Go(func() error {
-		return ms.db.UpsertStreamedWithStatement(ctx, upsertPodMetrics, ms.podMetricUpsertStmt(), 5)
+		return ms.db.UpsertStreamed(ctx, upsertPodMetrics, database.WithStatement(ms.podMetricUpsertStmt(), 5))
 	})
 
 	g.Go(func() error {
-		return ms.db.UpsertStreamedWithStatement(ctx, upsertContainerMetrics, ms.containerMetricUpsertStmt(), 6)
+		return ms.db.UpsertStreamed(ctx, upsertContainerMetrics, database.WithStatement(ms.containerMetricUpsertStmt(), 6))
 	})
 
 	return g.Wait()
 }
 
+// Clean deletes metrics from the database if the belonging pod is deleted
 func (ms *MetricSync) Clean(ctx context.Context, deleteChannel <-chan contracts.KDelete) error {
 
 	g, ctx := errgroup.WithContext(ctx)
@@ -130,42 +157,24 @@ func (ms *MetricSync) Clean(ctx context.Context, deleteChannel <-chan contracts.
 	})
 
 	g.Go(func() error {
-		return ms.db.DeleteStreamedByField(ctx, &schema.PodMetric{}, "reference_id", deletesPod)
+		return ms.db.DeleteStreamed(ctx, &schema.PodMetric{}, deletesPod, database.ByColumn("reference_id"))
 	})
 
 	g.Go(func() error {
-		return ms.db.DeleteStreamedByField(ctx, &schema.ContainerMetric{}, "pod_reference_id", deletesContainer)
+		return ms.db.DeleteStreamed(ctx, &schema.ContainerMetric{}, deletesContainer, database.ByColumn("pod_reference_id"))
 	})
 
 	return g.Wait()
 }
 
-func (ms *MetricSync) podMetricUpsertStmt() string {
-	return fmt.Sprintf(
-		"INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s",
-		"pod_metric",
-		"reference_id, timestamp, cpu, memory, storage",
-		":reference_id, :timestamp, :cpu, :memory, :storage",
-		"timestamp=VALUES(timestamp), cpu=VALUES(cpu), memory=VALUES(memory), storage=VALUES(storage)",
-	)
-}
-
-func (ms *MetricSync) containerMetricUpsertStmt() string {
-	return fmt.Sprintf(
-		"INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s",
-		"container_metric",
-		"container_reference_id, pod_reference_id, timestamp, cpu, memory, storage",
-		":container_reference_id, :pod_reference_id, :timestamp, :cpu, :memory, :storage",
-		"timestamp=VALUES(timestamp), cpu=VALUES(cpu), memory=VALUES(memory), storage=VALUES(storage)",
-	)
-}
-
+// NodeMetricSync syncs node metrics to the database
 type NodeMetricSync struct {
 	metricsClientset *metricsv.Clientset
 	db               *database.DB
 	logger           *logging.Logger
 }
 
+// NewNodeMetricSync creates new NodeMetricSync initialized with metricsClientset, database and logger
 func NewNodeMetricSync(metricClientset *metricsv.Clientset, db *database.DB, logger *logging.Logger) *NodeMetricSync {
 	return &NodeMetricSync{
 		metricsClientset: metricClientset,
@@ -174,6 +183,19 @@ func NewNodeMetricSync(metricClientset *metricsv.Clientset, db *database.DB, log
 	}
 }
 
+// nodeMetricUpsertStmt returns database upsert statement to upsert node metrics
+func (nms *NodeMetricSync) nodeMetricUpsertStmt() string {
+	return fmt.Sprintf(
+		"INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s",
+		"node_metric",
+		"node_id, timestamp, cpu, memory, storage",
+		":node_id, :timestamp, :cpu, :memory, :storage",
+		"timestamp=VALUES(timestamp), cpu=VALUES(cpu), memory=VALUES(memory), storage=VALUES(storage)",
+	)
+}
+
+// Run starts syncing the metrics to the database. Therefore, it gets a list of all nodes
+// and the belonging metrics
 func (nms *NodeMetricSync) Run(ctx context.Context) error {
 
 	g, ctx := errgroup.WithContext(ctx)
@@ -207,12 +229,13 @@ func (nms *NodeMetricSync) Run(ctx context.Context) error {
 	})
 
 	g.Go(func() error {
-		return nms.db.UpsertStreamedWithStatement(ctx, upsertNodeMetrics, nms.nodeMetricUpsertStmt(), 5)
+		return nms.db.UpsertStreamed(ctx, upsertNodeMetrics, database.WithStatement(nms.nodeMetricUpsertStmt(), 5))
 	})
 
 	return g.Wait()
 }
 
+// Clean deletes metrics from the database if the belonging node is deleted
 func (nms *NodeMetricSync) Clean(ctx context.Context, deleteChannel <-chan contracts.KDelete) error {
 
 	g, ctx := errgroup.WithContext(ctx)
@@ -238,18 +261,8 @@ func (nms *NodeMetricSync) Clean(ctx context.Context, deleteChannel <-chan contr
 	})
 
 	g.Go(func() error {
-		return nms.db.DeleteStreamedByField(ctx, &schema.NodeMetric{}, "node_id", deletes)
+		return nms.db.DeleteStreamed(ctx, &schema.NodeMetric{}, deletes, database.ByColumn("node_id"))
 	})
 
 	return g.Wait()
-}
-
-func (nms *NodeMetricSync) nodeMetricUpsertStmt() string {
-	return fmt.Sprintf(
-		"INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s",
-		"node_metric",
-		"node_id, timestamp, cpu, memory, storage",
-		":node_id, :timestamp, :cpu, :memory, :storage",
-		"timestamp=VALUES(timestamp), cpu=VALUES(cpu), memory=VALUES(memory), storage=VALUES(storage)",
-	)
 }
