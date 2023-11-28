@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"golang.org/x/sync/errgroup"
 	"sync/atomic"
 )
 
@@ -74,10 +75,32 @@ func (mux *channelMux[T]) Run(ctx context.Context) error {
 
 	outChannels := append(mux.addedOutChannels, mux.createdOutChannels...)
 
-	for {
-		for _, inChannel := range mux.inChannels {
+	sink := make(chan T)
+
+	g, ctx := errgroup.WithContext(ctx)
+
+	for _, ch := range mux.inChannels {
+		ch := ch
+
+		g.Go(func() error {
+			for {
+				select {
+				case spread, more := <-ch:
+					if !more {
+						return nil
+					}
+					sink <- spread
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			}
+		})
+	}
+
+	g.Go(func() error {
+		for {
 			select {
-			case spread, more := <-inChannel:
+			case spread, more := <-sink:
 				if !more {
 					return nil
 				}
@@ -93,5 +116,7 @@ func (mux *channelMux[T]) Run(ctx context.Context) error {
 				return ctx.Err()
 			}
 		}
-	}
+	})
+
+	return g.Wait()
 }
