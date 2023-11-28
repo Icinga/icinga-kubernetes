@@ -5,11 +5,11 @@ import (
 	"sync/atomic"
 )
 
-// ChannelSpreader takes a channel of type T and fans it out to an array of other channels of type T
+// ChannelSpreader takes a channel of type T and fans it out to an array of other addedChannels of type T
 type ChannelSpreader[T any] struct {
 	channelToBreak  <-chan T
 	createdChannels []chan<- T
-	channels        []chan<- T
+	addedChannels   []chan<- T
 	started         atomic.Bool
 }
 
@@ -20,9 +20,9 @@ func NewChannelSpreader[T any](channelToBreak <-chan T) *ChannelSpreader[T] {
 	}
 }
 
-// NewChannel returns and adds new output channel to the list of created channels
+// NewChannel returns and adds new output channel to the list of created addedChannels
 func (cs *ChannelSpreader[T]) NewChannel() <-chan T {
-	if cs.started.Load() == true {
+	if cs.started.Load() {
 		panic("ChannelSpreader already started")
 	}
 
@@ -32,18 +32,17 @@ func (cs *ChannelSpreader[T]) NewChannel() <-chan T {
 	return channel
 }
 
-// AddChannel adds given output channel to the list of added channels
+// AddChannel adds given output channel to the list of added addedChannels
 func (cs *ChannelSpreader[T]) AddChannel(channel chan<- T) {
-	if cs.started.Load() == true {
+	if cs.started.Load() {
 		panic("ChannelSpreader already started")
 	}
 
-	cs.channels = append(cs.channels, channel)
+	cs.addedChannels = append(cs.addedChannels, channel)
 }
 
-// Run combines the lists and starts fanning out the channel to the channels from the list
+// Run combines the lists and starts fanning out the channel to the addedChannels from the list
 func (cs *ChannelSpreader[T]) Run(ctx context.Context) error {
-
 	cs.started.Store(true)
 
 	defer func() {
@@ -52,7 +51,7 @@ func (cs *ChannelSpreader[T]) Run(ctx context.Context) error {
 		}
 	}()
 
-	cs.channels = append(cs.channels, cs.createdChannels...)
+	channels := append(cs.addedChannels, cs.createdChannels...)
 
 	for {
 		select {
@@ -61,14 +60,13 @@ func (cs *ChannelSpreader[T]) Run(ctx context.Context) error {
 				return nil
 			}
 
-			for _, channel := range cs.channels {
+			for _, channel := range channels {
 				select {
 				case channel <- spread:
 				case <-ctx.Done():
 					return ctx.Err()
 				}
 			}
-
 		case <-ctx.Done():
 			return ctx.Err()
 		}

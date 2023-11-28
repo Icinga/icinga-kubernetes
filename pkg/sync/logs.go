@@ -93,9 +93,7 @@ func (ls *LogSync) removeFromList(id database.ID) {
 	out := make([]*kcorev1.Pod, 0)
 
 	for _, element := range ls.list {
-
 		elementId := sha1.Sum([]byte(element.Namespace + "/" + element.Name))
-
 		if fmt.Sprintf("%x", elementId) != id.String() {
 			out = append(out, element)
 		}
@@ -105,10 +103,7 @@ func (ls *LogSync) removeFromList(id database.ID) {
 }
 
 // MaintainList adds pods from the addChannel to the list and deletes pods from the deleteChannel from the list
-func (ls *LogSync) MaintainList(ctx context.Context, addChannel <-chan contracts.KUpsert, deleteChannel <-chan contracts.KDelete) error {
-
-	ls.logger.Info("Starting maintain list")
-
+func (ls *LogSync) maintainList(ctx context.Context, upsertChannel <-chan contracts.KUpsert, deleteChannel <-chan contracts.KDelete) error {
 	g, ctx := errgroup.WithContext(ctx)
 
 	deletes := make(chan any)
@@ -120,13 +115,12 @@ func (ls *LogSync) MaintainList(ctx context.Context, addChannel <-chan contracts
 			case <-ctx.Done():
 				return errors.Wrap(ctx.Err(), "context canceled maintain log sync list")
 
-			case podFromChannel, more := <-addChannel:
+			case podFromChannel, more := <-upsertChannel:
 				if !more {
 					return nil
 				}
 
 				pod := podFromChannel.KObject().(*kcorev1.Pod)
-
 				podIsInList := false
 
 				for _, listPod := range ls.list {
@@ -169,27 +163,25 @@ func (ls *LogSync) MaintainList(ctx context.Context, addChannel <-chan contracts
 
 // Run starts syncing the logs to the database. Therefore, it loops over all
 // containers of each pod in the maintained list every 15 seconds.
-func (ls *LogSync) Run(ctx context.Context) error {
-
+func (ls *LogSync) Run(ctx context.Context, upsertChannel <-chan contracts.KUpsert, deleteChannel <-chan contracts.KDelete) error {
 	ls.logger.Info("Starting sync")
 
 	g, ctx := errgroup.WithContext(ctx)
 
-	upsertStmt := ls.upsertStmt()
+	g.Go(func() error {
+		return ls.maintainList(ctx, upsertChannel, deleteChannel)
+	})
 
+	upsertStmt := ls.upsertStmt()
 	upserts := make(chan database.Entity)
 	defer close(upserts)
 
 	g.Go(func() error {
 		for {
 			for _, pod := range ls.list {
-
 				curPodId := sha1.Sum([]byte(pod.Namespace + "/" + pod.Name))
-
 				for _, container := range pod.Spec.Containers {
-
 					curContainerId := sha1.Sum([]byte(pod.Namespace + "/" + pod.Name + "/" + container.Name))
-
 					podLogOpts := kcorev1.PodLogOptions{Container: container.Name, Timestamps: true}
 
 					if ls.lastChecked[curContainerId] != nil {
