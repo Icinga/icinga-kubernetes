@@ -49,3 +49,43 @@ CREATE TABLE log
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_bin;
+
+
+CREATE TABLE pod_metric
+(
+    reference_id BINARY(20) NOT NULL,
+    timestamp    BIGINT     NOT NULL,
+    cpu          BIGINT     NOT NULL,
+    memory       BIGINT     NOT NULL,
+    storage      BIGINT     NOT NULL,
+    PRIMARY KEY (reference_id)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_bin;
+
+
+CREATE TABLE container_metric
+(
+    container_reference_id BINARY(20) NOT NULL,
+    pod_reference_id       BINARY(20) NOT NULL,
+    timestamp              BIGINT     NOT NULL,
+    cpu                    BIGINT     NOT NULL,
+    memory                 BIGINT     NOT NULL,
+    storage                BIGINT     NOT NULL,
+    PRIMARY KEY (container_reference_id)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_bin;
+
+
+CREATE TABLE node_metric
+(
+    node_id   BINARY(20) NOT NULL,
+    timestamp BIGINT     NOT NULL,
+    cpu       BIGINT     NOT NULL,
+    memory    BIGINT     NOT NULL,
+    storage   BIGINT     NOT NULL,
+    PRIMARY KEY (node_id)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_bin;

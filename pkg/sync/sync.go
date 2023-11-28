@@ -53,11 +53,18 @@ func WithForwardDeleteToLog(channel chan<- contracts.KDelete) SyncOption {
 	}
 }
 
+func WithForwardDeleteToMetric(channel chan<- contracts.KDelete) SyncOption {
+	return func(options *SyncOptions) {
+		options.forwardDeleteToMetricChannel = channel
+	}
+}
+
 type SyncOption func(options *SyncOptions)
 
 type SyncOptions struct {
-	forwardUpsertToLogChannel chan<- contracts.KUpsert
-	forwardDeleteToLogChannel chan<- contracts.KDelete
+	forwardUpsertToLogChannel    chan<- contracts.KUpsert
+	forwardDeleteToLogChannel    chan<- contracts.KDelete
+	forwardDeleteToMetricChannel chan<- contracts.KDelete
 }
 
 func NewOptionStorage(execOptions ...SyncOption) *SyncOptions {
@@ -184,6 +191,10 @@ func (s *sync) Run(ctx context.Context, execOptions ...SyncOption) error {
 
 	if syncOptions.forwardDeleteToLogChannel != nil {
 		multiplexDelete.AddChannel(syncOptions.forwardDeleteToLogChannel)
+	}
+
+	if syncOptions.forwardDeleteToMetricChannel != nil {
+		multiplexDelete.AddChannel(syncOptions.forwardDeleteToMetricChannel)
 	}
 
 	// run delete channel spreader
