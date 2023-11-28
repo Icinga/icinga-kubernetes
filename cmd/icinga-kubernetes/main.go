@@ -72,57 +72,39 @@ func main() {
 	g, ctx := errgroup.WithContext(ctx)
 
 	forwardUpsertPodsChannel := make(chan database.Entity)
-	defer close(forwardUpsertPodsChannel)
-
 	forwardDeletePodsChannel := make(chan any)
+	defer close(forwardUpsertPodsChannel)
 	defer close(forwardDeletePodsChannel)
 
 	g.Go(func() error {
 		return sync.NewSync(
-			db,
-			schema.NewNode,
-			informers.Core().V1().Nodes().Informer(),
-			logs.GetChildLogger("Nodes"),
+			db, schema.NewNode, informers.Core().V1().Nodes().Informer(), logs.GetChildLogger("Nodes"),
 		).Run(ctx)
 	})
 
 	g.Go(func() error {
 		return sync.NewSync(
-			db,
-			schema.NewNamespace,
-			informers.Core().V1().Namespaces().Informer(),
-			logs.GetChildLogger("Namespaces"),
+			db, schema.NewNamespace, informers.Core().V1().Namespaces().Informer(), logs.GetChildLogger("Namespaces"),
 		).Run(ctx)
 	})
 
-	forwardUpsertPodsToLogChannel := make(chan contracts.KUpsert)
-	forwardDeletePodsToLogChannel := make(chan contracts.KDelete)
-
+	podUpserts := make(chan contracts.KUpsert)
+	podDeletes := make(chan contracts.KDelete)
 	g.Go(func() error {
-
-		defer close(forwardUpsertPodsToLogChannel)
-		defer close(forwardDeletePodsToLogChannel)
+		defer close(podUpserts)
+		defer close(podDeletes)
 
 		return sync.NewSync(
-			db,
-			schema.NewPod,
-			informers.Core().V1().Pods().Informer(),
-			logs.GetChildLogger("Pods"),
+			db, schema.NewPod, informers.Core().V1().Pods().Informer(), logs.GetChildLogger("Pods"),
 		).Run(
-			ctx,
-			sync.WithForwardUpsertToLog(forwardUpsertPodsToLogChannel),
-			sync.WithForwardDeleteToLog(forwardDeletePodsToLogChannel),
+			ctx, sync.WithForwardUpserts(podUpserts), sync.WithForwardDeletes(podDeletes),
 		)
 	})
 
 	logSync := sync.NewLogSync(k, db, logs.GetChildLogger("ContainerLogs"))
 
 	g.Go(func() error {
-		return logSync.MaintainList(ctx, forwardUpsertPodsToLogChannel, forwardDeletePodsToLogChannel)
-	})
-
-	g.Go(func() error {
-		return logSync.Run(ctx)
+		return logSync.Run(ctx, podUpserts, podDeletes)
 	})
 
 	if err := g.Wait(); err != nil {

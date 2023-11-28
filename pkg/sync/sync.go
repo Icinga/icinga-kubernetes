@@ -41,33 +41,33 @@ func NewSync(
 	return s
 }
 
-func WithForwardUpsertToLog(channel chan<- contracts.KUpsert) SyncOption {
+func WithForwardUpserts(channel chan<- contracts.KUpsert) SyncOption {
 	return func(options *SyncOptions) {
-		options.forwardUpsertToLogChannel = channel
+		options.forwardUpserts = channel
 	}
 }
 
-func WithForwardDeleteToLog(channel chan<- contracts.KDelete) SyncOption {
+func WithForwardDeletes(channel chan<- contracts.KDelete) SyncOption {
 	return func(options *SyncOptions) {
-		options.forwardDeleteToLogChannel = channel
+		options.forwardDeletes = channel
 	}
 }
 
 type SyncOption func(options *SyncOptions)
 
 type SyncOptions struct {
-	forwardUpsertToLogChannel chan<- contracts.KUpsert
-	forwardDeleteToLogChannel chan<- contracts.KDelete
+	forwardUpserts chan<- contracts.KUpsert
+	forwardDeletes chan<- contracts.KDelete
 }
 
-func NewOptionStorage(execOptions ...SyncOption) *SyncOptions {
-	optionStorage := &SyncOptions{}
+func NewSyncOptions(options ...SyncOption) *SyncOptions {
+	syncOptions := &SyncOptions{}
 
-	for _, option := range execOptions {
-		option(optionStorage)
+	for _, option := range options {
+		option(syncOptions)
 	}
 
-	return optionStorage
+	return syncOptions
 }
 
 func (s *sync) Run(ctx context.Context, execOptions ...SyncOption) error {
@@ -98,7 +98,7 @@ func (s *sync) Run(ctx context.Context, execOptions ...SyncOption) error {
 
 	s.factory().GetResourceVersion()
 
-	syncOptions := NewOptionStorage(execOptions...)
+	syncOptions := NewSyncOptions(execOptions...)
 
 	// init upsert channel spreader
 	multiplexUpsertChannel := make(chan contracts.KUpsert)
@@ -108,8 +108,8 @@ func (s *sync) Run(ctx context.Context, execOptions ...SyncOption) error {
 
 	upsertChannel := multiplexUpsert.NewChannel()
 
-	if syncOptions.forwardUpsertToLogChannel != nil {
-		multiplexUpsert.AddChannel(syncOptions.forwardUpsertToLogChannel)
+	if syncOptions.forwardUpserts != nil {
+		multiplexUpsert.AddChannel(syncOptions.forwardUpserts)
 	}
 
 	// run upsert channel spreader
@@ -182,8 +182,8 @@ func (s *sync) Run(ctx context.Context, execOptions ...SyncOption) error {
 
 	deleteChannel := multiplexDelete.NewChannel()
 
-	if syncOptions.forwardDeleteToLogChannel != nil {
-		multiplexDelete.AddChannel(syncOptions.forwardDeleteToLogChannel)
+	if syncOptions.forwardDeletes != nil {
+		multiplexDelete.AddChannel(syncOptions.forwardDeletes)
 	}
 
 	// run delete channel spreader
