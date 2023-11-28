@@ -171,7 +171,7 @@ func (s *sync) Run(ctx context.Context, execOptions ...SyncOption) error {
 	}
 
 	g.Go(func() error {
-		return s.db.UpsertStreamed(ctx, upsertToStream)
+		return database.NewUpsert(s.db).Stream(ctx, upsertToStream)
 	})
 
 	// init delete channel spreader
@@ -235,7 +235,7 @@ func (s *sync) Run(ctx context.Context, execOptions ...SyncOption) error {
 	})
 
 	g.Go(func() error {
-		return s.db.DeleteStreamed(ctx, s.factory(), deleteToStream)
+		return database.NewDelete(s.db).Stream(ctx, s.factory(), deleteToStream)
 	})
 
 	g.Go(func() error {

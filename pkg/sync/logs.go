@@ -161,7 +161,7 @@ func (ls *LogSync) MaintainList(ctx context.Context, addChannel <-chan contracts
 	})
 
 	g.Go(func() error {
-		return ls.db.DeleteStreamed(ctx, &schema.Log{}, deletes, database.ByColumn("reference_id"))
+		return database.NewDelete(ls.db).ByColumn("reference_id").Stream(ctx, &schema.Log{}, deletes)
 	})
 
 	return g.Wait()
@@ -244,7 +244,7 @@ func (ls *LogSync) Run(ctx context.Context) error {
 	})
 
 	g.Go(func() error {
-		return ls.db.UpsertStreamed(ctx, upserts, database.WithStatement(upsertStmt, 5))
+		return database.NewUpsert(ls.db).WithStatement(upsertStmt, 5).Stream(ctx, upserts)
 	})
 
 	return g.Wait()
