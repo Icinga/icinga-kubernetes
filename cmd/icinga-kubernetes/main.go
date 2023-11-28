@@ -7,6 +7,7 @@ import (
 	"github.com/icinga/icinga-go-library/driver"
 	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-kubernetes/internal"
+	"github.com/icinga/icinga-kubernetes/pkg/api"
 	"github.com/icinga/icinga-kubernetes/pkg/contracts"
 	"github.com/icinga/icinga-kubernetes/pkg/schema"
 	"github.com/icinga/icinga-kubernetes/pkg/sync"
@@ -155,6 +156,13 @@ func main() {
 
 	g.Go(func() error {
 		return nodeMetricSync.Clean(ctx, forwardDeleteNodesToMetricChannel)
+	})
+
+	// stream log api
+	logStreamApi := api.NewLogStreamApi(k, logs.GetChildLogger("LogStreamApi"), &cfg.Api.Log)
+
+	g.Go(func() error {
+		return logStreamApi.Stream(ctx)
 	})
 
 	if err := g.Wait(); err != nil {

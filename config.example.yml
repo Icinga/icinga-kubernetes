@@ -39,3 +39,11 @@ logging:
   # Valid units are "ms", "s", "m", "h".
   # Defaults to "20s".
 #  interval: 20s
+
+api:
+  log:
+    # Address where the api is reachable
+    address: '/logStream'
+
+    # Port where the api is reachable
+    port: 8080

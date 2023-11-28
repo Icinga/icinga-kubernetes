@@ -43,8 +43,8 @@ CREATE TABLE log
     id             BINARY(20)                              NOT NULL,
     reference_id   BINARY(20)                              NOT NULL,
     container_name VARCHAR(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-    time           LONGTEXT                                NOT NULL,
-    log            LONGTEXT                                NOT NULL,
+    time           LONGTEXT,
+    log            LONGTEXT,
     PRIMARY KEY (id)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
