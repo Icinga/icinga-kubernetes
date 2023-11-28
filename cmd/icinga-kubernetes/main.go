@@ -18,6 +18,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	kclientcmd "k8s.io/client-go/tools/clientcmd"
 	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
+	"os"
+	"os/signal"
 )
 
 func main() {
@@ -62,7 +64,7 @@ func main() {
 
 	driver.Register(logs.GetChildLogger("Database Driver"))
 
-	ctx := context.Background()
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 
 	db, err := database.NewDbFromConfig(&cfg.Database, logs.GetChildLogger("Database"))
 	defer db.Close()
@@ -165,7 +167,13 @@ func main() {
 		return logStreamApi.Stream(ctx)
 	})
 
-	if err := g.Wait(); err != nil {
-		logging.Fatal(errors.Wrap(err, "can't sync"))
+	select {
+	case <-ctx.Done():
+		logger.Info("Shutting down")
+		cancel()
+	}
+
+	if err := g.Wait(); err != nil && !errors.Is(err, context.Canceled) {
+		logger.Fatal(errors.Wrap(err, "can't sync"))
 	}
 }
