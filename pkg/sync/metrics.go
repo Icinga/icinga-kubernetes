@@ -118,11 +118,11 @@ func (ms *MetricSync) Run(ctx context.Context) error {
 	})
 
 	g.Go(func() error {
-		return ms.db.UpsertStreamed(ctx, upsertPodMetrics, database.WithStatement(ms.podMetricUpsertStmt(), 5))
+		return database.NewUpsert(ms.db).WithStatement(ms.podMetricUpsertStmt(), 5).Stream(ctx, upsertPodMetrics)
 	})
 
 	g.Go(func() error {
-		return ms.db.UpsertStreamed(ctx, upsertContainerMetrics, database.WithStatement(ms.containerMetricUpsertStmt(), 6))
+		return database.NewUpsert(ms.db).WithStatement(ms.containerMetricUpsertStmt(), 6).Stream(ctx, upsertContainerMetrics)
 	})
 
 	return g.Wait()
@@ -157,11 +157,11 @@ func (ms *MetricSync) Clean(ctx context.Context, deleteChannel <-chan contracts.
 	})
 
 	g.Go(func() error {
-		return ms.db.DeleteStreamed(ctx, &schema.PodMetric{}, deletesPod, database.ByColumn("reference_id"))
+		return database.NewDelete(ms.db).ByColumn("reference_id").Stream(ctx, &schema.PodMetric{}, deletesPod)
 	})
 
 	g.Go(func() error {
-		return ms.db.DeleteStreamed(ctx, &schema.ContainerMetric{}, deletesContainer, database.ByColumn("pod_reference_id"))
+		return database.NewDelete(ms.db).ByColumn("pod_reference_id").Stream(ctx, &schema.ContainerMetric{}, deletesContainer)
 	})
 
 	return g.Wait()
@@ -229,7 +229,7 @@ func (nms *NodeMetricSync) Run(ctx context.Context) error {
 	})
 
 	g.Go(func() error {
-		return nms.db.UpsertStreamed(ctx, upsertNodeMetrics, database.WithStatement(nms.nodeMetricUpsertStmt(), 5))
+		return database.NewUpsert(nms.db).WithStatement(nms.nodeMetricUpsertStmt(), 5).Stream(ctx, upsertNodeMetrics)
 	})
 
 	return g.Wait()
@@ -261,7 +261,7 @@ func (nms *NodeMetricSync) Clean(ctx context.Context, deleteChannel <-chan contr
 	})
 
 	g.Go(func() error {
-		return nms.db.DeleteStreamed(ctx, &schema.NodeMetric{}, deletes, database.ByColumn("node_id"))
+		return database.NewDelete(nms.db).ByColumn("node_id").Stream(ctx, &schema.NodeMetric{}, deletes)
 	})
 
 	return g.Wait()
