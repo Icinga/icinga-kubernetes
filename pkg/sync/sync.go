@@ -104,12 +104,12 @@ func (s *sync) Run(ctx context.Context, execOptions ...SyncOption) error {
 	multiplexUpsertChannel := make(chan contracts.KUpsert)
 	defer close(multiplexUpsertChannel)
 
-	multiplexUpsert := NewChannelSpreader[contracts.KUpsert](multiplexUpsertChannel)
+	multiplexUpsert := NewChannelMux(multiplexUpsertChannel)
 
-	upsertChannel := multiplexUpsert.NewChannel()
+	upsertChannel := multiplexUpsert.NewOutChannel()
 
 	if syncOptions.forwardUpserts != nil {
-		multiplexUpsert.AddChannel(syncOptions.forwardUpserts)
+		multiplexUpsert.AddOutChannel(syncOptions.forwardUpserts)
 	}
 
 	// run upsert channel spreader
@@ -178,12 +178,12 @@ func (s *sync) Run(ctx context.Context, execOptions ...SyncOption) error {
 	multiplexDeleteChannel := make(chan contracts.KDelete)
 	defer close(multiplexDeleteChannel)
 
-	multiplexDelete := NewChannelSpreader[contracts.KDelete](multiplexDeleteChannel)
+	multiplexDelete := NewChannelMux(multiplexDeleteChannel)
 
-	deleteChannel := multiplexDelete.NewChannel()
+	deleteChannel := multiplexDelete.NewOutChannel()
 
 	if syncOptions.forwardDeletes != nil {
-		multiplexDelete.AddChannel(syncOptions.forwardDeletes)
+		multiplexDelete.AddOutChannel(syncOptions.forwardDeletes)
 	}
 
 	// run delete channel spreader

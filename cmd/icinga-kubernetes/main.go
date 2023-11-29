@@ -71,11 +71,6 @@ func main() {
 
 	g, ctx := errgroup.WithContext(ctx)
 
-	forwardUpsertPodsChannel := make(chan database.Entity)
-	forwardDeletePodsChannel := make(chan any)
-	defer close(forwardUpsertPodsChannel)
-	defer close(forwardDeletePodsChannel)
-
 	g.Go(func() error {
 		return sync.NewSync(
 			db, schema.NewNode, informers.Core().V1().Nodes().Informer(), logs.GetChildLogger("Nodes"),
@@ -101,7 +96,7 @@ func main() {
 		)
 	})
 
-	logSync := sync.NewLogSync(k, db, logs.GetChildLogger("ContainerLogs"))
+	logSync := sync.NewContainerLogSync(k, db, logs.GetChildLogger("ContainerLogs"))
 
 	g.Go(func() error {
 		return logSync.Run(ctx, podUpserts, podDeletes)

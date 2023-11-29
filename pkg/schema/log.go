@@ -1,10 +1,11 @@
 package schema
 
-type Log struct {
+import "github.com/icinga/icinga-go-library/types"
+
+type ContainerLog struct {
 	kmetaWithoutNamespace
-	Id            []byte
-	ReferenceId   []byte
-	ContainerName string
-	Time          string
-	Log           string
+	ContainerId types.Binary
+	PodId       types.Binary
+	Time        string
+	Log         string
 }

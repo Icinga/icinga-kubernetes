@@ -29,11 +29,10 @@ CREATE TABLE pod (
   PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
-CREATE TABLE log (
-  id binary(20) NOT NULL,
-  reference_id binary(20) NOT NULL,
-  container_name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+CREATE TABLE container_log (
+  container_id binary(20) NOT NULL,
+  pod_id binary(20) NOT NULL,
   time longtext NOT NULL,
   log longtext NOT NULL,
-  PRIMARY KEY (id)
+  PRIMARY KEY (container_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
