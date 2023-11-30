@@ -15,6 +15,8 @@ import (
 	kinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	kclientcmd "k8s.io/client-go/tools/clientcmd"
+	"os"
+	"os/signal"
 )
 
 func main() {
@@ -54,7 +56,8 @@ func main() {
 
 	driver.Register(logs.GetChildLogger("Database Driver"))
 
-	ctx := context.Background()
+	ctx, unregisterSignals := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer unregisterSignals()
 
 	db, err := database.NewDbFromConfig(&cfg.Database, logs.GetChildLogger("Database"))
 	defer db.Close()
@@ -68,27 +71,34 @@ func main() {
 
 	informers := kinformers.NewSharedInformerFactory(k, 0)
 
-	g, ctx := errgroup.WithContext(ctx)
+	g, syncCtx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
 		return sync.NewSync(
 			db, schema.NewNode, informers.Core().V1().Nodes().Informer(), logs.GetChildLogger("Nodes"),
-		).Run(ctx)
+		).Run(syncCtx)
 	})
 
 	g.Go(func() error {
 		return sync.NewSync(
 			db, schema.NewNamespace, informers.Core().V1().Namespaces().Informer(), logs.GetChildLogger("Namespaces"),
-		).Run(ctx)
+		).Run(syncCtx)
 	})
 
 	g.Go(func() error {
 		return sync.NewSync(
 			db, schema.NewPod, informers.Core().V1().Pods().Informer(), logs.GetChildLogger("Pods"),
-		).Run(ctx)
+		).Run(syncCtx)
 	})
 
-	if err := g.Wait(); err != nil {
-		logging.Fatal(errors.Wrap(err, "can't sync"))
+	select {
+	case <-ctx.Done():
+		logger.Info("Shutting down")
+		unregisterSignals()
+	case <-syncCtx.Done():
+	}
+
+	if err := g.Wait(); err != nil && !errors.Is(err, context.Canceled) {
+		logger.Fatalf("%+v", errors.Wrap(err, "can't sync"))
 	}
 }
