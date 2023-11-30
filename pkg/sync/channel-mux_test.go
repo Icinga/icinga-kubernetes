@@ -27,9 +27,9 @@ func TestAddedOutputChannels(t *testing.T) {
 		outputChannel1 := make(chan int)
 		outputChannel2 := make(chan int)
 		outputChannel3 := make(chan int)
-		multiplexer.AddOutChannel(outputChannel1)
-		multiplexer.AddOutChannel(outputChannel2)
-		multiplexer.AddOutChannel(outputChannel3)
+		multiplexer.AddOut(outputChannel1)
+		multiplexer.AddOut(outputChannel2)
+		multiplexer.AddOut(outputChannel3)
 
 		g, ctx := errgroup.WithContext(context.Background())
 
@@ -56,9 +56,9 @@ func TestCreatedOutputChannels(t *testing.T) {
 		multiplexChannel := make(chan int)
 		multiplexer := NewChannelMux(multiplexChannel)
 
-		outputChannel1 := multiplexer.NewOutChannel()
-		outputChannel2 := multiplexer.NewOutChannel()
-		outputChannel3 := multiplexer.NewOutChannel()
+		outputChannel1 := multiplexer.Out()
+		outputChannel2 := multiplexer.Out()
+		outputChannel3 := multiplexer.Out()
 
 		g, ctx := errgroup.WithContext(context.Background())
 
@@ -100,7 +100,7 @@ func TestAddedInputChannels(t *testing.T) {
 
 		multiplexer := NewChannelMux(multiplexChannel1, multiplexChannel2, multiplexChannel3)
 
-		outputChannel := multiplexer.NewOutChannel()
+		outputChannel := multiplexer.Out()
 
 		ctx, cancel := context.WithCancel(context.Background())
 		g, ctx := errgroup.WithContext(ctx)
@@ -173,9 +173,9 @@ func TestClosedChannels(t *testing.T) {
 	multiplexChannel := make(chan int)
 	multiplexer := NewChannelMux(multiplexChannel)
 
-	outputChannel1 := multiplexer.NewOutChannel()
-	outputChannel2 := multiplexer.NewOutChannel()
-	outputChannel3 := multiplexer.NewOutChannel()
+	outputChannel1 := multiplexer.Out()
+	outputChannel2 := multiplexer.Out()
+	outputChannel3 := multiplexer.Out()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	g, ctx := errgroup.WithContext(ctx)

@@ -3,7 +3,6 @@ package sync
 import (
 	"bufio"
 	"context"
-	"crypto/sha1"
 	"fmt"
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/logging"
@@ -16,42 +15,46 @@ import (
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"strconv"
 	"strings"
-	msync "sync"
+	gosync "sync"
 	"time"
 )
 
-type podListItem struct {
-	pod            *kcorev1.Pod
-	lastTimestamps map[[20]byte]*kmetav1.Time
-}
-
-// ContainerLogSync reacts to pod changes and syncs container logs to database.
-// On pod add/updates ContainerLogSync starts syncing. On pod deletes syncing stops.
-// Container logs are periodic fetched from Kubernetes API.
+// ContainerLogSync reacts to pod changes and synchronizes container logs
+// with the database. When a pod is added/updated, ContainerLogSync starts
+// synchronizing its containers. When a pod is deleted, synchronization stops.
+// Container logs are periodically fetched from the Kubernetes API.
 type ContainerLogSync interface {
 	// Run starts the ContainerLogSync.
 	Run(context.Context, <-chan contracts.KUpsert, <-chan contracts.KDelete) error
 }
 
-// containerLogSync syncs container logs to database.
-type containerLogSync struct {
-	pods      map[[20]byte]podListItem
-	mutex     *msync.RWMutex
-	clientset *kubernetes.Clientset
-	db        *database.DB
-	logger    *logging.Logger
-}
-
-// NewContainerLogSync creates new containerLogSync initialized with clientset, database and logger.
-func NewContainerLogSync(clientset *kubernetes.Clientset, db *database.DB, logger *logging.Logger) ContainerLogSync {
+// NewContainerLogSync creates new ContainerLogSync initialized with clientset, database and logger.
+func NewContainerLogSync(clientset *kubernetes.Clientset, db *database.DB, logger *logging.Logger, period time.Duration) ContainerLogSync {
 	return &containerLogSync{
-		pods:      make(map[[20]byte]podListItem),
-		mutex:     &msync.RWMutex{},
+		pods:      make(map[string]podListItem),
+		mutex:     &gosync.RWMutex{},
 		clientset: clientset,
 		db:        db,
 		logger:    logger,
+		period:    period,
 	}
+}
+
+// containerLogSync syncs container logs to database.
+type containerLogSync struct {
+	pods      map[string]podListItem
+	mutex     *gosync.RWMutex
+	clientset *kubernetes.Clientset
+	db        *database.DB
+	logger    *logging.Logger
+	period    time.Duration
+}
+
+type podListItem struct {
+	pod            *kcorev1.Pod
+	lastTimestamps map[string]*kmetav1.Time
 }
 
 // upsertStmt returns a database statement to upsert a container log.
@@ -65,11 +68,12 @@ func (ls *containerLogSync) upsertStmt() string {
 	)
 }
 
-// splitTimestampsFromMessages takes a log and returns timestamps and messages as separate parts.
-// Additionally, it updates the last checked timestamp for the container log.
-func (ls *containerLogSync) splitTimestampsFromMessages(log types.Binary, curPodId [20]byte, curContainerId [20]byte) (times []string, messages []string, err error) {
+// splitTimestampsFromMessages takes a log line and returns timestamps and messages as separate parts.
+func (ls *containerLogSync) splitTimestampsFromMessages(log types.Binary, curPodId string, curContainerId string) (times []string, messages []string, newLastTimestamp time.Time, returnErr error) {
 	stringReader := strings.NewReader(string(log))
 	reader := bufio.NewReader(stringReader)
+
+	var parsedTimestamp time.Time
 
 	for {
 		line, err := reader.ReadString('\n')
@@ -77,117 +81,122 @@ func (ls *containerLogSync) splitTimestampsFromMessages(log types.Binary, curPod
 			if err == io.EOF {
 				break
 			}
-			return nil, nil, errors.Wrap(err, "error reading log message")
+
+			returnErr = errors.Wrap(err, "error reading log message")
+			return
 		}
 
-		messageTime, err := time.Parse("2006-01-02T15:04:05.999999999Z", strings.Split(line, " ")[0])
+		timestamp, message, _ := strings.Cut(line, " ")
+
+		parsedTimestamp, err = time.Parse("2006-01-02T15:04:05.999999999Z", timestamp)
 		if err != nil {
-			logging.Fatal(errors.Wrap(err, "error parsing log timestamp"))
+			ls.logger.Fatal(errors.Wrap(err, "error parsing log timestamp"))
 			continue
 		}
 
-		if ls.pods[curPodId].lastTimestamps[curContainerId] != nil && messageTime.UnixNano() <= ls.pods[curPodId].lastTimestamps[curContainerId].UnixNano() {
+		if lastTimestamp, ok := ls.pods[curPodId].lastTimestamps[curContainerId]; ok &&
+			(parsedTimestamp.Before(lastTimestamp.Time) || parsedTimestamp.Equal(lastTimestamp.Time)) {
 			continue
 		}
 
-		times = append(times, strings.Split(line, " ")[0])
-		messages = append(messages, strings.Join(strings.Split(line, " ")[1:], " "))
+		times = append(times, strconv.FormatInt(parsedTimestamp.UnixMilli(), 10))
+		messages = append(messages, message)
 	}
 
-	return times, messages, nil
+	newLastTimestamp = parsedTimestamp
+
+	return
 }
 
 // maintainList updates pods depending on the objects coming in via upsert and delete channel.
-func (ls *containerLogSync) maintainList(ctx context.Context, upsertChannel <-chan contracts.KUpsert, deleteChannel <-chan contracts.KDelete) error {
+func (ls *containerLogSync) maintainList(ctx context.Context, kupserts <-chan contracts.KUpsert, kdeletes <-chan contracts.KDelete) error {
 	g, ctx := errgroup.WithContext(ctx)
 
-	deletes := make(chan any)
+	databaseDeletes := make(chan any)
 	g.Go(func() error {
-		defer close(deletes)
+		defer close(databaseDeletes)
 
 		for {
 			select {
-			case <-ctx.Done():
-				return errors.Wrap(ctx.Err(), "context canceled maintain log sync pods")
-
-			case podFromChannel, more := <-upsertChannel:
+			case kupsert, more := <-kupserts:
 				if !more {
 					return nil
 				}
 
-				pod := podFromChannel.KObject().(*kcorev1.Pod)
-				podId := sha1.Sum(types.Checksum(podFromChannel.ID().String()))
+				podId := kupsert.ID().String()
 
-				_, ok := ls.pods[podId]
-
-				if ok {
+				if _, ok := ls.pods[podId]; ok {
 					continue
 				}
 
 				ls.mutex.RLock()
-				ls.pods[podId] = podListItem{pod: pod}
+				ls.pods[podId] = podListItem{
+					pod:            kupsert.KObject().(*kcorev1.Pod),
+					lastTimestamps: make(map[string]*kmetav1.Time),
+				}
 				ls.mutex.RUnlock()
 
-			case podIdFromChannel, more := <-deleteChannel:
+			case kdelete, more := <-kdeletes:
 				if !more {
 					return nil
 				}
 
-				podId := sha1.Sum(types.Checksum(podIdFromChannel.ID().String()))
+				podId := kdelete.ID().String()
 
 				ls.mutex.RLock()
 				delete(ls.pods, podId)
 				ls.mutex.RUnlock()
 
 				select {
-				case deletes <- podId:
+				case databaseDeletes <- podId:
 				case <-ctx.Done():
 					return ctx.Err()
 				}
+			case <-ctx.Done():
+				return ctx.Err()
 			}
 
 		}
 	})
 
 	g.Go(func() error {
-		return database.NewDelete(ls.db).ByColumn("container_id").Stream(ctx, &schema.ContainerLog{}, deletes)
+		return database.NewDelete(ls.db, database.ByColumn("container_id")).Stream(ctx, &schema.ContainerLog{}, databaseDeletes)
 	})
 
 	return g.Wait()
 }
 
-func (ls *containerLogSync) Run(ctx context.Context, upsertChannel <-chan contracts.KUpsert, deleteChannel <-chan contracts.KDelete) error {
+func (ls *containerLogSync) Run(ctx context.Context, kupserts <-chan contracts.KUpsert, kdeletes <-chan contracts.KDelete) error {
 	ls.logger.Info("Starting sync")
 
 	g, ctx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
-		return ls.maintainList(ctx, upsertChannel, deleteChannel)
+		return ls.maintainList(ctx, kupserts, kdeletes)
 	})
 
-	upsertStmt := ls.upsertStmt()
-	upserts := make(chan database.Entity)
-	defer close(upserts)
+	databaseUpserts := make(chan database.Entity)
+	defer close(databaseUpserts)
 
 	g.Go(func() error {
 		for {
 			for _, element := range ls.pods {
-				podId := sha1.Sum(types.Checksum(element.pod.Namespace + "/" + element.pod.Name))
+				podId := types.Binary(types.Checksum(element.pod.Namespace + "/" + element.pod.Name))
 				for _, container := range element.pod.Spec.Containers {
-					containerId := sha1.Sum(types.Checksum(element.pod.Namespace + "/" + element.pod.Name + "/" + container.Name))
+					containerId := types.Binary(types.Checksum(element.pod.Namespace + "/" + element.pod.Name + "/" + container.Name))
 					podLogOpts := kcorev1.PodLogOptions{Container: container.Name, Timestamps: true}
 
-					if ls.pods[podId].lastTimestamps != nil {
-						podLogOpts.SinceTime = ls.pods[podId].lastTimestamps[containerId]
+					if _, ok := ls.pods[podId.String()].lastTimestamps[containerId.String()]; ok {
+						podLogOpts.SinceTime = ls.pods[podId.String()].lastTimestamps[containerId.String()]
 					}
 
 					log, err := ls.clientset.CoreV1().Pods(element.pod.Namespace).GetLogs(element.pod.Name, &podLogOpts).Do(ctx).Raw()
 					if err != nil {
-						fmt.Println(errors.Wrap(err, "error reading container log"))
+						ls.logger.Fatal(errors.Wrap(err, "error reading container log"))
 						continue
 					}
 
-					times, messages, err := ls.splitTimestampsFromMessages(log, podId, containerId)
+					times, messages, lastTimestamp, err := ls.splitTimestampsFromMessages(log, podId.String(), containerId.String())
 					if err != nil {
 						return err
 					}
@@ -197,44 +206,37 @@ func (ls *containerLogSync) Run(ctx context.Context, upsertChannel <-chan contra
 					}
 
 					newLog := &schema.ContainerLog{
-						ContainerId: containerId[:],
-						PodId:       podId[:],
+						ContainerId: containerId,
+						PodId:       podId,
 						Time:        strings.Join(times, "\n"),
 						Log:         strings.Join(messages, "\n"),
 					}
 
 					select {
-					case upserts <- newLog:
+					case databaseUpserts <- newLog:
 					case <-ctx.Done():
 						return ctx.Err()
 
 					}
 
-					lastTime, err := time.Parse("2006-01-02T15:04:05.999999999Z", times[len(times)-1])
-					if err != nil {
-						return errors.Wrap(err, "error parsing log time")
-					}
-
-					lastV1Time := kmetav1.Time{Time: lastTime}
-
-					if _, ok := ls.pods[podId]; !ok {
+					if _, ok := ls.pods[podId.String()]; !ok {
 						continue
 					}
 
-					ls.pods[podId].lastTimestamps[containerId] = &lastV1Time
+					ls.pods[podId.String()].lastTimestamps[containerId.String()] = &kmetav1.Time{Time: lastTimestamp}
 				}
 			}
 
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case <-time.After(time.Second * 15):
+			case <-time.After(ls.period):
 			}
 		}
 	})
 
 	g.Go(func() error {
-		return database.NewUpsert(ls.db).WithStatement(upsertStmt, 5).Stream(ctx, upserts)
+		return database.NewUpsert(ls.db, database.WithStatement(ls.upsertStmt(), 5)).Stream(ctx, databaseUpserts)
 	})
 
 	return g.Wait()

@@ -7,79 +7,79 @@ import (
 )
 
 // ChannelMux is a multiplexer for channels of variable types.
-// It fans all input channels to all output channels.
+// It fans out all input channels to all output channels.
 type ChannelMux[T any] interface {
+	// In adds the given input channel reading.
+	In(<-chan T)
 
-	// AddInChannel adds given input channel to the list of input channels.
-	AddInChannel(<-chan T)
+	// Out returns a new output channel that receives from all input channels.
+	Out() <-chan T
 
-	// NewOutChannel returns and adds new output channel to the pods of created addedOutChannels.
-	NewOutChannel() <-chan T
+	// AddOut registers the given output channel to receive from all input channels.
+	AddOut(chan<- T)
 
-	// AddOutChannel adds given output channel to the list of added addedOutChannels.
-	AddOutChannel(chan<- T)
-
-	// Run combines output channel lists and starts multiplexing.
+	// Run starts multiplexing of all input channels to all output channels.
 	Run(context.Context) error
 }
 
 type channelMux[T any] struct {
-	inChannels         []<-chan T
-	createdOutChannels []chan<- T
-	addedOutChannels   []chan<- T
-	started            atomic.Bool
+	in       []<-chan T
+	out      []chan<- T
+	outAdded []chan<- T
+	started  atomic.Bool
 }
 
-// NewChannelMux creates new ChannelMux initialized with at least one input channel
-func NewChannelMux[T any](initInChannel <-chan T, inChannels ...<-chan T) ChannelMux[T] {
+// NewChannelMux returns a new ChannelMux initialized with at least one input channel.
+func NewChannelMux[T any](inChannel <-chan T, inChannels ...<-chan T) ChannelMux[T] {
 	return &channelMux[T]{
-		inChannels: append(make([]<-chan T, 0), append(inChannels, initInChannel)...),
+		in: append(inChannels, inChannel),
 	}
 }
 
-func (mux *channelMux[T]) AddInChannel(channel <-chan T) {
+func (mux *channelMux[T]) In(channel <-chan T) {
 	if mux.started.Load() {
 		panic("channelMux already started")
 	}
 
-	mux.inChannels = append(mux.inChannels, channel)
+	mux.in = append(mux.in, channel)
 }
 
-func (mux *channelMux[T]) NewOutChannel() <-chan T {
+func (mux *channelMux[T]) Out() <-chan T {
 	if mux.started.Load() {
 		panic("channelMux already started")
 	}
 
 	channel := make(chan T)
-	mux.createdOutChannels = append(mux.createdOutChannels, channel)
+	mux.out = append(mux.out, channel)
 
 	return channel
 }
 
-func (mux *channelMux[T]) AddOutChannel(channel chan<- T) {
+func (mux *channelMux[T]) AddOut(channel chan<- T) {
 	if mux.started.Load() {
 		panic("channelMux already started")
 	}
 
-	mux.addedOutChannels = append(mux.addedOutChannels, channel)
+	mux.outAdded = append(mux.outAdded, channel)
 }
 
 func (mux *channelMux[T]) Run(ctx context.Context) error {
-	mux.started.Store(true)
+	if mux.started.Swap(true) {
+		panic("channelMux already started")
+	}
 
 	defer func() {
-		for _, channelToClose := range mux.createdOutChannels {
+		for _, channelToClose := range mux.out {
 			close(channelToClose)
 		}
 	}()
 
-	outChannels := append(mux.addedOutChannels, mux.createdOutChannels...)
-
-	sink := make(chan T)
-
 	g, ctx := errgroup.WithContext(ctx)
 
-	for _, ch := range mux.inChannels {
+	sink := make(chan T)
+	defer close(sink)
+
+	for _, ch := range mux.in {
 		ch := ch
 
 		g.Go(func() error {
@@ -89,7 +89,12 @@ func (mux *channelMux[T]) Run(ctx context.Context) error {
 					if !more {
 						return nil
 					}
-					sink <- spread
+					select {
+					case sink <- spread:
+					case <-ctx.Done():
+						return ctx.Err()
+					}
+
 				case <-ctx.Done():
 					return ctx.Err()
 				}
@@ -97,6 +102,7 @@ func (mux *channelMux[T]) Run(ctx context.Context) error {
 		})
 	}
 
+	outs := append(mux.outAdded, mux.out...)
 	g.Go(func() error {
 		for {
 			select {
@@ -105,9 +111,9 @@ func (mux *channelMux[T]) Run(ctx context.Context) error {
 					return nil
 				}
 
-				for _, outChannel := range outChannels {
+				for _, ch := range outs {
 					select {
-					case outChannel <- spread:
+					case ch <- spread:
 					case <-ctx.Done():
 						return ctx.Err()
 					}

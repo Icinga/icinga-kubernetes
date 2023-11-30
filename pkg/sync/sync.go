@@ -15,7 +15,7 @@ import (
 )
 
 type Sync interface {
-	Run(context.Context, ...SyncOption) error
+	Run(context.Context, ...syncOption) error
 }
 
 type sync struct {
@@ -31,46 +31,15 @@ func NewSync(
 	informer kcache.SharedInformer,
 	logger *logging.Logger,
 ) Sync {
-	s := &sync{
+	return &sync{
 		db:       db,
 		informer: informer,
 		logger:   logger,
 		factory:  factory,
 	}
-
-	return s
 }
 
-func WithForwardUpserts(channel chan<- contracts.KUpsert) SyncOption {
-	return func(options *SyncOptions) {
-		options.forwardUpserts = channel
-	}
-}
-
-func WithForwardDeletes(channel chan<- contracts.KDelete) SyncOption {
-	return func(options *SyncOptions) {
-		options.forwardDeletes = channel
-	}
-}
-
-type SyncOption func(options *SyncOptions)
-
-type SyncOptions struct {
-	forwardUpserts chan<- contracts.KUpsert
-	forwardDeletes chan<- contracts.KDelete
-}
-
-func NewSyncOptions(options ...SyncOption) *SyncOptions {
-	syncOptions := &SyncOptions{}
-
-	for _, option := range options {
-		option(syncOptions)
-	}
-
-	return syncOptions
-}
-
-func (s *sync) Run(ctx context.Context, execOptions ...SyncOption) error {
+func (s *sync) Run(ctx context.Context, options ...syncOption) error {
 	s.logger.Info("Starting sync")
 
 	s.logger.Debug("Warming up")
@@ -96,110 +65,40 @@ func (s *sync) Run(ctx context.Context, execOptions ...SyncOption) error {
 
 	s.logger.Debug("Finished warming up")
 
-	s.factory().GetResourceVersion()
+	syncOpts := newSyncOptions(options...)
 
-	syncOptions := NewSyncOptions(execOptions...)
+	kupsertsMux := NewChannelMux(changes.Adds(), changes.Updates())
+	kupserts := kupsertsMux.Out()
 
-	// init upsert channel spreader
-	multiplexUpsertChannel := make(chan contracts.KUpsert)
-	defer close(multiplexUpsertChannel)
-
-	multiplexUpsert := NewChannelMux(multiplexUpsertChannel)
-
-	upsertChannel := multiplexUpsert.NewOutChannel()
-
-	if syncOptions.forwardUpserts != nil {
-		multiplexUpsert.AddOutChannel(syncOptions.forwardUpserts)
-	}
-
-	// run upsert channel spreader
-	g.Go(func() error {
-		return multiplexUpsert.Run(ctx)
-	})
-
-	upsertToStream := make(chan database.Entity)
-	defer close(upsertToStream)
-
-	for _, ch := range []<-chan contracts.KUpsert{changes.Adds(), changes.Updates()} {
-		ch := ch
-
-		g.Go(func() error {
-			for {
-				select {
-				case kupsert, more := <-ch:
-					if !more {
-						return nil
-					}
-
-					select {
-					case multiplexUpsertChannel <- kupsert:
-					case <-ctx.Done():
-						return ctx.Err()
-					}
-				case <-ctx.Done():
-					return ctx.Err()
-				}
-			}
-		})
-
-		g.Go(func() error {
-			for {
-				select {
-				case kupsert, more := <-upsertChannel:
-					if !more {
-						return nil
-					}
-
-					entity := s.factory()
-					entity.SetID(kupsert.ID())
-					entity.SetCanonicalName(kupsert.GetCanonicalName())
-					entity.Obtain(kupsert.KObject())
-
-					select {
-					case upsertToStream <- entity:
-						s.logger.Debugw(
-							fmt.Sprintf("Sync: Upserted %s", kupsert.GetCanonicalName()),
-							zap.String("id", kupsert.ID().String()))
-					case <-ctx.Done():
-						return ctx.Err()
-					}
-				case <-ctx.Done():
-					return ctx.Err()
-				}
-			}
-		})
+	if syncOpts.forwardUpserts != nil {
+		kupsertsMux.AddOut(syncOpts.forwardUpserts)
 	}
 
 	g.Go(func() error {
-		return database.NewUpsert(s.db).Stream(ctx, upsertToStream)
+		return kupsertsMux.Run(ctx)
 	})
 
-	// init delete channel spreader
-	multiplexDeleteChannel := make(chan contracts.KDelete)
-	defer close(multiplexDeleteChannel)
-
-	multiplexDelete := NewChannelMux(multiplexDeleteChannel)
-
-	deleteChannel := multiplexDelete.NewOutChannel()
-
-	if syncOptions.forwardDeletes != nil {
-		multiplexDelete.AddOutChannel(syncOptions.forwardDeletes)
-	}
-
-	// run delete channel spreader
-	g.Go(func() error {
-		return multiplexDelete.Run(ctx)
-	})
+	databaseUpserts := make(chan database.Entity)
+	defer close(databaseUpserts)
 
 	g.Go(func() error {
 		for {
 			select {
-			case kdelete, more := <-changes.Deletes():
+			case kupsert, more := <-kupserts:
 				if !more {
 					return nil
 				}
+
+				entity := s.factory()
+				entity.SetID(kupsert.ID())
+				entity.SetCanonicalName(kupsert.GetCanonicalName())
+				entity.Obtain(kupsert.KObject())
+
 				select {
-				case multiplexDeleteChannel <- kdelete:
+				case databaseUpserts <- entity:
+					s.logger.Debugw(
+						fmt.Sprintf("Sync: Upserted %s", kupsert.GetCanonicalName()),
+						zap.String("id", kupsert.ID().String()))
 				case <-ctx.Done():
 					return ctx.Err()
 				}
@@ -209,19 +108,34 @@ func (s *sync) Run(ctx context.Context, execOptions ...SyncOption) error {
 		}
 	})
 
-	deleteToStream := make(chan any)
 	g.Go(func() error {
-		defer close(deleteToStream)
+		return s.db.UpsertStreamed(ctx, databaseUpserts)
+	})
+
+	kdeletesMux := NewChannelMux(changes.Deletes())
+	kdeletes := kdeletesMux.Out()
+
+	if syncOpts.forwardDeletes != nil {
+		kdeletesMux.AddOut(syncOpts.forwardDeletes)
+	}
+
+	g.Go(func() error {
+		return kdeletesMux.Run(ctx)
+	})
+
+	databaseDeletes := make(chan any)
+	g.Go(func() error {
+		defer close(databaseDeletes)
 
 		for {
 			select {
-			case kdelete, more := <-deleteChannel:
+			case kdelete, more := <-kdeletes:
 				if !more {
 					return nil
 				}
 
 				select {
-				case deleteToStream <- kdelete.ID():
+				case databaseDeletes <- kdelete.ID():
 					s.logger.Debugw(
 						fmt.Sprintf("Sync: Deleted %s", kdelete.GetCanonicalName()),
 						zap.String("id", kdelete.ID().String()))
@@ -235,7 +149,7 @@ func (s *sync) Run(ctx context.Context, execOptions ...SyncOption) error {
 	})
 
 	g.Go(func() error {
-		return database.NewDelete(s.db).Stream(ctx, s.factory(), deleteToStream)
+		return s.db.DeleteStreamed(ctx, s.factory(), databaseDeletes)
 	})
 
 	g.Go(func() error {

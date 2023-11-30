@@ -16,6 +16,7 @@ import (
 	kinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	kclientcmd "k8s.io/client-go/tools/clientcmd"
+	"time"
 )
 
 func main() {
@@ -96,10 +97,12 @@ func main() {
 		)
 	})
 
-	logSync := sync.NewContainerLogSync(k, db, logs.GetChildLogger("ContainerLogs"))
-
 	g.Go(func() error {
-		return logSync.Run(ctx, podUpserts, podDeletes)
+		return sync.NewContainerLogSync(
+			k, db, logs.GetChildLogger("ContainerLogs"), time.Second*15,
+		).Run(
+			ctx, podUpserts, podDeletes,
+		)
 	})
 
 	if err := g.Wait(); err != nil {
