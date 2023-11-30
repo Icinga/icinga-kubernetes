@@ -1,0 +1,14 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: icinga-kubernetes
+  labels:
+    app: icinga-kubernetes
+spec:
+  containers:
+    - name: icinga-kubernetes
+      image: icinga-kubernetes
+      imagePullPolicy: Never
+      ports:
+        - containerPort: 8080
