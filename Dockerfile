@@ -7,6 +7,8 @@ RUN go build -o /go/bin/icinga-kubernetes ./cmd/icinga-kubernetes/main.go
 
 FROM scratch
 
-COPY --from=builder /go/bin/icinga-kubernetes /go/bin/icinga-kubernetes
-EXPOSE 8080
-ENTRYPOINT ["/go/bin/icinga-kubernetes"]
+WORKDIR /go/bin/
+COPY --from=alpine /tmp /tmp
+COPY --from=builder /go/bin/icinga-kubernetes ./icinga-kubernetes
+
+ENTRYPOINT ["./icinga-kubernetes"]
