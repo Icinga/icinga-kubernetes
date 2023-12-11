@@ -7,15 +7,18 @@ import (
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-kubernetes/pkg/contracts"
+	"github.com/icinga/icinga-kubernetes/pkg/schema"
 	"github.com/icinga/icinga-kubernetes/pkg/sink"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
+	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kcache "k8s.io/client-go/tools/cache"
+	"reflect"
 )
 
 type Sync interface {
-	Run(context.Context) error
+	Run(context.Context, string) error
 }
 
 type sync struct {
@@ -39,12 +42,12 @@ func NewSync(
 	}
 }
 
-func (s *sync) Run(ctx context.Context) error {
+func (s *sync) Run(ctx context.Context, namespace string) error {
 	s.logger.Info("Starting sync")
 
 	s.logger.Debug("Warming up")
 
-	err := s.Warmup(ctx)
+	err := s.Warmup(ctx, namespace)
 	if err != nil {
 		return errors.Wrap(err, "warmup failed")
 	}
@@ -139,13 +142,19 @@ func (s *sync) Run(ctx context.Context) error {
 	return g.Wait()
 }
 
-func (s *sync) Warmup(ctx context.Context) error {
+func (s *sync) Warmup(ctx context.Context, namespace string) error {
 	g, ctx := errgroup.WithContext(ctx)
 
 	resource := s.factory()
+	resourceType := reflect.TypeOf(resource).Elem()
+
+	if _, found := resourceType.FieldByName("kmetaWithNamespace"); found && namespace != kmetav1.NamespaceAll {
+		resource = schema.NewScopedResource(resource, &struct{ Namespace string }{})
+	}
+
 	entities, err := s.db.YieldAll(ctx, func() database.Entity {
 		return s.factory()
-	}, s.db.BuildSelectStmt(resource, resource.Fingerprint()), struct{}{})
+	}, s.db.BuildSelectStmt(resource, resource.Fingerprint()), struct{ Namespace string }{Namespace: namespace})
 	com.ErrgroupReceive(ctx, g, err)
 
 	g.Go(func() error {
