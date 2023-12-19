@@ -184,14 +184,62 @@ CREATE TABLE deployment_condition (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE service (
+  id binary(20) NOT NULL,
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
-  type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  type enum('cluster_ip', 'node_port', 'load_balancer', 'external_name') COLLATE utf8mb4_unicode_ci NOT NULL,
   cluster_ip varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  cluster_ips varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  external_ips varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  session_affinity enum('client_ip', 'none') COLLATE utf8mb4_unicode_ci NOT NULL,
+  external_name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  external_traffic_policy enum('cluster', 'local') COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  health_check_node_port int unsigned NOT NULL,
+  publish_not_ready_addresses enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
+  ip_families enum('IPv4', 'IPv6') COLLATE utf8mb4_general_ci NOT NULL,
+  ip_family_policy enum('single_stack', 'prefer_dual_stack', 'require_dual_stack') COLLATE utf8mb4_unicode_ci NOT NULL,
+  allocate_load_balancer_node_ports enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
+  load_balancer_class varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  internal_traffic_policy enum('cluster', 'local') COLLATE utf8mb4_unicode_ci NOT NULL,
   created bigint unsigned NOT NULL,
-  PRIMARY KEY (namespace, name)
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE selector (
+  id binary(20) NOT NULL,
+  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  value varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE service_selector (
+  service_id binary(20) NOT NULL,
+  selector_id binary(20) NOT NULL,
+  PRIMARY KEY (service_id, selector_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE service_condition (
+  service_id binary(20) NOT NULL,
+  type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  status enum('true', 'false', 'unknown') COLLATE utf8mb4_unicode_ci NOT NULL,
+  observed_generation bigint unsigned NULL DEFAULT NULL,
+  last_transition bigint unsigned NULL DEFAULT NULL,
+  reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  message varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (service_id, type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE service_port (
+  service_id binary(20) NOT NULL,
+  name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  protocol enum('TCP', 'UDP', 'SCTP') COLLATE utf8mb4_general_ci NOT NULL,
+  app_protocol varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  port int unsigned NOT NULL,
+  target_port varchar(15) COLLATE utf8mb4_unicode_ci NOT NULL,
+  node_port int unsigned NOT NULL,
+  PRIMARY KEY (service_id, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE replica_set (
@@ -399,6 +447,12 @@ CREATE TABLE config_map_label (
   config_map_id binary(20) NOT NULL,
   label_id binary(20) NOT NULL,
   PRIMARY KEY (config_map_id, label_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE service_label (
+  service_id binary(20) NOT NULL,
+  label_id binary(20) NOT NULL,
+  PRIMARY KEY (service_id, label_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE event (
