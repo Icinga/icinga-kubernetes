@@ -92,7 +92,7 @@ CREATE TABLE pod_condition (
 
 CREATE TABLE pod_owner (
   pod_id binary(20) NOT NULL,
-  kind enum('daemon_set', 'node', 'replica_set', 'stateful_set') COLLATE utf8mb4_unicode_ci NOT NULL,
+  kind enum('daemon_set', 'node', 'replica_set', 'stateful_set', 'job') COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   controller enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -491,4 +491,43 @@ CREATE TABLE persistent_volume_claim_ref (
   name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (persistent_volume_id, uid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE job (
+  id binary(20) NOT NULL,
+  namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  resource_version varchar(255) NOT NULL,
+  parallelism int unsigned NULL DEFAULT NULL,
+  completions int unsigned NULL DEFAULT NULL,
+  active_deadline_seconds bigint unsigned NULL DEFAULT NULL,
+  backoff_limit int unsigned NULL DEFAULT NULL,
+  ttl_seconds_after_finished int unsigned NULL DEFAULT NULL,
+  completion_mode enum('non_indexed', 'indexed') COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  suspend enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
+  start_time bigint unsigned NULL DEFAULT NULL,
+  completion_time bigint unsigned NULL DEFAULT NULL,
+  active int unsigned NOT NULL,
+  succeeded int unsigned NOT NULL,
+  failed int unsigned NOT NULL,
+  created bigint unsigned NOT NULL,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE job_condition (
+  job_id binary(20) NOT NULL,
+  type enum('suspended', 'complete', 'failed', 'failure_target') COLLATE utf8mb4_unicode_ci NOT NULL,
+  status enum('true', 'false', 'unknown') COLLATE utf8mb4_unicode_ci NOT NULL,
+  last_probe bigint unsigned NULL DEFAULT NULL,
+  last_transition bigint unsigned NOT NULL,
+  reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  message varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (job_id, type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE job_label (
+  job_id binary(20) NOT NULL,
+  label_id binary(20) NOT NULL,
+  PRIMARY KEY (job_id, label_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
