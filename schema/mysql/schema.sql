@@ -242,6 +242,50 @@ CREATE TABLE service_port (
   PRIMARY KEY (service_id, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+CREATE TABLE endpoint_slice (
+  id binary(20) NOT NULL,
+  namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
+  uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  resource_version varchar(255) NOT NULL,
+  address_type enum('IPv4', 'IPv6', 'FQDN') COLLATE utf8mb4_general_ci NOT NULL,
+  created bigint unsigned NOT NULL,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE endpoint (
+  id binary(20) NOT NULL,
+  endpoint_slice_id binary(20) NOT NULL,
+  host_name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
+  node_name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
+  ready enum('n', 'y') COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  serving enum('n', 'y') COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  terminating enum('n', 'y') COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  address varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
+  protocol enum('TCP', 'UDP', 'SCTP') COLLATE utf8mb4_general_ci NOT NULL,
+  port int unsigned NOT NULL,
+  port_name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
+  app_protocol varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE endpoint_target_ref (
+  endpoint_slice_id binary(20) NOT NULL,
+  kind enum('pod') COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  api_version varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  resource_version varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (endpoint_slice_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE endpoint_slice_label (
+  endpoint_slice_id binary(20) NOT NULL,
+  label_id binary(20) NOT NULL,
+  PRIMARY KEY (endpoint_slice_id, label_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
 CREATE TABLE replica_set (
   id binary(20) NOT NULL,
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
