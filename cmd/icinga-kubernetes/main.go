@@ -221,6 +221,11 @@ func main() {
 
 		return s.Run(ctx)
 	})
+	g.Go(func() error {
+		s := syncv1.NewSync(db, factory.Networking().V1().Ingresses().Informer(), log.WithName("ingresses"), schemav1.NewIngress)
+
+		return s.Run(ctx)
+	})
 	if err := g.Wait(); err != nil {
 		klog.Fatal(err)
 	}

@@ -286,6 +286,53 @@ CREATE TABLE endpoint_slice_label (
   PRIMARY KEY (endpoint_slice_id, label_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+CREATE TABLE ingress (
+  id binary(20) NOT NULL,
+  namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  resource_version varchar(255) NOT NULL,
+  created bigint unsigned NOT NULL,
+  PRIMARY KEY(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE ingress_tls (
+  ingress_id binary(20) NOT NULL,
+  tls_host varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  tls_secret varchar(255) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  PRIMARY KEY(ingress_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE ingress_backend_service (
+  service_id binary(20) NOT NULL,
+  ingress_id binary(20) NOT NULL,
+  ingress_rule_id binary(20) NULL DEFAULT NULL,
+  service_name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  service_port_name varchar(255) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  service_port_number int unsigned NULL DEFAULT NULL,
+  PRIMARY KEY(service_id, ingress_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE ingress_backend_resource (
+  resource_id binary(20) NOT NULL,
+  ingress_id binary(20) NOT NULL,
+  ingress_rule_id binary(20) NULL DEFAULT NULL,
+  api_group varchar(255) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  kind varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY(resource_id, ingress_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE ingress_rule (
+  id binary(20) NOT NULL,
+  backend_id binary(20) NOT NULL,
+  ingress_id binary(20) NOT NULL,
+  host varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  path varchar(255) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  path_type varchar(255) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  PRIMARY KEY(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
 CREATE TABLE replica_set (
   id binary(20) NOT NULL,
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
