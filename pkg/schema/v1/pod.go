@@ -1,52 +1,16 @@
 package v1
 
 import (
-	"context"
 	"database/sql"
-	"fmt"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
 	"github.com/icinga/icinga-kubernetes/pkg/types"
-	"io"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ktypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"strings"
 )
-
-type Container struct {
-	Id             types.Binary
-	PodId          types.Binary
-	Name           string
-	Image          string
-	CpuLimits      int64
-	CpuRequests    int64
-	MemoryLimits   int64
-	MemoryRequests int64
-	State          sql.NullString
-	StateDetails   string
-	Ready          types.Bool
-	Started        types.Bool
-	RestartCount   int32
-	Logs           string
-}
-
-type ContainerDevice struct {
-	ContainerId types.Binary
-	PodId       types.Binary
-	Name        string
-	Path        string
-}
-
-type ContainerMount struct {
-	ContainerId types.Binary
-	PodId       types.Binary
-	VolumeName  string
-	Path        string
-	SubPath     sql.NullString
-	ReadOnly    types.Bool
-}
 
 type PodFactory struct {
 	clientset *kubernetes.Clientset
@@ -67,15 +31,13 @@ type Pod struct {
 	Message           string
 	Qos               string
 	RestartPolicy     string
-	Conditions        []PodCondition    `db:"-"`
-	Containers        []Container       `db:"-"`
-	ContainerDevices  []ContainerDevice `db:"-"`
-	ContainerMounts   []ContainerMount  `db:"-"`
-	Owners            []PodOwner        `db:"-"`
-	Labels            []Label           `db:"-"`
-	PodLabels         []PodLabel        `db:"-"`
-	Pvcs              []PodPvc          `db:"-"`
-	Volumes           []PodVolume       `db:"-"`
+	Conditions        []PodCondition `db:"-"`
+	Containers        []Container    `db:"-"`
+	Owners            []PodOwner     `db:"-"`
+	Labels            []Label        `db:"-"`
+	PodLabels         []PodLabel     `db:"-"`
+	Pvcs              []PodPvc       `db:"-"`
+	Volumes           []PodVolume    `db:"-"`
 	factory           *PodFactory
 }
 
@@ -158,75 +120,67 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 	for _, containerStatus := range pod.Status.ContainerStatuses {
 		containerStatuses[containerStatus.Name] = containerStatus
 	}
-	for _, container := range pod.Spec.Containers {
-		if containerStatuses[container.Name].RestartCount > 0 {
-			fmt.Println(containerStatuses[container.Name].LastTerminationState)
-		}
+	for _, k8sContainer := range pod.Spec.Containers {
 		var started bool
-		if containerStatuses[container.Name].Started != nil {
-			started = *containerStatuses[container.Name].Started
+		if containerStatuses[k8sContainer.Name].Started != nil {
+			started = *containerStatuses[k8sContainer.Name].Started
 		}
-		state, stateDetails, err := MarshalFirstNonNilStructFieldToJSON(containerStatuses[container.Name].State)
+		state, stateDetails, err := MarshalFirstNonNilStructFieldToJSON(containerStatuses[k8sContainer.Name].State)
 		if err != nil {
 			panic(err)
-		}
-		logs, err := getContainerLogs(p.factory.clientset, pod, container)
-		if err != nil {
-			// ContainerCreating, NotFound, ...
-			fmt.Println(err)
-			logs = ""
 		}
 		var containerState sql.NullString
 		if state != "" {
 			containerState.String = strcase.Snake(state)
 			containerState.Valid = true
 		}
-		p.Containers = append(p.Containers, Container{
-			Id:             types.Checksum(pod.Namespace + "/" + pod.Name + "/" + container.Name),
-			PodId:          p.Id,
-			Name:           container.Name,
-			Image:          container.Image,
-			CpuLimits:      container.Resources.Limits.Cpu().MilliValue(),
-			CpuRequests:    container.Resources.Requests.Cpu().MilliValue(),
-			MemoryLimits:   container.Resources.Limits.Memory().MilliValue(),
-			MemoryRequests: container.Resources.Requests.Memory().MilliValue(),
+
+		container := Container{
+			ContainerMeta: ContainerMeta{
+				Id:    types.Checksum(pod.Namespace + "/" + pod.Name + "/" + k8sContainer.Name),
+				PodId: p.Id,
+			},
+			Name:           k8sContainer.Name,
+			Image:          k8sContainer.Image,
+			CpuLimits:      k8sContainer.Resources.Limits.Cpu().MilliValue(),
+			CpuRequests:    k8sContainer.Resources.Requests.Cpu().MilliValue(),
+			MemoryLimits:   k8sContainer.Resources.Limits.Memory().MilliValue(),
+			MemoryRequests: k8sContainer.Resources.Requests.Memory().MilliValue(),
 			Ready: types.Bool{
-				Bool:  containerStatuses[container.Name].Ready,
+				Bool:  containerStatuses[k8sContainer.Name].Ready,
 				Valid: true,
 			},
 			Started: types.Bool{
 				Bool:  started,
 				Valid: true,
 			},
-			RestartCount: containerStatuses[container.Name].RestartCount,
+			RestartCount: containerStatuses[k8sContainer.Name].RestartCount,
 			State:        containerState,
 			StateDetails: stateDetails,
-			Logs:         logs,
-		})
+		}
 
-		p.CpuLimits += container.Resources.Limits.Cpu().MilliValue()
-		p.CpuRequests += container.Resources.Requests.Cpu().MilliValue()
-		p.MemoryLimits += container.Resources.Limits.Memory().MilliValue()
-		p.MemoryRequests += container.Resources.Requests.Memory().MilliValue()
+		p.CpuLimits += k8sContainer.Resources.Limits.Cpu().MilliValue()
+		p.CpuRequests += k8sContainer.Resources.Requests.Cpu().MilliValue()
+		p.MemoryLimits += k8sContainer.Resources.Limits.Memory().MilliValue()
+		p.MemoryRequests += k8sContainer.Resources.Requests.Memory().MilliValue()
 
-		for _, device := range container.VolumeDevices {
-			p.ContainerDevices = append(p.ContainerDevices, ContainerDevice{
-				ContainerId: types.Checksum(pod.Namespace + "/" + pod.Name + "/" + container.Name),
+		for _, device := range k8sContainer.VolumeDevices {
+			container.Devices = append(container.Devices, ContainerDevice{
+				ContainerId: container.Id,
 				PodId:       p.Id,
 				Name:        device.Name,
 				Path:        device.DevicePath,
 			})
 		}
 
-		for _, mount := range container.VolumeMounts {
+		for _, mount := range k8sContainer.VolumeMounts {
 			var subPath sql.NullString
 			if mount.SubPath != "" {
 				subPath.String = mount.SubPath
 				subPath.Valid = true
 			}
-
-			p.ContainerMounts = append(p.ContainerMounts, ContainerMount{
-				ContainerId: types.Checksum(pod.Namespace + "/" + pod.Name + "/" + container.Name),
+			container.Mounts = append(container.Mounts, ContainerMount{
+				ContainerId: container.Id,
 				PodId:       p.Id,
 				VolumeName:  mount.Name,
 				Path:        mount.MountPath,
@@ -237,6 +191,8 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 				},
 			})
 		}
+
+		p.Containers = append(p.Containers, container)
 	}
 
 	for labelName, labelValue := range pod.Labels {
@@ -318,28 +274,11 @@ func (p *Pod) Relations() []database.Relation {
 
 	return []database.Relation{
 		database.HasMany(p.Conditions, fk),
-		database.HasMany(p.Containers, fk),
-		database.HasMany(p.ContainerDevices, fk),
-		database.HasMany(p.ContainerMounts, fk),
+		database.HasMany(p.Containers, database.WithoutCascadeDelete()),
 		database.HasMany(p.Owners, fk),
 		database.HasMany(p.Labels, database.WithoutCascadeDelete()),
 		database.HasMany(p.PodLabels, fk),
 		database.HasMany(p.Pvcs, fk),
 		database.HasMany(p.Volumes, fk),
 	}
-}
-
-func getContainerLogs(clientset *kubernetes.Clientset, pod *kcorev1.Pod, container kcorev1.Container) (string, error) {
-	req := clientset.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, &kcorev1.PodLogOptions{Container: container.Name})
-	body, err := req.Stream(context.TODO())
-	if err != nil {
-		return "", err
-	}
-	defer body.Close()
-	logs, err := io.ReadAll(body)
-	if err != nil {
-		return "", err
-	}
-
-	return string(logs), nil
 }

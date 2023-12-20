@@ -136,27 +136,16 @@ func main() {
 	})
 	g.Go(func() error {
 		pods := make(chan any)
+		deletePodIds := make(chan interface{})
+		defer close(pods)
+		defer close(deletePodIds)
 
-		g.Go(func() error {
-			defer runtime.HandleCrash()
-			defer close(pods)
-
-			for {
-				select {
-				case _, more := <-pods:
-					if !more {
-						return nil
-					}
-				case <-ctx.Done():
-					return ctx.Err()
-				}
-			}
-		})
+		schemav1.SyncContainers(ctx, db, g, pods, deletePodIds)
 
 		f := schemav1.NewPodFactory(clientset)
 		s := syncv1.NewSync(db, factory.Core().V1().Pods().Informer(), log.WithName("pods"), f.New)
 
-		return s.Run(ctx, sync.WithOnUpsert(com.ForwardBulk(pods)))
+		return s.Run(ctx, sync.WithOnUpsert(com.ForwardBulk(pods)), sync.WithOnDelete(com.ForwardBulk(deletePodIds)))
 	})
 	g.Go(func() error {
 		s := syncv1.NewSync(db, factory.Apps().V1().Deployments().Informer(), log.WithName("deployments"), schemav1.NewDeployment)
