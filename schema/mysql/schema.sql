@@ -604,7 +604,7 @@ CREATE TABLE pvc (
   volume_mode enum('block', 'filesystem') COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   storage_class varchar(255) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   created bigint unsigned NOT NULL,
-  PRIMARY KEY (id, volume_name)
+  PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE pvc_condition (
