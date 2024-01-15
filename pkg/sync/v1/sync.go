@@ -2,7 +2,6 @@ package v1
 
 import (
 	"context"
-	"fmt"
 	"github.com/go-logr/logr"
 	"github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
@@ -69,7 +68,6 @@ func (s *Sync) warmup(ctx context.Context, c *sync.Controller) error {
 				}
 
 				if err := c.Announce(e); err != nil {
-					fmt.Println(err)
 					return err
 				}
 			case <-ctx.Done():
@@ -97,22 +95,14 @@ func (s *Sync) sync(ctx context.Context, c *sync.Controller, features ...sync.Fe
 	g.Go(func() error {
 		defer runtime.HandleCrash()
 
-		err := c.Stream(ctx, sink)
-		if err != nil {
-			fmt.Println(err)
-		}
-		return err
+		return c.Stream(ctx, sink)
 	})
 	g.Go(func() error {
 		defer runtime.HandleCrash()
 
-		err := s.db.UpsertStreamed(
+		return s.db.UpsertStreamed(
 			ctx, sink.UpsertCh(),
 			database.WithCascading(), database.WithOnSuccess(with.OnUpsert()))
-		if err != nil {
-			fmt.Println(err)
-		}
-		return err
 	})
 	g.Go(func() error {
 		defer runtime.HandleCrash()
@@ -130,13 +120,9 @@ func (s *Sync) sync(ctx context.Context, c *sync.Controller, features ...sync.Fe
 
 			}
 		} else {
-			err := s.db.DeleteStreamed(
+			return s.db.DeleteStreamed(
 				ctx, s.factory(), sink.DeleteCh(),
 				database.WithBlocking(), database.WithCascading(), database.WithOnSuccess(with.OnDelete()))
-			if err != nil {
-				fmt.Println(err)
-			}
-			return err
 		}
 	})
 	g.Go(func() error {
@@ -157,9 +143,5 @@ func (s *Sync) sync(ctx context.Context, c *sync.Controller, features ...sync.Fe
 		}
 	})
 
-	err := g.Wait()
-	if err != nil {
-		fmt.Println(err)
-	}
-	return err
+	return g.Wait()
 }

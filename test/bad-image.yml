@@ -1,9 +1,0 @@
-apiVersion: v1
-kind: Pod
-metadata:
-  name: bad-image
-  namespace: failures
-spec:
-  containers:
-    - name: bad-image
-      image: icinga/bad-image

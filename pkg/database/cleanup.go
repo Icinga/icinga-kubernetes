@@ -3,8 +3,8 @@ package database
 import (
 	"context"
 	"fmt"
+	"github.com/icinga/icinga-kubernetes/internal"
 	"github.com/icinga/icinga-kubernetes/pkg/com"
-	"github.com/icinga/icinga-kubernetes/pkg/internal"
 	"github.com/icinga/icinga-kubernetes/pkg/types"
 	"time"
 )

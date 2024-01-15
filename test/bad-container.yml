@@ -1,9 +1,0 @@
-apiVersion: v1
-kind: Pod
-metadata:
-  name: crashing-app
-  namespace: failures
-spec:
-  containers:
-    - name: crashing-container
-      image: rosskukulinski/crashing-app
