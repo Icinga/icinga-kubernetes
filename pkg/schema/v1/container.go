@@ -13,7 +13,6 @@ import (
 	kcorev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/utils/pointer"
 	"sync"
 	"time"
 )
@@ -108,7 +107,8 @@ func (cl *ContainerLog) Upsert() interface{} {
 func (cl *ContainerLog) syncContainerLogs(ctx context.Context, clientset *kubernetes.Clientset, db *database.Database) error {
 	logOptions := &kcorev1.PodLogOptions{Container: cl.ContainerName}
 	if !cl.LastUpdate.Time().IsZero() {
-		logOptions.SinceSeconds = pointer.Int64(int64(time.Since(cl.LastUpdate.Time()).Seconds()))
+		sinceSeconds := int64(time.Since(cl.LastUpdate.Time()).Seconds())
+		logOptions.SinceSeconds = &sinceSeconds
 	}
 
 	req := clientset.CoreV1().Pods(cl.Namespace).GetLogs(cl.PodName, logOptions)
