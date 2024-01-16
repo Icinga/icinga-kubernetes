@@ -27,8 +27,5 @@ jobs:
     - name: Check licenses against allow list
       run: |
         # Pass allowed licenses as SPDX Identifiers: https://spdx.org/licenses/
-        # The current list is based on Icinga DB, plus GPL-2.0 as both Icinga DB
-        # and this very icinga-notifications are licensed under GPL-2.0.
-        # https://github.com/Icinga/icingadb/blob/v1.1.1/.github/workflows/compliance/check-licenses.sh
-        go-licenses check github.com/icinga/icinga-notifications/... \
+        go-licenses check github.com/icinga/icinga-kubernetes/... \
           --allowed_licenses BSD-2-Clause,BSD-3-Clause,GPL-2.0,MIT,MPL-2.0
