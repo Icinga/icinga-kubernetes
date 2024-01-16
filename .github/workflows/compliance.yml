@@ -28,4 +28,4 @@ jobs:
       run: |
         # Pass allowed licenses as SPDX Identifiers: https://spdx.org/licenses/
         go-licenses check github.com/icinga/icinga-kubernetes/... \
-          --allowed_licenses BSD-2-Clause,BSD-3-Clause,AGPL-3.0,MIT,MPL-2.0,Apache-2.0,ISC
+          --allowed_licenses AGPL-3.0,Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC,MIT,MPL-2.0
