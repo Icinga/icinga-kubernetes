@@ -36,3 +36,14 @@ With locally accessible kubeconfig and `config.yml` files, `icinga-kubernetes` c
 ```bash
 icinga-kubernetes -config /path/to/config.yml [-kubeconfig $HOME/.kube/config]
 ```
+
+## Using a Container
+
+With locally accessible kubeconfig and `config.yml` files,
+run the `icinga/icinga-kubernetes` image using a container runtime of you choice, e.g. Docker:
+
+```bash
+export KUBECONFIG=$HOME/.kube/config
+export ICINGA_KUBERNETES_CONFIG=config.yml
+docker run --rm --network=host -v $ICINGA_KUBERNETES_CONFIG:/config.yml -v $KUBECONFIG:/.kube/config icinga/icinga-kubernetes
+```
