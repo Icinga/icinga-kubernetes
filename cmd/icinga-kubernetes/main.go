@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
@@ -15,38 +14,28 @@ import (
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
+	kclientcmd "k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
-	"os"
-	"path/filepath"
 	"time"
 )
 
 func main() {
 	runtime.ReallyCrash = true
 
-	var config string
-	var kubeconfig string
-	var master string
-
-	userHomeDir, err := os.UserHomeDir()
-	if err != nil {
-		fmt.Printf("error getting user home dir: %v\n", err)
-		os.Exit(1)
-	}
-	kubeConfigPath := filepath.Join(userHomeDir, ".kube", "config")
-	klog.InitFlags(nil)
-	flag.StringVar(&kubeconfig, "kubeconfig", kubeConfigPath, "absolute path to the kubeconfig file")
-	flag.StringVar(&master, "master", "", "master url")
-	flag.StringVar(&config, "config", "./config.yml", "path to the config file")
-	flag.Parse()
-
-	clientconfig, err := clientcmd.BuildConfigFromFlags(master, kubeconfig)
+	kconfig, err := kclientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		kclientcmd.NewDefaultClientConfigLoadingRules(), &kclientcmd.ConfigOverrides{}).ClientConfig()
 	if err != nil {
 		klog.Fatal(err)
 	}
 
-	clientset, err := kubernetes.NewForConfig(clientconfig)
+	var config string
+
+	klog.InitFlags(nil)
+
+	flag.StringVar(&config, "config", "./config.yml", "path to the config file")
+	flag.Parse()
+
+	clientset, err := kubernetes.NewForConfig(kconfig)
 	if err != nil {
 		klog.Fatal(err)
 	}
