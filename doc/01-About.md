@@ -1,12 +1,18 @@
 # Icinga Kubernetes
 
-Icinga Kubernetes is a set of components for monitoring Kubernetes resources, consisting of
+Icinga Kubernetes is a set of components for monitoring and visualizing Kubernetes resources,
+consisting of
 
-* the Icinga Kubernetes daemon, which monitors Kubernetes Resources, and
+* the Icinga Kubernetes daemon, which uses the Kubernetes API to monitor the configuration and
+  status changes of Kubernetes resources synchronizing every change in a database, and
 * [Icinga Kubernetes Web](https://icinga.com/docs/icinga-kubernetes-web)
-  for visualizing Kubernetes resources and their state.
+  which connects to the database for visualizing Kubernetes resources and their state.
 
 ![Icinga Kubernetes Overview](res/icinga-kubernetes-overview.png)
+
+Any of the Icinga Kubernetes components can run either inside or outside Kubernetes clusters,
+including the database.
+At the moment it is only possible to monitor one Kubernetes cluster per Icinga Kubernetes installation.
 
 ## Installation
 
