@@ -14,6 +14,10 @@ Any of the Icinga Kubernetes components can run either inside or outside Kuberne
 including the database.
 At the moment it is only possible to monitor one Kubernetes cluster per Icinga Kubernetes installation.
 
+![Icinga Kubernetes Web Stateful Set](res/icinga-kubernetes-web-stateful-set.png)
+![Icinga Kubernetes Web Service](res/icinga-kubernetes-web-service.png)
+![Icinga Kubernetes Web Pod](res/icinga-kubernetes-web-pod.png)
+
 ## Installation
 
 To install Icinga Kubernetes see [Installation](02-Installation.md).
