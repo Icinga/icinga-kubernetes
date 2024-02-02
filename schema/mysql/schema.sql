@@ -6,7 +6,7 @@ CREATE TABLE namespace (
   resource_version varchar(255) NOT NULL,
   phase enum('active', 'terminating') COLLATE utf8mb4_unicode_ci NOT NULL,
   created bigint unsigned NOT NULL,
-  PRIMARY KEY(id)
+  PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE namespace_condition (
@@ -76,7 +76,7 @@ CREATE TABLE pod (
   message varchar(255) NULL DEFAULT NULL,
   qos enum('guaranteed', 'burstable', 'best_effort') COLLATE utf8mb4_unicode_ci NOT NULL,
   created bigint unsigned NOT NULL,
-  PRIMARY KEY(id)
+  PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE pod_condition (
@@ -301,14 +301,14 @@ CREATE TABLE ingress (
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
   created bigint unsigned NOT NULL,
-  PRIMARY KEY(id)
+  PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE ingress_tls (
   ingress_id binary(20) NOT NULL,
   tls_host varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   tls_secret varchar(255) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
-  PRIMARY KEY(ingress_id)
+  PRIMARY KEY (ingress_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE ingress_backend_service (
@@ -318,7 +318,7 @@ CREATE TABLE ingress_backend_service (
   service_name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   service_port_name varchar(255) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   service_port_number int unsigned NULL DEFAULT NULL,
-  PRIMARY KEY(service_id, ingress_id)
+  PRIMARY KEY (service_id, ingress_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE ingress_backend_resource (
@@ -328,7 +328,7 @@ CREATE TABLE ingress_backend_resource (
   api_group varchar(255) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   kind varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  PRIMARY KEY(resource_id, ingress_id)
+  PRIMARY KEY (resource_id, ingress_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE ingress_rule (
@@ -338,7 +338,7 @@ CREATE TABLE ingress_rule (
   host varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   path varchar(255) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   path_type varchar(255) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
-  PRIMARY KEY(id)
+  PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE replica_set (
@@ -710,3 +710,16 @@ CREATE TABLE cron_job_label (
   label_id binary(20) NOT NULL,
   PRIMARY KEY (cron_job_id, label_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE kubernetes_schema (
+  id int unsigned NOT NULL AUTO_INCREMENT,
+  version varchar(64) NOT NULL,
+  timestamp bigint unsigned NOT NULL,
+  success enum('n', 'y') DEFAULT NULL,
+  reason text DEFAULT NULL,
+  PRIMARY KEY (id),
+  CONSTRAINT idx_kubernetes_schema_version UNIQUE (version)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+INSERT INTO kubernetes_schema (version, timestamp, success)
+VALUES ('0.1.0', UNIX_TIMESTAMP() * 1000, 'Initial import');
