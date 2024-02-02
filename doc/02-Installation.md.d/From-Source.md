@@ -16,7 +16,7 @@ This should place the `icinga-kubernetes` binary in your configured `$GOBIN` pat
 Download or clone the source and run the following command from the source's root directory.
 
 ```bash
-go build .
+go build -o icinga-kubernetes cmd/icinga-kubernetes/main.go
 ```
 
 <!-- {% set from_source = True %} -->
@@ -27,14 +27,14 @@ go build .
 Before running Icinga Kubernetes, create a local `config.yml` using [the sample configuration](../../config.example.yml)
 adjust the database credentials and, if necessary, the connection configuration.
 The configuration file explains general settings.
-All available settings can be found under [Configuration](03-Configuration.md).
+All available settings can be found under [Configuration](../03-Configuration.md).
 
 ## Running Icinga Kubernetes
 
 With locally accessible kubeconfig and `config.yml` files, `icinga-kubernetes` can be executed by running:
 
 ```bash
-icinga-kubernetes -config /path/to/config.yml [-kubeconfig $HOME/.kube/config]
+icinga-kubernetes -config /path/to/config.yml
 ```
 
 ## Using a Container
