@@ -47,3 +47,10 @@ export KUBECONFIG=$HOME/.kube/config
 export ICINGA_KUBERNETES_CONFIG=config.yml
 docker run --rm --network=host -v $ICINGA_KUBERNETES_CONFIG:/config.yml -v $KUBECONFIG:/.kube/config icinga/icinga-kubernetes:edge
 ```
+
+## Running Within Kubernetes
+
+Before running Icinga inside Kubernetes, create a local configuration using [the sample configuration](../../icinga-kubernetes.example.yml)
+adjust the database credentials and, if necessary, the connection configuration.
+The configuration file explains general settings.
+All available settings can be found under [Configuration](../03-Configuration.md).
