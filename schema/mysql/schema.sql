@@ -721,5 +721,5 @@ CREATE TABLE kubernetes_schema (
   CONSTRAINT idx_kubernetes_schema_version UNIQUE (version)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
-INSERT INTO kubernetes_schema (version, timestamp, success)
-VALUES ('0.1.0', UNIX_TIMESTAMP() * 1000, 'Initial import');
+INSERT INTO kubernetes_schema (version, timestamp, success, reason)
+VALUES ('0.1.0', UNIX_TIMESTAMP() * 1000, 'y', 'Initial import');
