@@ -1,0 +1,88 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: all-resources-reader
+rules:
+  - apiGroups: [ "*" ]
+    resources: [ "*" ]
+    verbs: [ "get", "watch", "list" ]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: read-all-resources
+roleRef:
+  kind: ClusterRole
+  name: all-resources-reader
+  apiGroup: "rbac.authorization.k8s.io"
+subjects:
+  - kind: ServiceAccount
+    name: icinga-kubernetes
+    namespace: icinga-kubernetes
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: icinga-kubernetes
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: icinga-kubernetes
+  namespace: icinga-kubernetes
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: icinga-kubernetes-config
+  namespace: icinga-kubernetes
+data:
+  config.yml: |-
+    # This is the configuration file for Icinga Kubernetes.
+    
+    # Connection configuration for the database to which Icinga Kubernetes synchronizes data.
+    # This is also the database used in Icinga Kubernetes Web to view and work with the data.
+    database:
+      # Database type. Only 'mysql' is supported yet which is the default.
+    #  type: mysql
+      
+      # Database host or absolute Unix socket path.
+      host: mysql
+      
+      # Database port. By default, the MySQL port.
+    #  port:
+      
+      # Database name.
+      database: kubernetes
+      
+      # Database user.
+      user: kubernetes
+      
+      # Database password.
+      password: CHANGEME
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: icinga-kubernetes
+  namespace: icinga-kubernetes
+spec:
+  serviceAccountName: icinga-kubernetes
+  containers:
+    - name: icinga-kubernetes
+      image: icinga/icinga-kubernetes:edge
+      volumeMounts:
+        - name: config-volume
+          mountPath: /config.yml
+          subPath: config.yml
+  volumes:
+    - name: config-volume
+      configMap:
+        name: icinga-kubernetes-config
+
+
