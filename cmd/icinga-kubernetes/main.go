@@ -10,12 +10,14 @@ import (
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
 	"github.com/icinga/icinga-kubernetes/pkg/sync"
 	syncv1 "github.com/icinga/icinga-kubernetes/pkg/sync/v1"
+	k8sMysql "github.com/icinga/icinga-kubernetes/schema/mysql"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	kclientcmd "k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
+	"strings"
 	"time"
 )
 
@@ -47,12 +49,30 @@ func main() {
 	if err != nil {
 		klog.Fatal(err)
 	}
-	db, err := database.NewFromConfig(d, log.WithName("database"))
+	dbLog := log.WithName("database")
+	db, err := database.NewFromConfig(d, dbLog)
 	if err != nil {
 		klog.Fatal(err)
 	}
 	if !db.Connect() {
 		return
+	}
+
+	dbLog.Info("Importing schema")
+
+	hasSchema, err := dbHasSchema(db, d.Database)
+	if err != nil {
+		klog.Fatal(err)
+	}
+
+	if !hasSchema {
+		for _, ddl := range strings.Split(k8sMysql.Schema, ";") {
+			if ddl = strings.TrimSpace(ddl); ddl != "" {
+				if _, err := db.Exec(ddl); err != nil {
+					klog.Fatal(err)
+				}
+			}
+		}
 	}
 
 	g, ctx := errgroup.WithContext(context.Background())
@@ -174,4 +194,19 @@ func main() {
 	if err := g.Wait(); err != nil {
 		klog.Fatal(err)
 	}
+}
+
+// dbHasSchema queries via db whether the database dbName has a table named "kubernetes_schema".
+func dbHasSchema(db *database.Database, dbName string) (bool, error) {
+	rows, err := db.Query(
+		db.Rebind("SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=? AND TABLE_NAME='kubernetes_schema'"),
+		dbName,
+	)
+	if err != nil {
+		return false, err
+	}
+
+	defer func() { _ = rows.Close() }()
+
+	return rows.Next(), rows.Err()
 }
