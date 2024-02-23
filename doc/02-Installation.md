@@ -1,11 +1,14 @@
 <!-- {% if index %} -->
-
 # Installing Icinga Kubernetes
 
 The recommended way to install Icinga Kubernetes is to use prebuilt packages for
 all supported platforms from our official release repository.
 Please follow the steps listed for your target operating system,
 which guide you through setting up the repository and installing Icinga Kubernetes.
+
+For running Icinga within Kubernetes use our
+[Helm charts](https://github.com/Icinga/helm-charts/tree/main/charts/icinga-stack) to
+provide a ready-to-use Icinga stack.
 
 ![Icinga Kubernetes](res/icinga-kubernetes-installation.png)
 
@@ -23,7 +26,7 @@ or install [from source](02-Installation.md.d/From-Source.md).
 
 A MySQL (≥5.5) or MariaDB (≥10.1) database is required to run Icinga Kubernetes.
 Please follow the steps listed for your target database,
-which guide you through setting up the database and user and importing the schema.
+which guide you through setting up the database and user, and importing the schema.
 
 ### Setting up a MySQL or MariaDB Database
 
@@ -43,8 +46,11 @@ CREATE USER 'kubernetes'@'localhost' IDENTIFIED BY 'CHANGEME';
 GRANT ALL ON kubernetes.* TO 'kubernetes'@'localhost';
 ```
 
-After creating the database, import the Icinga Kubernetes schema located at
+Icinga Kubernetes automatically imports the schema on first start and also applies schema migrations if required.
+<!-- {% if not from_source %} -->
+You can also import the schema file manually, which is located at
 `/usr/share/kubernetes/schema/mysql/schema.sql`.
+<!-- {% endif %} -->
 
 <!-- {% if not from_source %} -->
 ## Configuring Icinga Kubernetes
@@ -63,6 +69,43 @@ Please run the following command to enable and start its service:
 ```bash
 systemctl enable --now icinga-kubernetes
 ```
+<!-- {% else %} -->
+## Configuring Icinga Kubernetes
+
+Before running Icinga Kubernetes, create a local `config.yml` using [the sample configuration](../config.example.yml)
+adjust the database credentials and, if necessary, the connection configuration.
+The configuration file explains general settings.
+All available settings can be found under [Configuration](03-Configuration.md).
+
+## Running Icinga Kubernetes
+
+With locally accessible kubeconfig and `config.yml` files, `icinga-kubernetes` can be executed by running:
+
+```bash
+icinga-kubernetes -config /path/to/config.yml
+```
+
+## Using a Container
+
+With locally accessible kubeconfig and `config.yml` files,
+run the `icinga/icinga-kubernetes` image using a container runtime of you choice, e.g. Docker:
+
+```bash
+export KUBECONFIG=$HOME/.kube/config
+export ICINGA_KUBERNETES_CONFIG=config.yml
+docker run --rm -v $ICINGA_KUBERNETES_CONFIG:/config.yml -v $KUBECONFIG:/.kube/config icinga/icinga-kubernetes:edge
+```
+
+## Running Within Kubernetes
+
+Before running Icinga Kubernetes inside Kubernetes,
+create a local configuration using [the sample configuration](../icinga-kubernetes.example.yml)
+adjust the database credentials and, if necessary, the connection configuration.
+The sample configuration explains general settings.
+All available settings can be found under [Configuration](03-Configuration.md).
+
+You can also use our [Helm charts](https://github.com/Icinga/helm-charts/tree/main/charts/icinga-stack) to
+provide a ready-to-use Icinga stack.
 <!-- {% endif %} -->
 
 ## Installing Icinga Kubernetes Web
