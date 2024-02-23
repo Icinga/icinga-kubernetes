@@ -5,7 +5,7 @@ consisting of
 
 * the Icinga Kubernetes daemon, which uses the Kubernetes API to monitor the configuration and
   status changes of Kubernetes resources synchronizing every change in a database, and
-* [Icinga Kubernetes Web](https://icinga.com/docs/icinga-kubernetes-web)
+* [Icinga Kubernetes Web](https://github.com/Icinga/icinga-kubernetes-web)
   which connects to the database for visualizing Kubernetes resources and their state.
 
 ![Icinga Kubernetes Overview](doc/res/icinga-kubernetes-overview.png)
