@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/icinga/icinga-kubernetes/internal"
 	"github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/periodic"
@@ -17,6 +18,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	kclientcmd "k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
+	"os"
 	"strings"
 	"time"
 )
@@ -34,6 +36,12 @@ func main() {
 
 	klog.InitFlags(nil)
 
+	flag.BoolFunc("version", "print version and exit", func(_ string) error {
+		internal.Version.Print()
+		os.Exit(0)
+
+		return nil
+	})
 	flag.StringVar(&config, "config", "./config.yml", "path to the config file")
 	flag.Parse()
 
