@@ -1,28 +1,28 @@
-# Icinga Kubernetes
+# Icinga for Kubernetes
 
-Icinga Kubernetes is a set of components for monitoring and visualizing Kubernetes resources,
+Icinga for Kubernetes is a set of components for monitoring and visualizing Kubernetes resources,
 consisting of
 
-* the Icinga Kubernetes daemon, which uses the Kubernetes API to monitor the configuration and
+* the Icinga for Kubernetes daemon, which uses the Kubernetes API to monitor the configuration and
   status changes of Kubernetes resources synchronizing every change in a database, and
-* [Icinga Kubernetes Web](https://icinga.com/docs/icinga-kubernetes-web)
+* [Icinga for Kubernetes Web](https://icinga.com/docs/icinga-kubernetes-web)
   which connects to the database for visualizing Kubernetes resources and their state.
 
-![Icinga Kubernetes Overview](res/icinga-kubernetes-overview.png)
+![Icinga for Kubernetes Overview](res/icinga-kubernetes-overview.png)
 
-Any of the Icinga Kubernetes components can run either inside or outside Kubernetes clusters,
+Any of the Icinga for Kubernetes components can run either inside or outside Kubernetes clusters,
 including the database.
-At the moment it is only possible to monitor one Kubernetes cluster per Icinga Kubernetes installation.
+At the moment it is only possible to monitor one Kubernetes cluster per Icinga for Kubernetes installation.
 
-![Icinga Kubernetes Web Stateful Set](res/icinga-kubernetes-web-stateful-set.png)
-![Icinga Kubernetes Web Service](res/icinga-kubernetes-web-service.png)
-![Icinga Kubernetes Web Pod](res/icinga-kubernetes-web-pod.png)
+![Icinga for Kubernetes Web Stateful Set](res/icinga-kubernetes-web-stateful-set.png)
+![Icinga for Kubernetes Web Service](res/icinga-kubernetes-web-service.png)
+![Icinga for Kubernetes Web Pod](res/icinga-kubernetes-web-pod.png)
 
 ## Installation
 
-To install Icinga Kubernetes see [Installation](02-Installation.md).
+To install Icinga for Kubernetes see [Installation](02-Installation.md).
 
 ## License
 
-Icinga Kubernetes and the Icinga Kubernetes documentation are licensed under the terms of the
+Icinga for Kubernetes and the Icinga for Kubernetes documentation are licensed under the terms of the
 GNU Affero General Public License Version 3.

@@ -1,7 +1,7 @@
-# This is the configuration file for Icinga Kubernetes.
+# This is the configuration file for Icinga for Kubernetes.
 
-# Connection configuration for the database to which Icinga Kubernetes synchronizes data.
-# This is also the database used in Icinga Kubernetes Web to view and work with the data.
+# Connection configuration for the database to which Icinga for Kubernetes synchronizes data.
+# This is also the database used in Icinga for Kubernetes Web to view and work with the data.
 database:
   # Database type. Only 'mysql' is supported yet which is the default.
 #  type: mysql

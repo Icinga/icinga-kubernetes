@@ -5,9 +5,9 @@ See [config.example.yml](../config.example.yml) for an example configuration.
 
 ## Database Configuration
 
-Connection configuration for the database to which Icinga Kubernetes synchronizes monitoring data.
+Connection configuration for the database to which Icinga for Kubernetes synchronizes monitoring data.
 This is also the database used in
-[Icinga Kubernetes Web](https://icinga.com/docs/icinga-kubernetes-web) to view and work with the data.
+[Icinga for Kubernetes Web](https://icinga.com/docs/icinga-kubernetes-web) to view and work with the data.
 
 | Option   | Description                                                        |
 |----------|--------------------------------------------------------------------|

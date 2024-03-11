@@ -1,4 +1,4 @@
-# Installing Icinga Kubernetes from Source
+# Installing Icinga for Kubernetes from Source
 
 ## Using `go install`
 
