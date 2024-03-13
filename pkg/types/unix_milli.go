@@ -5,6 +5,7 @@ import (
 	"database/sql/driver"
 	"encoding"
 	"encoding/json"
+	"github.com/pkg/errors"
 	"strconv"
 	"time"
 )
@@ -63,12 +64,22 @@ func (t *UnixMilli) Scan(src interface{}) error {
 		return nil
 	}
 
-	i, err := strToInt(string(src.([]byte)))
-	if err != nil {
-		return err
-	}
+	switch v := src.(type) {
+	case []byte:
+		i, err := strToInt(string(src.([]byte)))
+		if err != nil {
+			return err
+		}
 
-	*t = UnixMilli(FromUnixMilli(i))
+		*t = UnixMilli(time.UnixMilli(i))
+	// https://github.com/go-sql-driver/mysql/pull/1452
+	case uint64:
+		*t = UnixMilli(time.UnixMilli(int64(v)))
+	case int64:
+		*t = UnixMilli(time.UnixMilli(v))
+	default:
+		return errors.Errorf("bad (u)int64/[]byte type assertion from %[1]v (%[1]T)", src)
+	}
 
 	return nil
 }
