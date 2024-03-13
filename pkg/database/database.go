@@ -640,10 +640,10 @@ func (db *Database) YieldAll(ctx context.Context, factoryFunc func() (interface{
 func (db *Database) periodicLog(ctx context.Context, query string, counter *com.Counter) periodic.Stopper {
 	return periodic.Start(ctx, 10*time.Second, func(tick periodic.Tick) {
 		if count := counter.Reset(); count > 0 {
-			db.log.Info(fmt.Sprintf("Executed %s with %d rows", query, count))
+			db.log.V(2).Info(fmt.Sprintf("Executed %s with %d rows", query, count))
 		}
 	}, periodic.OnStop(func(tick periodic.Tick) {
-		db.log.Info(fmt.Sprintf("Finished executing %s with %d rows in %s", query, counter.Total(), tick.Elapsed))
+		db.log.V(2).Info(fmt.Sprintf("Finished executing %s with %d rows in %s", query, counter.Total(), tick.Elapsed))
 	}))
 }
 

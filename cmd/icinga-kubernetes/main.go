@@ -66,14 +66,14 @@ func main() {
 		return
 	}
 
-	dbLog.Info("Importing schema")
-
 	hasSchema, err := dbHasSchema(db, d.Database)
 	if err != nil {
 		klog.Fatal(err)
 	}
 
 	if !hasSchema {
+		dbLog.Info("Importing schema")
+
 		for _, ddl := range strings.Split(k8sMysql.Schema, ";") {
 			if ddl = strings.TrimSpace(ddl); ddl != "" {
 				if _, err := db.Exec(ddl); err != nil {
