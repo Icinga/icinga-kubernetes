@@ -279,7 +279,7 @@ CREATE TABLE endpoint (
 
 CREATE TABLE endpoint_target_ref (
   endpoint_slice_id binary(20) NOT NULL,
-  kind enum('pod') COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  kind enum('pod', 'node') COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
