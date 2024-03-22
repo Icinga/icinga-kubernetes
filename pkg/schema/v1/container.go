@@ -142,7 +142,7 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 	err := make(chan error, 1)
 	err <- warmup(ctx, db)
 	close(err)
-	com.ErrgroupReceive(g, err)
+	com.ErrgroupReceive(ctx, g, err)
 
 	// Use buffered channel here not to block the goroutines, as they can stream container ids
 	// from multiple pods concurrently.
@@ -185,7 +185,7 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 				entities, errs := db.YieldAll(ctx, func() (interface{}, error) {
 					return &Container{}, nil
 				}, query, meta)
-				com.ErrgroupReceive(g, errs)
+				com.ErrgroupReceive(ctx, g, errs)
 
 				g.Go(func() error {
 					defer runtime.HandleCrash()
@@ -275,7 +275,7 @@ func warmup(ctx context.Context, db *database.Database) error {
 	entities, errs := db.YieldAll(ctx, func() (interface{}, error) {
 		return &ContainerLog{}, nil
 	}, db.BuildSelectStmt(ContainerLog{}, ContainerLog{}))
-	com.ErrgroupReceive(g, errs)
+	com.ErrgroupReceive(ctx, g, errs)
 
 	g.Go(func() error {
 		defer runtime.HandleCrash()

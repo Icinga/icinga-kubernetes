@@ -178,6 +178,7 @@ func main() {
 	})
 
 	errs := make(chan error, 1)
+	defer close(errs)
 	defer periodic.Start(ctx, time.Hour, func(tick periodic.Tick) {
 		olderThan := tick.Time.AddDate(0, 0, -1)
 
@@ -197,7 +198,7 @@ func main() {
 			return
 		}
 	}, periodic.Immediate()).Stop()
-	com.ErrgroupReceive(g, errs)
+	com.ErrgroupReceive(ctx, g, errs)
 
 	if err := g.Wait(); err != nil {
 		klog.Fatal(err)

@@ -55,7 +55,7 @@ func (s *Sync) warmup(ctx context.Context, c *sync.Controller) error {
 		return s.factory(), nil
 	}, s.db.BuildSelectStmt(s.factory(), &schemav1.Meta{}))
 	// Let errors from YieldAll() cancel the group.
-	com.ErrgroupReceive(g, errs)
+	com.ErrgroupReceive(ctx, g, errs)
 
 	g.Go(func() error {
 		defer runtime.HandleCrash()

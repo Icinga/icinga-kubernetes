@@ -634,7 +634,7 @@ func (db *Database) YieldAll(ctx context.Context, factoryFunc func() (interface{
 		return nil
 	})
 
-	return entities, com.WaitAsync(g)
+	return entities, com.WaitAsync(ctx, g)
 }
 
 func (db *Database) periodicLog(ctx context.Context, query string, counter *com.Counter) periodic.Stopper {

@@ -8,14 +8,18 @@ import (
 // WaitAsync calls Wait() on the passed Waiter in a new goroutine and
 // sends the first non-nil error (if any) to the returned channel.
 // The returned channel is always closed when the Waiter is done.
-func WaitAsync(w Waiter) <-chan error {
+func WaitAsync(ctx context.Context, w Waiter) <-chan error {
 	errs := make(chan error, 1)
 
 	go func() {
 		defer close(errs)
 
 		if e := w.Wait(); e != nil {
-			errs <- e
+			select {
+			case errs <- e:
+			case <-ctx.Done():
+			}
+
 		}
 	}()
 
@@ -25,13 +29,14 @@ func WaitAsync(w Waiter) <-chan error {
 // ErrgroupReceive adds a goroutine to the specified group that
 // returns the first non-nil error (if any) from the specified channel.
 // If the channel is closed, it will return nil.
-func ErrgroupReceive(g *errgroup.Group, err <-chan error) {
+func ErrgroupReceive(ctx context.Context, g *errgroup.Group, err <-chan error) {
 	g.Go(func() error {
-		if e := <-err; e != nil {
+		select {
+		case e := <-err:
 			return e
+		case <-ctx.Done():
+			return ctx.Err()
 		}
-
-		return nil
 	})
 }
 
