@@ -99,6 +99,10 @@ func (i *Ingress) Obtain(k8s kmetav1.Object) {
 	}
 
 	for _, rules := range ingress.Spec.Rules {
+		if rules.IngressRuleValue.HTTP == nil {
+			continue
+		}
+
 		for _, ruleValue := range rules.IngressRuleValue.HTTP.Paths {
 			var pathType sql.NullString
 			if ruleValue.PathType != nil {
