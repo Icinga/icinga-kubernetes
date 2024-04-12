@@ -62,11 +62,13 @@ func (n *Node) Obtain(k8s kmetav1.Object) {
 
 	n.Id = types.Checksum(n.Namespace + "/" + n.Name)
 	n.PodCIDR = node.Spec.PodCIDR
-	_, cidr, err := net.ParseCIDR(n.PodCIDR)
-	if err != nil {
-		panic(errors.Wrapf(err, "failed to parse CIDR %s", n.PodCIDR))
+	if n.PodCIDR != "" {
+		_, cidr, err := net.ParseCIDR(n.PodCIDR)
+		if err != nil {
+			panic(errors.Wrapf(err, "failed to parse CIDR %s", n.PodCIDR))
+		}
+		n.NumIps = knet.RangeSize(cidr) - 2
 	}
-	n.NumIps = knet.RangeSize(cidr) - 2
 	n.Unschedulable = types.Bool{
 		Bool:  node.Spec.Unschedulable,
 		Valid: true,
