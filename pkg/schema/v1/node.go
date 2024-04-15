@@ -41,7 +41,7 @@ type NodeCondition struct {
 
 type NodeVolume struct {
 	NodeId     types.Binary
-	name       kcorev1.UniqueVolumeName
+	Name       kcorev1.UniqueVolumeName
 	DevicePath string
 	Mounted    types.Bool
 }
@@ -99,11 +99,12 @@ func (n *Node) Obtain(k8s kmetav1.Object) {
 	for _, name := range node.Status.VolumesInUse {
 		volumesMounted[name] = struct{}{}
 	}
+
 	for _, volume := range node.Status.VolumesAttached {
 		_, mounted := volumesMounted[volume.Name]
 		n.Volumes = append(n.Volumes, NodeVolume{
 			NodeId:     n.Id,
-			name:       volume.Name,
+			Name:       volume.Name,
 			DevicePath: volume.DevicePath,
 			Mounted: types.Bool{
 				Bool:  mounted,
