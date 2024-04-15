@@ -23,7 +23,7 @@ type PersistentVolume struct {
 	Phase            string
 	Reason           string
 	Message          string
-	Claim            PersistentVolumeClaimRef `db:"-"`
+	Claim            *PersistentVolumeClaimRef `db:"-"`
 }
 
 type PersistentVolumeClaimRef struct {
@@ -62,15 +62,21 @@ func (p *PersistentVolume) Obtain(k8s kmetav1.Object) {
 		panic(err)
 	}
 
-	p.Claim = PersistentVolumeClaimRef{
-		PersistentVolumeId: p.Id,
-		Kind:               persistentVolume.Spec.ClaimRef.Kind,
-		Name:               persistentVolume.Spec.ClaimRef.Name,
-		Uid:                persistentVolume.Spec.ClaimRef.UID,
+	if persistentVolume.Spec.ClaimRef != nil {
+		p.Claim = &PersistentVolumeClaimRef{
+			PersistentVolumeId: p.Id,
+			Kind:               persistentVolume.Spec.ClaimRef.Kind,
+			Name:               persistentVolume.Spec.ClaimRef.Name,
+			Uid:                persistentVolume.Spec.ClaimRef.UID,
+		}
 	}
 }
 
 func (p *PersistentVolume) Relations() []database.Relation {
+	if p.Claim == nil {
+		return []database.Relation{}
+	}
+
 	fk := database.WithForeignKey("persistent_volume_id")
 
 	return []database.Relation{
