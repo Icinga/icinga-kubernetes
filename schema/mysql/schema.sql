@@ -5,6 +5,7 @@ CREATE TABLE namespace (
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
   phase enum('active', 'terminating') COLLATE utf8mb4_unicode_ci NOT NULL,
+  yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
@@ -34,6 +35,7 @@ CREATE TABLE node (
   memory_capacity bigint unsigned NOT NULL,
   memory_allocatable bigint unsigned NOT NULL,
   pod_capacity int unsigned NOT NULL,
+  yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
@@ -75,6 +77,7 @@ CREATE TABLE pod (
   reason varchar(255) NULL DEFAULT NULL,
   message varchar(255) NULL DEFAULT NULL,
   qos enum('guaranteed', 'burstable', 'best_effort') COLLATE utf8mb4_unicode_ci NOT NULL,
+  yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
@@ -176,6 +179,7 @@ CREATE TABLE deployment (
   ready_replicas int unsigned NOT NULL,
   available_replicas int unsigned NOT NULL,
   unavailable_replicas int unsigned NOT NULL,
+  yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
@@ -211,6 +215,7 @@ CREATE TABLE service (
   allocate_load_balancer_node_ports enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
   load_balancer_class varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   internal_traffic_policy enum('cluster', 'local') COLLATE utf8mb4_unicode_ci NOT NULL,
+  yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
@@ -300,6 +305,7 @@ CREATE TABLE ingress (
   name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
+  yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
@@ -353,6 +359,7 @@ CREATE TABLE replica_set (
   fully_labeled_replicas int unsigned NOT NULL,
   ready_replicas int unsigned NOT NULL,
   available_replicas int unsigned NOT NULL,
+  yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
@@ -392,6 +399,7 @@ CREATE TABLE daemon_set (
   update_number_scheduled int unsigned NOT NULL,
   number_available int unsigned NOT NULL,
   number_unavailable int unsigned NOT NULL,
+  yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
@@ -425,6 +433,7 @@ CREATE TABLE stateful_set (
   current_replicas int unsigned NOT NULL,
   updated_replicas int unsigned NOT NULL,
   available_replicas int unsigned NOT NULL,
+  yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
@@ -447,6 +456,7 @@ CREATE TABLE secret (
   resource_version varchar(255) NOT NULL,
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   immutable enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
+  yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
@@ -458,6 +468,7 @@ CREATE TABLE config_map (
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
   immutable enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
+  yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
@@ -572,6 +583,7 @@ CREATE TABLE event (
   first_seen bigint unsigned NOT NULL,
   last_seen bigint unsigned NOT NULL,
   count int unsigned NOT NULL,
+  yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
@@ -603,6 +615,7 @@ CREATE TABLE pvc (
   volume_name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   volume_mode enum('block', 'filesystem') COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   storage_class varchar(255) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
@@ -634,6 +647,7 @@ CREATE TABLE persistent_volume (
   storage_class varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   volume_source longtext NOT NULL,
   reclaim_policy enum('recycle', 'delete', 'retain') COLLATE utf8mb4_unicode_ci NOT NULL,
+  yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
@@ -664,6 +678,7 @@ CREATE TABLE job (
   active int unsigned NOT NULL,
   succeeded int unsigned NOT NULL,
   failed int unsigned NOT NULL,
+  yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
@@ -701,6 +716,7 @@ CREATE TABLE cron_job (
   failed_jobs_history_limit int unsigned NOT NULL,
   last_schedule_time bigint unsigned NULL DEFAULT NULL,
   last_successful_time bigint unsigned NULL DEFAULT NULL,
+  yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;

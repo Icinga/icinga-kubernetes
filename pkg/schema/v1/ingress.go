@@ -6,10 +6,14 @@ import (
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	networkingv1 "k8s.io/api/networking/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kruntime "k8s.io/apimachinery/pkg/runtime"
+	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
+	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 )
 
 type Ingress struct {
 	Meta
+	Yaml                   string
 	IngressTls             []IngressTls             `db:"-"`
 	IngressBackendService  []IngressBackendService  `db:"-"`
 	IngressBackendResource []IngressBackendResource `db:"-"`
@@ -154,6 +158,12 @@ func (i *Ingress) Obtain(k8s kmetav1.Object) {
 		}
 
 	}
+
+	scheme := kruntime.NewScheme()
+	_ = networkingv1.AddToScheme(scheme)
+	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), networkingv1.SchemeGroupVersion)
+	output, _ := kruntime.Encode(codec, ingress)
+	i.Yaml = string(output)
 }
 
 func (i *Ingress) Relations() []database.Relation {

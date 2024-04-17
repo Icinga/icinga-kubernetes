@@ -4,6 +4,9 @@ import (
 	"github.com/icinga/icinga-go-library/types"
 	keventsv1 "k8s.io/api/events/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kruntime "k8s.io/apimachinery/pkg/runtime"
+	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
+	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 )
 
 type Event struct {
@@ -20,6 +23,7 @@ type Event struct {
 	FirstSeen           types.UnixMilli
 	LastSeen            types.UnixMilli
 	Count               int32
+	Yaml                string
 }
 
 func NewEvent() Resource {
@@ -51,6 +55,12 @@ func (e *Event) Obtain(k8s kmetav1.Object) {
 		e.LastSeen = types.UnixMilli(event.DeprecatedLastTimestamp.Time)
 	}
 	e.Count = event.DeprecatedCount
+
+	scheme := kruntime.NewScheme()
+	_ = keventsv1.AddToScheme(scheme)
+	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), keventsv1.SchemeGroupVersion)
+	output, _ := kruntime.Encode(codec, event)
+	e.Yaml = string(output)
 	// e.FirstSeen = types.UnixMilli(event.EventTime.Time)
 	// if event.Series != nil {
 	// 	e.LastSeen = types.UnixMilli(event.Series.LastObservedTime.Time)

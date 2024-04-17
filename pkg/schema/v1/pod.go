@@ -7,6 +7,9 @@ import (
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kruntime "k8s.io/apimachinery/pkg/runtime"
+	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
+	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	ktypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"strings"
@@ -30,6 +33,7 @@ type Pod struct {
 	Message           string
 	Qos               string
 	RestartPolicy     string
+	Yaml              string
 	Conditions        []PodCondition `db:"-"`
 	Containers        []Container    `db:"-"`
 	Owners            []PodOwner     `db:"-"`
@@ -38,6 +42,13 @@ type Pod struct {
 	Pvcs              []PodPvc       `db:"-"`
 	Volumes           []PodVolume    `db:"-"`
 	factory           *PodFactory
+}
+
+type PodYaml struct {
+	PodId      types.Binary
+	Kind       string
+	ApiVersion string
+	YamlData   string
 }
 
 type PodCondition struct {
@@ -265,6 +276,12 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 			})
 		}
 	}
+
+	scheme := kruntime.NewScheme()
+	_ = kcorev1.AddToScheme(scheme)
+	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kcorev1.SchemeGroupVersion)
+	output, _ := kruntime.Encode(codec, pod)
+	p.Yaml = string(output)
 }
 
 func (p *Pod) Relations() []database.Relation {
