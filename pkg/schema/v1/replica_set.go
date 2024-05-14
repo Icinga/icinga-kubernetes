@@ -1,10 +1,12 @@
 package v1
 
 import (
+	"fmt"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
 	kappsv1 "k8s.io/api/apps/v1"
+	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kruntime "k8s.io/apimachinery/pkg/runtime"
 	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
@@ -22,6 +24,8 @@ type ReplicaSet struct {
 	ReadyReplicas        int32
 	AvailableReplicas    int32
 	Yaml                 string
+	IcingaState          IcingaState
+	IcingaStateReason    string
 	Conditions           []ReplicaSetCondition `db:"-"`
 	Owners               []ReplicaSetOwner     `db:"-"`
 	Labels               []Label               `db:"-"`
@@ -70,6 +74,7 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object) {
 	r.FullyLabeledReplicas = replicaSet.Status.FullyLabeledReplicas
 	r.ReadyReplicas = replicaSet.Status.ReadyReplicas
 	r.AvailableReplicas = replicaSet.Status.AvailableReplicas
+	r.IcingaState, r.IcingaStateReason = r.getIcingaState()
 
 	for _, condition := range replicaSet.Status.Conditions {
 		r.Conditions = append(r.Conditions, ReplicaSetCondition{
@@ -124,6 +129,37 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object) {
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kappsv1.SchemeGroupVersion)
 	output, _ := kruntime.Encode(codec, replicaSet)
 	r.Yaml = string(output)
+}
+
+func (r *ReplicaSet) getIcingaState() (IcingaState, string) {
+	if r.DesiredReplicas < 1 {
+		reason := fmt.Sprintf("ReplicaSet %s/%s has an invalid desired replica count: %d", r.Namespace, r.Name, r.DesiredReplicas)
+
+		return Unknown, reason
+	}
+
+	for _, condition := range r.Conditions {
+		if condition.Type == string(kappsv1.ReplicaSetReplicaFailure) && condition.Status == string(kcorev1.ConditionTrue) {
+			reason := fmt.Sprintf("ReplicaSet %s/%s has a failure condition: %s", r.Namespace, r.Name, condition.Message)
+
+			return Critical, reason
+		}
+	}
+
+	switch {
+	case r.AvailableReplicas < 1:
+		reason := fmt.Sprintf("ReplicaSet %s/%s has no replica available from %d desired", r.Namespace, r.Name, r.DesiredReplicas)
+
+		return Critical, reason
+	case r.AvailableReplicas < r.DesiredReplicas:
+		reason := fmt.Sprintf("ReplicaSet %s/%s only has %d out of %d desired replicas available", r.Namespace, r.Name, r.AvailableReplicas, r.DesiredReplicas)
+
+		return Warning, reason
+	default:
+		reason := fmt.Sprintf("ReplicaSet %s/%s has all %d desired replicas available", r.Namespace, r.Name, r.DesiredReplicas)
+
+		return Ok, reason
+	}
 }
 
 func (r *ReplicaSet) Relations() []database.Relation {
