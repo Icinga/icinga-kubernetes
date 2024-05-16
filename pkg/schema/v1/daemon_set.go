@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"fmt"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
@@ -24,6 +25,8 @@ type DaemonSet struct {
 	NumberAvailable        int32
 	NumberUnavailable      int32
 	Yaml                   string
+	IcingaState            IcingaState
+	IcingaStateReason      string
 	Conditions             []DaemonSetCondition `db:"-"`
 	Labels                 []Label              `db:"-"`
 	DaemonSetLabels        []DaemonSetLabel     `db:"-"`
@@ -61,6 +64,7 @@ func (d *DaemonSet) Obtain(k8s kmetav1.Object) {
 	d.UpdateNumberScheduled = daemonSet.Status.UpdatedNumberScheduled
 	d.NumberAvailable = daemonSet.Status.NumberAvailable
 	d.NumberUnavailable = daemonSet.Status.NumberUnavailable
+	d.IcingaState, d.IcingaStateReason = d.getIcingaState()
 
 	for _, condition := range daemonSet.Status.Conditions {
 		d.Conditions = append(d.Conditions, DaemonSetCondition{
@@ -90,6 +94,29 @@ func (d *DaemonSet) Obtain(k8s kmetav1.Object) {
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kappsv1.SchemeGroupVersion)
 	output, _ := kruntime.Encode(codec, daemonSet)
 	d.Yaml = string(output)
+}
+
+func (d *DaemonSet) getIcingaState() (IcingaState, string) {
+	if d.DesiredNumberScheduled < 1 {
+		reason := fmt.Sprintf("DaemonSet %s/%s has an invalid desired node count: %d", d.Namespace, d.Name, d.DesiredNumberScheduled)
+
+		return Unknown, reason
+	}
+
+	switch {
+	case d.NumberAvailable == 0:
+		reason := fmt.Sprintf("DaemonSet %s/%s does not have a single pod available which should run on %d desired nodes", d.Namespace, d.Name, d.DesiredNumberScheduled)
+
+		return Critical, reason
+	case d.NumberAvailable < d.DesiredNumberScheduled:
+		reason := fmt.Sprintf("DaemonSet %s/%s pods are only available on %d out of %d desired nodes", d.Namespace, d.Name, d.NumberAvailable, d.DesiredNumberScheduled)
+
+		return Warning, reason
+	default:
+		reason := fmt.Sprintf("DaemonSet %s/%s has pods available on all %d desired nodes", d.Namespace, d.Name, d.DesiredNumberScheduled)
+
+		return Ok, reason
+	}
 }
 
 func (d *DaemonSet) Relations() []database.Relation {
