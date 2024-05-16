@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"fmt"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
@@ -28,6 +29,8 @@ type StatefulSet struct {
 	UpdatedReplicas                                 int32
 	AvailableReplicas                               int32
 	Yaml                                            string
+	IcingaState                                     IcingaState
+	IcingaStateReason                               string
 	Conditions                                      []StatefulSetCondition `db:"-"`
 	Labels                                          []Label                `db:"-"`
 	StatefulSetLabels                               []StatefulSetLabel     `db:"-"`
@@ -85,6 +88,7 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object) {
 	s.CurrentReplicas = statefulSet.Status.CurrentReplicas
 	s.UpdatedReplicas = statefulSet.Status.UpdatedReplicas
 	s.AvailableReplicas = statefulSet.Status.AvailableReplicas
+	s.IcingaState, s.IcingaStateReason = s.getIcingaState()
 
 	for _, condition := range statefulSet.Status.Conditions {
 		s.Conditions = append(s.Conditions, StatefulSetCondition{
@@ -115,6 +119,23 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object) {
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kappsv1.SchemeGroupVersion)
 	output, _ := kruntime.Encode(codec, statefulSet)
 	s.Yaml = string(output)
+}
+
+func (s *StatefulSet) getIcingaState() (IcingaState, string) {
+	switch {
+	case s.AvailableReplicas == 0:
+		reason := fmt.Sprintf("StatefulSet %s/%s has no replica available from %d desired", s.Namespace, s.Name, s.DesiredReplicas)
+
+		return Critical, reason
+	case s.AvailableReplicas < s.DesiredReplicas:
+		reason := fmt.Sprintf("StatefulSet %s/%s only has %d out of %d desired replicas available", s.Namespace, s.Name, s.AvailableReplicas, s.DesiredReplicas)
+
+		return Warning, reason
+	default:
+		reason := fmt.Sprintf("StatefulSet %s/%s has all %d desired replicas available", s.Namespace, s.Name, s.DesiredReplicas)
+
+		return Ok, reason
+	}
 }
 
 func (s *StatefulSet) Relations() []database.Relation {
