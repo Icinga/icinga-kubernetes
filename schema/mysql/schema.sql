@@ -36,6 +36,17 @@ CREATE TABLE node (
   memory_allocatable bigint unsigned NOT NULL,
   pod_capacity int unsigned NOT NULL,
   yaml mediumblob DEFAULT NULL,
+  roles varchar(255) NOT NULL,
+  machine_id varchar(255) NOT NULL,
+  system_uuid varchar(255) NOT NULL,
+  boot_id varchar(255) NOT NULL,
+  kernel_version varchar(255) NOT NULL,
+  os_image varchar(255) NOT NULL,
+  operating_system varchar(255) NOT NULL,
+  architecture varchar(255) NOT NULL,
+  container_runtime_version varchar(255) NOT NULL,
+  kubelet_version varchar(255) NOT NULL,
+  kube_proxy_version varchar(255) NOT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
