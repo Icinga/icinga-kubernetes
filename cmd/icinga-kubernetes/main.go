@@ -12,28 +12,24 @@ import (
 	"github.com/icinga/icinga-kubernetes/pkg/sync"
 	"github.com/okzk/sdnotify"
 	"github.com/pkg/errors"
+	promapi "github.com/prometheus/client_golang/api"
+	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"golang.org/x/sync/errgroup"
 	kinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	kclientcmd "k8s.io/client-go/tools/clientcmd"
-	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
 func main() {
 	kconfig, err := kclientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		kclientcmd.NewDefaultClientConfigLoadingRules(), &kclientcmd.ConfigOverrides{}).ClientConfig()
 	if err != nil {
-		logging.Fatal(errors.Wrap(err, "can't configure Kubernetes client"))
+		logging.Fatal(errors.Wrap(err, "can't configure Kubernetes promClient"))
 	}
-
+	
 	k, err := kubernetes.NewForConfig(kconfig)
 	if err != nil {
-		logging.Fatal(errors.Wrap(err, "can't create Kubernetes client"))
-	}
-
-	mk, err := metricsv.NewForConfig(kconfig)
-	if err != nil {
-		logging.Fatal(errors.Wrap(err, "can't create Kubernetes metrics client"))
+		logging.Fatal(errors.Wrap(err, "can't create Kubernetes promClient"))
 	}
 
 	flags, err := config.ParseFlags[internal.Flags]()
@@ -45,6 +41,13 @@ func main() {
 	if err != nil {
 		logging.Fatal(errors.Wrap(err, "can't create configuration"))
 	}
+
+	promClient, err := promapi.NewClient(promapi.Config{Address: "http://localhost:9090"})
+	if err != nil {
+		logging.Fatal(errors.Wrap(err, "error creating promClient"))
+	}
+
+	promApiClient := promv1.NewAPI(promClient)
 
 	logs, err := logging.NewLoggingFromConfig("Icinga Kubernetes", &cfg.Logging)
 	if err != nil {
@@ -105,7 +108,7 @@ func main() {
 	forwardUpsertPodsToLogChannel := make(chan contracts.KUpsert)
 	forwardDeletePodsToLogChannel := make(chan contracts.KDelete)
 
-	forwardDeletePodsToMetricChannel := make(chan contracts.KDelete)
+	//forwardDeletePodsToMetricChannel := make(chan contracts.KDelete)
 
 	g.Go(func() error {
 
@@ -135,27 +138,12 @@ func main() {
 		return logSync.Run(ctx)
 	})
 
-	// sync pod and container metrics
-	metricsSync := sync.NewMetricSync(mk, db, logs.GetChildLogger("Metrics"))
+	// sync prometheus metrics
+	promMetricSync := sync.NewPromMetricSync(promApiClient, db, logs.GetChildLogger("PromMetrics"))
 
-	g.Go(func() error {
-		return metricsSync.Run(ctx)
-	})
+	g.Go(func() error { return promMetricSync.Run(ctx) })
 
-	g.Go(func() error {
-		return metricsSync.Clean(ctx, forwardDeletePodsToMetricChannel)
-	})
-
-	// sync node metrics
-	nodeMetricSync := sync.NewNodeMetricSync(mk, db, logs.GetChildLogger("NodeMetrics"))
-
-	g.Go(func() error {
-		return nodeMetricSync.Run(ctx)
-	})
-
-	g.Go(func() error {
-		return nodeMetricSync.Clean(ctx, forwardDeleteNodesToMetricChannel)
-	})
+	//g.Go(func() error {return promMetricSync.Clean(ctx, forwardDeletePodsToMetricChannel)})
 
 	if err := g.Wait(); err != nil {
 		logging.Fatal(errors.Wrap(err, "can't sync"))

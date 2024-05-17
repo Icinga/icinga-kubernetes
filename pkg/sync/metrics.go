@@ -6,263 +6,642 @@ import (
 	"fmt"
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/logging"
-	"github.com/icinga/icinga-kubernetes/pkg/contracts"
 	"github.com/icinga/icinga-kubernetes/pkg/schema"
 	"github.com/pkg/errors"
+	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
+	"github.com/prometheus/common/model"
 	"golang.org/x/sync/errgroup"
-	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"time"
-
-	//kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
-// MetricSync syncs container and pod metrics to the database
-type MetricSync struct {
-	metricsClientset *metricsv.Clientset
-	db               *database.DB
-	logger           *logging.Logger
+type PromQuery struct {
+	metricGroup string
+	query       string
+	nameLabel   model.LabelName
 }
 
-// NewMetricSync creates new MetricSync initialized with metricsClientset, database and logger
-func NewMetricSync(metricsClientset *metricsv.Clientset, db *database.DB, logger *logging.Logger) *MetricSync {
-	return &MetricSync{
-		metricsClientset: metricsClientset,
-		db:               db,
-		logger:           logger,
+type PromMetricSync struct {
+	promApiClient v1.API
+	db            *database.DB
+	logger        *logging.Logger
+}
+
+func NewPromMetricSync(promApiClient v1.API, db *database.DB, logger *logging.Logger) *PromMetricSync {
+	return &PromMetricSync{
+		promApiClient: promApiClient,
+		db:            db,
+		logger:        logger,
 	}
 }
 
-// podMetricUpsertStmt returns database upsert statement to upsert pod metrics
-func (ms *MetricSync) podMetricUpsertStmt() string {
+// promMetricClusterUpsertStmt returns database upsert statement to upsert cluster metrics
+func (pms *PromMetricSync) promMetricClusterUpsertStmt() string {
 	return fmt.Sprintf(
-		"INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s",
-		"pod_metric",
-		"reference_id, timestamp, cpu, memory, storage",
-		":reference_id, :timestamp, :cpu, :memory, :storage",
-		"timestamp=VALUES(timestamp), cpu=VALUES(cpu), memory=VALUES(memory), storage=VALUES(storage)",
+		`INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s`,
+		`prometheus_cluster_metric`,
+		"timestamp, `group`, name, value",
+		`:timestamp, :group, :name, :value`,
+		`value=VALUES(value)`,
 	)
 }
 
-// containerMetricUpsertStmt returns database upsert statement to upsert container metrics
-func (ms *MetricSync) containerMetricUpsertStmt() string {
+// promMetricNodeUpsertStmt returns database upsert statement to upsert node metrics
+func (pms *PromMetricSync) promMetricNodeUpsertStmt() string {
 	return fmt.Sprintf(
-		"INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s",
-		"container_metric",
-		"container_reference_id, pod_reference_id, timestamp, cpu, memory, storage",
-		":container_reference_id, :pod_reference_id, :timestamp, :cpu, :memory, :storage",
-		"timestamp=VALUES(timestamp), cpu=VALUES(cpu), memory=VALUES(memory), storage=VALUES(storage)",
+		`INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s`,
+		`prometheus_node_metric`,
+		"node_id, timestamp, `group`, name, value",
+		`:node_id, :timestamp, :group, :name, :value`,
+		`value=VALUES(value)`,
 	)
 }
 
-// Run starts syncing the metrics to the database. Therefore, it gets a list of all pods
-// and the belonging containers together with their metrics from the API every minute.
-// The pod metrics are the container metrics summed up by pod.
-func (ms *MetricSync) Run(ctx context.Context) error {
+// promMetricPodUpsertStmt returns database upsert statement to upsert pod metrics
+func (pms *PromMetricSync) promMetricPodUpsertStmt() string {
+	return fmt.Sprintf(
+		`INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s`,
+		`prometheus_pod_metric`,
+		"pod_id, timestamp, `group`, name, value",
+		`:pod_id, :timestamp, :group, :name, :value`,
+		`value=VALUES(value)`,
+	)
+}
 
-	ms.logger.Info("Starting sync")
+// promMetricContainerUpsertStmt returns database upsert statement to upsert container metrics
+func (pms *PromMetricSync) promMetricContainerUpsertStmt() string {
+	return fmt.Sprintf(
+		`INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s`,
+		`prometheus_container_metric`,
+		"container_id, timestamp, `group`, name, value",
+		`:container_id, :timestamp, :group, :name, :value`,
+		`value=VALUES(value)`,
+	)
+}
 
+// Run starts syncing the prometheus metrics to the database.
+// Therefore, it gets a list of the metric queries.
+func (pms *PromMetricSync) Run(ctx context.Context) error {
 	g, ctx := errgroup.WithContext(ctx)
 
+	upsertClusterMetrics := make(chan database.Entity)
+	upsertNodeMetrics := make(chan database.Entity)
 	upsertPodMetrics := make(chan database.Entity)
 	upsertContainerMetrics := make(chan database.Entity)
 
-	g.Go(func() error {
-		defer close(upsertPodMetrics)
-		defer close(upsertContainerMetrics)
+	promQueriesCluster := []PromQuery{
+		{
+			"node.count",
+			`count(group by (node) (kube_node_info))`,
+			"",
+		},
+		{
+			"namespace.count",
+			`count(kube_namespace_created)`,
+			"",
+		},
+		{
+			"pod.running",
+			`sum(kube_pod_status_phase{phase="Running"})`,
+			"",
+		},
+		{
+			"pod.pending",
+			`sum(kube_pod_status_phase{phase="Pending"})`,
+			"",
+		},
+		{
+			"pod.failed",
+			`sum(kube_pod_status_phase{phase="Failed"})`,
+			"",
+		},
+		{
+			"pod.succeeded",
+			`sum(kube_pod_status_phase{phase="Succeeded"})`,
+			"",
+		},
+		{
+			"cpu.usage",
+			`avg(sum by (instance, cpu) (rate(node_cpu_seconds_total{mode!~"idle|iowait|steal"}[1m])))`,
+			"",
+		},
+		{
+			"memory.usage",
+			`sum(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / sum(node_memory_MemTotal_bytes)`,
+			"",
+		},
+		{
+			"qos_by_class",
+			`sum by (qos_class) (kube_pod_status_qos_class)`,
+			"",
+		},
+		{
+			"network.received.bytes",
+			`sum by (device) (rate(node_network_receive_bytes_total{device!~"(veth|azv|lxc).*"}[2m]))`,
+			"",
+		},
+		{
+			"network.transmitted.bytes",
+			`- sum by (device) (rate(node_network_transmit_bytes_total{device!~"(veth|azv|lxc).*"}[2m]))`,
+			"",
+		},
+		{
+			"network.received.bytes.bydevice",
+			`sum by (device) (rate(node_network_receive_bytes_total{device!~"(veth|azv|lxc).*"}[2m]))`,
+			"device",
+		},
+	}
 
-		for {
-			metrics, err := ms.metricsClientset.MetricsV1beta1().PodMetricses(kmetav1.NamespaceAll).List(ctx, kmetav1.ListOptions{})
-			if err != nil {
-				return errors.Wrap(err, "error getting metrics from api")
-			}
+	promQueriesNode := []PromQuery{
+		{
+			"cpu.usage",
+			`avg by (instance) (sum by (instance, cpu) (rate(node_cpu_seconds_total{mode!~"idle|iowait|steal"}[1m])))`,
+			"",
+		},
+		{
+			"cpu.request",
+			`sum by (node) (kube_pod_container_resource_requests{resource="cpu"})`,
+			"",
+		},
+		{
+			"cpu.request.percentage",
+			`sum by (node) (kube_pod_container_resource_requests{resource="cpu"}) / on(node) group_left() (sum by (node) (machine_cpu_cores))`,
+			"",
+		},
+		{
+			"cpu.limit",
+			`sum by (node) (kube_pod_container_resource_limits{resource="cpu"})`,
+			"",
+		},
+		{
+			"cpu.limit.percentage",
+			`sum by (node) (kube_pod_container_resource_limits{resource="cpu"}) / on(node) group_left() (sum by (node) (machine_cpu_cores))`,
+			"",
+		},
+		{
+			"memory.usage",
+			`sum by (instance) (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / sum by (instance) (node_memory_MemTotal_bytes)`,
+			"",
+		},
+		{
+			"memory.request",
+			`sum by (node) (kube_pod_container_resource_requests{resource="memory"})`,
+			"",
+		},
+		{
+			"memory.request.percentage",
+			`sum by (node) (kube_pod_container_resource_requests{resource="memory"}) / on(node) group_left() (sum by (node) (machine_memory_bytes))`,
+			"",
+		},
+		{
+			"memory.limit",
+			`sum by (node) (kube_pod_container_resource_limits{resource="memory"})`,
+			"",
+		},
+		{
+			"memory.limit.percentage",
+			`sum by (node) (kube_pod_container_resource_limits{resource="memory"}) / on(node) group_left() (sum by (node) (machine_memory_bytes))`,
+			"",
+		},
+		{
+			"network.received.bytes",
+			`sum by (instance) (rate(node_network_receive_bytes_total[2m]))`,
+			"",
+		},
+		{
+			"network.transmitted.bytes",
+			`- sum by (instance) (rate(node_network_transmit_bytes_total[2m]))`,
+			"",
+		},
+		{
+			"filesystem.usage",
+			`sum by (instance, mountpoint) (1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes))`,
+			"mountpoint",
+		},
+	}
 
-			for _, pod := range metrics.Items {
+	promQueriesPod := []PromQuery{
+		{
+			"cpu.usage",
+			`avg by (namespace, pod) (sum by (namespace, pod, cpu) (rate(node_cpu_seconds_total{mode!~"idle|iowait|steal"}[1m])))`,
+			"",
+		},
+		{
+			"memory.usage",
+			`sum by (namespace, pod) ((node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes))`,
+			"",
+		},
+		{
+			"cpu.usage.cores",
+			`sum by (namespace, pod) (rate(container_cpu_usage_seconds_total[1m]))`,
+			"",
+		},
+		{
+			"memory.usage.bytes",
+			`sum by (namespace, pod) (container_memory_usage_bytes)`,
+			"",
+		},
+		{
+			"cpu.request",
+			`sum by (node, namespace, pod) (kube_pod_container_resource_requests{resource="cpu"})`,
+			"",
+		},
+		{
+			"cpu.request.percentage",
+			`sum by (node, namespace, pod) (kube_pod_container_resource_requests{resource="cpu"}) / on(node) group_left() (sum by (node) (machine_cpu_cores))`,
+			"",
+		},
+		{
+			"cpu.limit",
+			`sum by (node, namespace, pod) (kube_pod_container_resource_limits{resource="cpu"})`,
+			"",
+		},
+		{
+			"cpu.limit.percentage",
+			`sum by (node, namespace, pod) (kube_pod_container_resource_limits{resource="cpu"}) / on(node) group_left() (sum by (node) (machine_cpu_cores))`,
+			"",
+		},
+		{
+			"memory.request",
+			`sum by (node, namespace, pod) (kube_pod_container_resource_requests{resource="memory"})`,
+			"",
+		},
+		{
+			"memory.request.percentage",
+			`sum by (node, namespace, pod) (kube_pod_container_resource_requests{resource="memory"}) / on(node) group_left() (sum by (node) (machine_memory_bytes))`,
+			"",
+		},
+		{
+			"memory.limit",
+			`sum by (node, namespace, pod) (kube_pod_container_resource_limits{resource="memory"})`,
+			"",
+		},
+		{
+			"memory.limit.percentage",
+			`sum by (node, namespace, pod) (kube_pod_container_resource_limits{resource="memory"}) / on(node) group_left() (sum by (node) (machine_memory_bytes))`,
+			"",
+		},
+	}
 
-				podId := sha1.Sum([]byte(pod.Namespace + "/" + pod.Name))
+	promQueriesContainer := []PromQuery{
+		{
+			"cpu.request",
+			`sum by (node, namespace, pod, container) (kube_pod_container_resource_requests{resource="cpu"})`,
+			"",
+		},
+		{
+			"cpu.request.percentage",
+			`sum by (node, namespace, pod, container) (kube_pod_container_resource_requests{resource="cpu"}) / on(node) group_left() (sum by (node) (machine_cpu_cores))`,
+			"",
+		},
+		{
+			"cpu.limit",
+			`sum by (node, namespace, pod, container) (kube_pod_container_resource_limits{resource="cpu"})`,
+			"",
+		},
+		{
+			"cpu.limit.percentage",
+			`sum by (node, namespace, pod, container) (kube_pod_container_resource_limits{resource="cpu"}) / on(node) group_left() (sum by (node) (machine_cpu_cores))`,
+			"",
+		},
+		{
+			"memory.request",
+			`sum by (node, namespace, pod, container) (kube_pod_container_resource_requests{resource="memory"})`,
+			"",
+		},
+		{
+			"memory.request.percentage",
+			`sum by (node, namespace, pod, container) (kube_pod_container_resource_requests{resource="memory"}) / on(node) group_left() (sum by (node) (machine_memory_bytes))`,
+			"",
+		},
+		{
+			"memory.limit",
+			`sum by (node, namespace, pod, container) (kube_pod_container_resource_limits{resource="memory"})`,
+			"",
+		},
+		{
+			"memory.limit.percentage",
+			`sum by (node, namespace, pod, container) (kube_pod_container_resource_limits{resource="memory"}) / on(node) group_left() (sum by (node) (machine_memory_bytes))`,
+			"",
+		},
+	}
 
-				newPodMetric := &schema.PodMetric{
-					ReferenceId: podId[:],
-					Timestamp:   pod.Timestamp.UnixMilli(),
+	//promv1.Range{
+	//	Start: time.Now().Add(time.Duration(-2) * time.Hour),
+	//	End:   time.Now(),
+	//	Step:  time.Second * 10,
+	//},
+
+	for _, promQuery := range promQueriesCluster {
+		promQuery := promQuery
+
+		g.Go(func() error {
+			for {
+				result, warnings, err := pms.promApiClient.Query(
+					ctx,
+					promQuery.query,
+					time.Time{},
+					//promQuery.queryRange,
+				)
+				if err != nil {
+					return errors.Wrap(err, "error querying Prometheus")
+				}
+				if len(warnings) > 0 {
+					fmt.Printf("Warnings: %v\n", warnings)
+				}
+				if result == nil {
+					fmt.Println("No results found")
+					continue
 				}
 
-				for _, container := range pod.Containers {
+				for _, res := range result.(model.Vector) {
 
-					containerId := sha1.Sum([]byte(pod.Namespace + "/" + pod.Name + "/" + container.Name))
+					name := ""
 
-					newContainerMetric := &schema.ContainerMetric{
-						ContainerReferenceId: containerId[:],
-						PodReferenceId:       podId[:],
-						Timestamp:            pod.Timestamp.UnixMilli(),
-						Cpu:                  container.Usage.Cpu().MilliValue(),
-						Memory:               container.Usage.Memory().Value(),
-						Storage:              container.Usage.Storage().Value(),
+					if promQuery.nameLabel != "" {
+						name = string(res.Metric[promQuery.nameLabel])
 					}
 
-					upsertContainerMetrics <- newContainerMetric
+					newClusterMetric := &schema.PrometheusClusterMetric{
+						Timestamp: (res.Timestamp.UnixNano() - res.Timestamp.UnixNano()%(60*1000000000)) / 1000000,
+						Group:     promQuery.metricGroup,
+						Name:      name,
+						Value:     float64(res.Value),
+					}
 
-					newPodMetric.Cpu += container.Usage.Cpu().MilliValue()
-					newPodMetric.Memory += container.Usage.Memory().Value()
-					newPodMetric.Storage += container.Usage.Storage().Value()
+					select {
+					case upsertClusterMetrics <- newClusterMetric:
+					case <-ctx.Done():
+						return ctx.Err()
+					}
 				}
 
-				upsertPodMetrics <- newPodMetric
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(time.Second * 55):
+				}
 			}
+		})
+	}
 
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(time.Minute):
+	for _, promQuery := range promQueriesNode {
+		promQuery := promQuery
+
+		g.Go(func() error {
+			for {
+				result, warnings, err := pms.promApiClient.Query(
+					ctx,
+					promQuery.query,
+					time.Time{},
+					//promQuery.queryRange,
+				)
+				if err != nil {
+					return errors.Wrap(err, "error querying Prometheus")
+				}
+				if len(warnings) > 0 {
+					fmt.Printf("Warnings: %v\n", warnings)
+				}
+				if result == nil {
+					fmt.Println("No results found")
+					continue
+				}
+
+				for _, res := range result.(model.Vector) {
+					nodeName := res.Metric["node"]
+
+					if nodeName == "" {
+						nodeName = res.Metric["instance"]
+					}
+
+					nodeId := sha1.Sum([]byte(nodeName))
+
+					name := ""
+
+					if promQuery.nameLabel != "" {
+						name = string(res.Metric[promQuery.nameLabel])
+					}
+
+					newNodeMetric := &schema.PrometheusNodeMetric{
+						NodeId:    nodeId[:],
+						Timestamp: (res.Timestamp.UnixNano() - res.Timestamp.UnixNano()%(60*1000000000)) / 1000000,
+						Group:     promQuery.metricGroup,
+						Name:      name,
+						Value:     float64(res.Value),
+					}
+
+					select {
+					case upsertNodeMetrics <- newNodeMetric:
+					case <-ctx.Done():
+						return ctx.Err()
+					}
+				}
+
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(time.Second * 55):
+				}
 			}
-		}
+		})
+	}
+
+	for _, promQuery := range promQueriesPod {
+		promQuery := promQuery
+
+		g.Go(func() error {
+			for {
+				result, warnings, err := pms.promApiClient.Query(
+					ctx,
+					promQuery.query,
+					time.Time{},
+					//promQuery.queryRange,
+				)
+				if err != nil {
+					return errors.Wrap(err, "error querying Prometheus")
+				}
+				if len(warnings) > 0 {
+					fmt.Printf("Warnings: %v\n", warnings)
+				}
+				if result == nil {
+					fmt.Println("No results found")
+					continue
+				}
+
+				for _, res := range result.(model.Vector) {
+
+					podId := sha1.Sum([]byte(res.Metric["namespace"] + "/" + res.Metric["pod"]))
+
+					name := ""
+
+					if promQuery.nameLabel != "" {
+						name = string(res.Metric[promQuery.nameLabel])
+					}
+
+					newPodMetric := &schema.PrometheusPodMetric{
+						PodId:     podId[:],
+						Timestamp: (res.Timestamp.UnixNano() - res.Timestamp.UnixNano()%(60*1000000000)) / 1000000,
+						Group:     promQuery.metricGroup,
+						Name:      name,
+						Value:     float64(res.Value),
+					}
+
+					select {
+					case upsertPodMetrics <- newPodMetric:
+					case <-ctx.Done():
+						return ctx.Err()
+					}
+				}
+
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(time.Second * 55):
+				}
+			}
+		})
+	}
+
+	for _, promQuery := range promQueriesContainer {
+		promQuery := promQuery
+
+		g.Go(func() error {
+			for {
+				result, warnings, err := pms.promApiClient.Query(
+					ctx,
+					promQuery.query,
+					time.Time{},
+					//promQuery.queryRange,
+				)
+				if err != nil {
+					return errors.Wrap(err, "error querying Prometheus")
+				}
+				if len(warnings) > 0 {
+					fmt.Printf("Warnings: %v\n", warnings)
+				}
+				if result == nil {
+					fmt.Println("No results found")
+					continue
+				}
+
+				for _, res := range result.(model.Vector) {
+					containerId := sha1.Sum([]byte(res.Metric["namespace"] + "/" + res.Metric["pod"] + "/" + res.Metric["container"]))
+
+					name := ""
+
+					if promQuery.nameLabel != "" {
+						name = string(res.Metric[promQuery.nameLabel])
+					}
+
+					newContainerMetric := &schema.PrometheusContainerMetric{
+						ContainerId: containerId[:],
+						Timestamp:   (res.Timestamp.UnixNano() - res.Timestamp.UnixNano()%(60*1000000000)) / 1000000,
+						Group:       promQuery.metricGroup,
+						Name:        name,
+						Value:       float64(res.Value),
+					}
+
+					select {
+					case upsertContainerMetrics <- newContainerMetric:
+					case <-ctx.Done():
+						return ctx.Err()
+					}
+				}
+
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(time.Second * 55):
+				}
+			}
+		})
+	}
+
+	g.Go(func() error {
+		return database.NewUpsert(pms.db, database.WithStatement(pms.promMetricClusterUpsertStmt(), 3)).Stream(ctx, upsertClusterMetrics)
 	})
 
 	g.Go(func() error {
-		return database.NewUpsert(ms.db).WithStatement(ms.podMetricUpsertStmt(), 5).Stream(ctx, upsertPodMetrics)
+		return database.NewUpsert(pms.db, database.WithStatement(pms.promMetricNodeUpsertStmt(), 4)).Stream(ctx, upsertNodeMetrics)
 	})
 
 	g.Go(func() error {
-		return database.NewUpsert(ms.db).WithStatement(ms.containerMetricUpsertStmt(), 6).Stream(ctx, upsertContainerMetrics)
+		return database.NewUpsert(pms.db, database.WithStatement(pms.promMetricPodUpsertStmt(), 4)).Stream(ctx, upsertPodMetrics)
+	})
+
+	g.Go(func() error {
+		return database.NewUpsert(pms.db, database.WithStatement(pms.promMetricContainerUpsertStmt(), 4)).Stream(ctx, upsertContainerMetrics)
 	})
 
 	return g.Wait()
 }
 
 // Clean deletes metrics from the database if the belonging pod is deleted
-func (ms *MetricSync) Clean(ctx context.Context, deleteChannel <-chan contracts.KDelete) error {
-
-	g, ctx := errgroup.WithContext(ctx)
-
-	deletesPod := make(chan any)
-	deletesContainer := make(chan any)
-
-	g.Go(func() error {
-		defer close(deletesPod)
-		defer close(deletesContainer)
-
-		for {
-			select {
-			case kdelete, more := <-deleteChannel:
-				if !more {
-					return nil
-				}
-
-				deletesPod <- kdelete.ID()
-				deletesContainer <- kdelete.ID()
-
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		}
-	})
-
-	g.Go(func() error {
-		return database.NewDelete(ms.db).ByColumn("reference_id").Stream(ctx, &schema.PodMetric{}, deletesPod)
-	})
-
-	g.Go(func() error {
-		return database.NewDelete(ms.db).ByColumn("pod_reference_id").Stream(ctx, &schema.ContainerMetric{}, deletesContainer)
-	})
-
-	return g.Wait()
-}
-
-// NodeMetricSync syncs node metrics to the database
-type NodeMetricSync struct {
-	metricsClientset *metricsv.Clientset
-	db               *database.DB
-	logger           *logging.Logger
-}
-
-// NewNodeMetricSync creates new NodeMetricSync initialized with metricsClientset, database and logger
-func NewNodeMetricSync(metricClientset *metricsv.Clientset, db *database.DB, logger *logging.Logger) *NodeMetricSync {
-	return &NodeMetricSync{
-		metricsClientset: metricClientset,
-		db:               db,
-		logger:           logger,
-	}
-}
-
-// nodeMetricUpsertStmt returns database upsert statement to upsert node metrics
-func (nms *NodeMetricSync) nodeMetricUpsertStmt() string {
-	return fmt.Sprintf(
-		"INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s",
-		"node_metric",
-		"node_id, timestamp, cpu, memory, storage",
-		":node_id, :timestamp, :cpu, :memory, :storage",
-		"timestamp=VALUES(timestamp), cpu=VALUES(cpu), memory=VALUES(memory), storage=VALUES(storage)",
-	)
-}
-
-// Run starts syncing the metrics to the database. Therefore, it gets a list of all nodes
-// and the belonging metrics
-func (nms *NodeMetricSync) Run(ctx context.Context) error {
-
-	g, ctx := errgroup.WithContext(ctx)
-
-	upsertNodeMetrics := make(chan database.Entity)
-
-	g.Go(func() error {
-
-		defer close(upsertNodeMetrics)
-
-		for {
-			metrics, err := nms.metricsClientset.MetricsV1beta1().NodeMetricses().List(ctx, kmetav1.ListOptions{})
-			if err != nil {
-				return errors.Wrap(err, "error getting node metrics from api")
-			}
-
-			for _, node := range metrics.Items {
-				nodeId := sha1.Sum([]byte(node.Name))
-
-				newNodeMetric := &schema.NodeMetric{
-					NodeId:    nodeId[:],
-					Timestamp: node.Timestamp.UnixMilli(),
-					Cpu:       node.Usage.Cpu().MilliValue(),
-					Memory:    node.Usage.Memory().Value(),
-					Storage:   node.Usage.Storage().Value(),
-				}
-
-				upsertNodeMetrics <- newNodeMetric
-			}
-		}
-	})
-
-	g.Go(func() error {
-		return database.NewUpsert(nms.db).WithStatement(nms.nodeMetricUpsertStmt(), 5).Stream(ctx, upsertNodeMetrics)
-	})
-
-	return g.Wait()
-}
-
+//func (ms *MetricSync) Clean(ctx context.Context, deleteChannel <-chan contracts.KDelete) error {
+//
+//	g, ctx := errgroup.WithContext(ctx)
+//
+//	deletesPod := make(chan any)
+//	deletesContainer := make(chan any)
+//
+//	g.Go(func() error {
+//		defer close(deletesPod)
+//		defer close(deletesContainer)
+//
+//		for {
+//			select {
+//			case kdelete, more := <-deleteChannel:
+//				if !more {
+//					return nil
+//				}
+//
+//				deletesPod <- kdelete.ID()
+//				deletesContainer <- kdelete.ID()
+//
+//			case <-ctx.Done():
+//				return ctx.Err()
+//			}
+//		}
+//	})
+//
+//	g.Go(func() error {
+//		return database.NewDelete(ms.db, database.ByColumn("reference_id")).Stream(ctx, &schema.PodMetric{}, deletesPod)
+//	})
+//
+//	g.Go(func() error {
+//		return database.NewDelete(ms.db, database.ByColumn("pod_reference_id")).Stream(ctx, &schema.ContainerMetric{}, deletesContainer)
+//	})
+//
+//	return g.Wait()
+//}
+//
 // Clean deletes metrics from the database if the belonging node is deleted
-func (nms *NodeMetricSync) Clean(ctx context.Context, deleteChannel <-chan contracts.KDelete) error {
-
-	g, ctx := errgroup.WithContext(ctx)
-
-	deletes := make(chan any)
-
-	g.Go(func() error {
-		defer close(deletes)
-
-		for {
-			select {
-			case kdelete, more := <-deleteChannel:
-				if !more {
-					return nil
-				}
-
-				deletes <- kdelete.ID()
-
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		}
-	})
-
-	g.Go(func() error {
-		return database.NewDelete(nms.db).ByColumn("node_id").Stream(ctx, &schema.NodeMetric{}, deletes)
-	})
-
-	return g.Wait()
-}
+//func (nms *NodeMetricSync) Clean(ctx context.Context, deleteChannel <-chan contracts.KDelete) error {
+//
+//	g, ctx := errgroup.WithContext(ctx)
+//
+//	deletes := make(chan any)
+//
+//	g.Go(func() error {
+//		defer close(deletes)
+//
+//		for {
+//			select {
+//			case kdelete, more := <-deleteChannel:
+//				if !more {
+//					return nil
+//				}
+//
+//				deletes <- kdelete.ID()
+//
+//			case <-ctx.Done():
+//				return ctx.Err()
+//			}
+//		}
+//	})
+//
+//	g.Go(func() error {
+//		return database.NewDelete(nms.db, database.ByColumn("node_id")).Stream(ctx, &schema.NodeMetric{}, deletes)
+//	})
+//
+//	return g.Wait()
+//}

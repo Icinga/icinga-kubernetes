@@ -50,42 +50,49 @@ CREATE TABLE log
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_bin;
 
-
-CREATE TABLE pod_metric
+CREATE TABLE prometheus_cluster_metric
 (
-    reference_id BINARY(20) NOT NULL,
-    timestamp    BIGINT     NOT NULL,
-    cpu          BIGINT     NOT NULL,
-    memory       BIGINT     NOT NULL,
-    storage      BIGINT     NOT NULL,
-    PRIMARY KEY (reference_id)
+    timestamp BIGINT       NOT NULL,
+    `group`   VARCHAR(255) NOT NULL,
+    name      VARCHAR(255) NOT NULL,
+    value     DOUBLE       NOT NULL,
+    PRIMARY KEY (timestamp, `group`, name)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_bin;
 
-
-CREATE TABLE container_metric
+CREATE TABLE prometheus_node_metric
 (
-    container_reference_id BINARY(20) NOT NULL,
-    pod_reference_id       BINARY(20) NOT NULL,
-    timestamp              BIGINT     NOT NULL,
-    cpu                    BIGINT     NOT NULL,
-    memory                 BIGINT     NOT NULL,
-    storage                BIGINT     NOT NULL,
-    PRIMARY KEY (container_reference_id)
+    node_id   BINARY(20)   NOT NULL,
+    timestamp BIGINT       NOT NULL,
+    `group`   VARCHAR(255) NOT NULL,
+    name      VARCHAR(255) NOT NULL,
+    value     DOUBLE       NOT NULL,
+    PRIMARY KEY (node_id, timestamp, `group`, name)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_bin;
 
-
-CREATE TABLE node_metric
+CREATE TABLE prometheus_pod_metric
 (
-    node_id   BINARY(20) NOT NULL,
-    timestamp BIGINT     NOT NULL,
-    cpu       BIGINT     NOT NULL,
-    memory    BIGINT     NOT NULL,
-    storage   BIGINT     NOT NULL,
-    PRIMARY KEY (node_id)
+    pod_id    BINARY(20)   NOT NULL,
+    timestamp BIGINT       NOT NULL,
+    `group`   VARCHAR(255) NOT NULL,
+    name      VARCHAR(255) NOT NULL,
+    value     DOUBLE       NOT NULL,
+    PRIMARY KEY (pod_id, timestamp, `group`, name)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_bin;
+
+CREATE TABLE prometheus_container_metric
+(
+    container_id BINARY(20)   NOT NULL,
+    timestamp    BIGINT       NOT NULL,
+    `group`      VARCHAR(255) NOT NULL,
+    name         VARCHAR(255) NOT NULL,
+    value        DOUBLE       NOT NULL,
+    PRIMARY KEY (container_id, timestamp, `group`, name)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_bin;

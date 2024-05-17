@@ -1,29 +1,36 @@
 package schema
 
-type PodMetric struct {
+type PrometheusClusterMetric struct {
 	kmetaWithoutNamespace
-	ReferenceId []byte
-	Timestamp   int64
-	Cpu         int64
-	Memory      int64
-	Storage     int64
+	Timestamp int64
+	Group     string
+	Name      string
+	Value     float64
 }
 
-type ContainerMetric struct {
-	kmetaWithoutNamespace
-	ContainerReferenceId []byte
-	PodReferenceId       []byte
-	Timestamp            int64
-	Cpu                  int64
-	Memory               int64
-	Storage              int64
-}
-
-type NodeMetric struct {
+type PrometheusNodeMetric struct {
 	kmetaWithoutNamespace
 	NodeId    []byte
 	Timestamp int64
-	Cpu       int64
-	Memory    int64
-	Storage   int64
+	Group     string
+	Name      string
+	Value     float64
+}
+
+type PrometheusPodMetric struct {
+	kmetaWithoutNamespace
+	PodId     []byte
+	Timestamp int64
+	Group     string
+	Name      string
+	Value     float64
+}
+
+type PrometheusContainerMetric struct {
+	kmetaWithoutNamespace
+	ContainerId []byte
+	Timestamp   int64
+	Group       string
+	Name        string
+	Value       float64
 }
