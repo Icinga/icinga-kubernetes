@@ -7,11 +7,13 @@ import (
 	"github.com/icinga/icinga-kubernetes/internal"
 	"github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
+	"github.com/icinga/icinga-kubernetes/pkg/metrics"
 	"github.com/icinga/icinga-kubernetes/pkg/periodic"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
 	"github.com/icinga/icinga-kubernetes/pkg/sync"
 	syncv1 "github.com/icinga/icinga-kubernetes/pkg/sync/v1"
 	k8sMysql "github.com/icinga/icinga-kubernetes/schema/mysql"
+	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/informers"
@@ -19,6 +21,7 @@ import (
 	kclientcmd "k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -53,7 +56,19 @@ func main() {
 	factory := informers.NewSharedInformerFactory(clientset, 0)
 	log := klog.NewKlogr()
 
-	d, err := database.FromYAMLFile(config)
+	cfg, err := config.FromYAMLFile[internal.Config](flags.Config)
+	if err != nil {
+		logging.Fatal(errors.Wrap(err, "can't create configuration"))
+	}
+
+	promClient, err := promapi.NewClient(promapi.Config{Address: cfg.Prometheus.Host + ":" + strconv.Itoa(cfg.Prometheus.Port)})
+	if err != nil {
+		logging.Fatal(errors.Wrap(err, "error creating promClient"))
+	}
+
+	promApiClient := promv1.NewAPI(promClient)
+
+	db, err := database.NewDbFromConfig(&cfg.Database, logs.GetChildLogger("Database"))
 	if err != nil {
 		klog.Fatal(err)
 	}
@@ -175,6 +190,11 @@ func main() {
 		s := syncv1.NewSync(db, factory.Networking().V1().Ingresses().Informer(), log.WithName("ingresses"), schemav1.NewIngress)
 
 		return s.Run(ctx)
+	})
+	g.Go(func() error {
+		promMetricSync := metrics.NewPromMetricSync(promApiClient, db)
+
+		return promMetricSync.Run(ctx)
 	})
 
 	errs := make(chan error, 1)

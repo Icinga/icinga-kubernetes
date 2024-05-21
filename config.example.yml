@@ -20,3 +20,12 @@ database:
 
   # Database password.
   password: CHANGEME
+
+# Configuration for Prometheus metrics API.
+prometheus:
+
+  # Prometheus host
+#  host: http://localhost
+
+    # Prometheus port
+#  port: 9090
