@@ -26,7 +26,7 @@ func main() {
 	if err != nil {
 		logging.Fatal(errors.Wrap(err, "can't configure Kubernetes promClient"))
 	}
-	
+
 	k, err := kubernetes.NewForConfig(kconfig)
 	if err != nil {
 		logging.Fatal(errors.Wrap(err, "can't create Kubernetes promClient"))
@@ -139,7 +139,7 @@ func main() {
 	})
 
 	// sync prometheus metrics
-	promMetricSync := sync.NewPromMetricSync(promApiClient, db, logs.GetChildLogger("PromMetrics"))
+	promMetricSync := sync.NewPromMetricSync(promApiClient, db)
 
 	g.Go(func() error { return promMetricSync.Run(ctx) })
 

@@ -5,7 +5,6 @@ import (
 	"crypto/sha1"
 	"fmt"
 	"github.com/icinga/icinga-go-library/database"
-	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-kubernetes/pkg/schema"
 	"github.com/pkg/errors"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
@@ -14,23 +13,24 @@ import (
 	"time"
 )
 
+// PromQuery defines a prometheus query with the metric group, the query and the name label
 type PromQuery struct {
 	metricGroup string
 	query       string
 	nameLabel   model.LabelName
 }
 
+// PromMetricSync synchronizes prometheus metrics from the prometheus API to the database
 type PromMetricSync struct {
 	promApiClient v1.API
 	db            *database.DB
-	logger        *logging.Logger
 }
 
-func NewPromMetricSync(promApiClient v1.API, db *database.DB, logger *logging.Logger) *PromMetricSync {
+// NewPromMetricSync creates a new PromMetricSync
+func NewPromMetricSync(promApiClient v1.API, db *database.DB) *PromMetricSync {
 	return &PromMetricSync{
 		promApiClient: promApiClient,
 		db:            db,
-		logger:        logger,
 	}
 }
 
@@ -222,12 +222,12 @@ func (pms *PromMetricSync) Run(ctx context.Context) error {
 	promQueriesPod := []PromQuery{
 		{
 			"cpu.usage",
-			`avg by (namespace, pod) (sum by (namespace, pod, cpu) (rate(node_cpu_seconds_total{mode!~"idle|iowait|steal"}[1m])))`,
+			`sum by (node, namespace, pod) (rate(container_cpu_usage_seconds_total[1m]))`,
 			"",
 		},
 		{
 			"memory.usage",
-			`sum by (namespace, pod) ((node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes))`,
+			`sum by (node, namespace, pod) (container_memory_usage_bytes) / on (node) group_left(instance) label_replace(node_memory_MemTotal_bytes, "node", "$1", "instance", "(.*)")`,
 			"",
 		},
 		{
