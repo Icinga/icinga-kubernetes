@@ -29,9 +29,11 @@ type Deployment struct {
 	Yaml                    string
 	IcingaState             IcingaState
 	IcingaStateReason       string
-	Conditions              []DeploymentCondition `db:"-"`
-	Labels                  []Label               `db:"-"`
-	DeploymentLabels        []DeploymentLabel     `db:"-"`
+	Conditions              []DeploymentCondition  `db:"-"`
+	Labels                  []Label                `db:"-"`
+	DeploymentLabels        []DeploymentLabel      `db:"-"`
+	Annotations             []Annotation           `db:"-"`
+	DeploymentAnnotations   []DeploymentAnnotation `db:"-"`
 }
 
 type DeploymentCondition struct {
@@ -47,6 +49,11 @@ type DeploymentCondition struct {
 type DeploymentLabel struct {
 	DeploymentUuid types.UUID
 	LabelUuid      types.UUID
+}
+
+type DeploymentAnnotation struct {
+	DeploymentUuid types.UUID
+	AnnotationUuid types.UUID
 }
 
 func NewDeployment() Resource {
@@ -106,6 +113,19 @@ func (d *Deployment) Obtain(k8s kmetav1.Object) {
 		})
 	}
 
+	for annotationName, annotationValue := range deployment.Annotations {
+		annotationUuid := NewUUID(d.Uuid, strings.ToLower(annotationName+":"+annotationValue))
+		d.Annotations = append(d.Annotations, Annotation{
+			Uuid:  annotationUuid,
+			Name:  annotationName,
+			Value: annotationValue,
+		})
+		d.DeploymentAnnotations = append(d.DeploymentAnnotations, DeploymentAnnotation{
+			DeploymentUuid: d.Uuid,
+			AnnotationUuid: annotationUuid,
+		})
+	}
+
 	scheme := kruntime.NewScheme()
 	_ = kappsv1.AddToScheme(scheme)
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kappsv1.SchemeGroupVersion)
@@ -154,5 +174,7 @@ func (d *Deployment) Relations() []database.Relation {
 		database.HasMany(d.Conditions, fk),
 		database.HasMany(d.DeploymentLabels, fk),
 		database.HasMany(d.Labels, database.WithoutCascadeDelete()),
+		database.HasMany(d.DeploymentAnnotations, fk),
+		database.HasMany(d.Annotations, database.WithoutCascadeDelete()),
 	}
 }

@@ -17,19 +17,21 @@ import (
 
 type ReplicaSet struct {
 	Meta
-	DesiredReplicas      int32
-	MinReadySeconds      int32
-	ActualReplicas       int32
-	FullyLabeledReplicas int32
-	ReadyReplicas        int32
-	AvailableReplicas    int32
-	Yaml                 string
-	IcingaState          IcingaState
-	IcingaStateReason    string
-	Conditions           []ReplicaSetCondition `db:"-"`
-	Owners               []ReplicaSetOwner     `db:"-"`
-	Labels               []Label               `db:"-"`
-	ReplicaSetLabels     []ReplicaSetLabel     `db:"-"`
+	DesiredReplicas       int32
+	MinReadySeconds       int32
+	ActualReplicas        int32
+	FullyLabeledReplicas  int32
+	ReadyReplicas         int32
+	AvailableReplicas     int32
+	Yaml                  string
+	IcingaState           IcingaState
+	IcingaStateReason     string
+	Conditions            []ReplicaSetCondition  `db:"-"`
+	Owners                []ReplicaSetOwner      `db:"-"`
+	Labels                []Label                `db:"-"`
+	ReplicaSetLabels      []ReplicaSetLabel      `db:"-"`
+	Annotations           []Annotation           `db:"-"`
+	ReplicaSetAnnotations []ReplicaSetAnnotation `db:"-"`
 }
 
 type ReplicaSetCondition struct {
@@ -54,6 +56,11 @@ type ReplicaSetOwner struct {
 type ReplicaSetLabel struct {
 	ReplicaSetUuid types.UUID
 	LabelUuid      types.UUID
+}
+
+type ReplicaSetAnnotation struct {
+	ReplicaSetUuid types.UUID
+	AnnotationUuid types.UUID
 }
 
 func NewReplicaSet() Resource {
@@ -126,6 +133,19 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object) {
 		})
 	}
 
+	for annotationName, annotationValue := range replicaSet.Annotations {
+		annotationUuid := NewUUID(r.Uuid, strings.ToLower(annotationName+":"+annotationValue))
+		r.Annotations = append(r.Annotations, Annotation{
+			Uuid:  annotationUuid,
+			Name:  annotationName,
+			Value: annotationValue,
+		})
+		r.ReplicaSetAnnotations = append(r.ReplicaSetAnnotations, ReplicaSetAnnotation{
+			ReplicaSetUuid: r.Uuid,
+			AnnotationUuid: annotationUuid,
+		})
+	}
+
 	scheme := kruntime.NewScheme()
 	_ = kappsv1.AddToScheme(scheme)
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kappsv1.SchemeGroupVersion)
@@ -176,5 +196,7 @@ func (r *ReplicaSet) Relations() []database.Relation {
 		database.HasMany(r.Owners, fk),
 		database.HasMany(r.ReplicaSetLabels, fk),
 		database.HasMany(r.Labels, database.WithoutCascadeDelete()),
+		database.HasMany(r.ReplicaSetAnnotations, fk),
+		database.HasMany(r.Annotations, database.WithoutCascadeDelete()),
 	}
 }

@@ -13,11 +13,13 @@ import (
 
 type Namespace struct {
 	Meta
-	Phase           string
-	Yaml            string
-	Conditions      []NamespaceCondition `db:"-"`
-	Labels          []Label              `db:"-"`
-	NamespaceLabels []NamespaceLabel     `db:"-"`
+	Phase                string
+	Yaml                 string
+	Conditions           []NamespaceCondition  `db:"-"`
+	Labels               []Label               `db:"-"`
+	NamespaceLabels      []NamespaceLabel      `db:"-"`
+	Annotations          []Annotation          `db:"-"`
+	NamespaceAnnotations []NamespaceAnnotation `db:"-"`
 }
 
 type NamespaceCondition struct {
@@ -32,6 +34,11 @@ type NamespaceCondition struct {
 type NamespaceLabel struct {
 	NamespaceUuid types.UUID
 	LabelUuid     types.UUID
+}
+
+type NamespaceAnnotation struct {
+	NamespaceUuid  types.UUID
+	AnnotationUuid types.UUID
 }
 
 func NewNamespace() Resource {
@@ -69,6 +76,19 @@ func (n *Namespace) Obtain(k8s kmetav1.Object) {
 		})
 	}
 
+	for annotationName, annotationValue := range namespace.Annotations {
+		annotationUuid := NewUUID(n.Uuid, strings.ToLower(annotationName+":"+annotationValue))
+		n.Annotations = append(n.Annotations, Annotation{
+			Uuid:  annotationUuid,
+			Name:  annotationName,
+			Value: annotationValue,
+		})
+		n.NamespaceAnnotations = append(n.NamespaceAnnotations, NamespaceAnnotation{
+			NamespaceUuid:  n.Uuid,
+			AnnotationUuid: annotationUuid,
+		})
+	}
+
 	scheme := kruntime.NewScheme()
 	_ = kcorev1.AddToScheme(scheme)
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kcorev1.SchemeGroupVersion)
@@ -83,5 +103,7 @@ func (n *Namespace) Relations() []database.Relation {
 		database.HasMany(n.Conditions, fk),
 		database.HasMany(n.NamespaceLabels, fk),
 		database.HasMany(n.Labels, database.WithoutCascadeDelete()),
+		database.HasMany(n.NamespaceAnnotations, fk),
+		database.HasMany(n.Annotations, database.WithoutCascadeDelete()),
 	}
 }

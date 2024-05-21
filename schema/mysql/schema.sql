@@ -586,6 +586,91 @@ CREATE TABLE service_label (
   PRIMARY KEY (service_uuid, label_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+CREATE TABLE annotation (
+  uuid binary(16) NOT NULL,
+  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  value blob COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (uuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE pod_annotation (
+  pod_uuid binary(16) NOT NULL,
+  annotation_uuid binary(16) NOT NULL,
+  PRIMARY KEY (pod_uuid, annotation_uuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE replica_set_annotation (
+  replica_set_uuid binary(16) NOT NULL,
+  annotation_uuid binary(16) NOT NULL,
+  PRIMARY KEY (replica_set_uuid, annotation_uuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE deployment_annotation (
+  deployment_uuid binary(16) NOT NULL,
+  annotation_uuid binary(16) NOT NULL,
+  PRIMARY KEY (deployment_uuid, annotation_uuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE daemon_set_annotation (
+  daemon_set_uuid binary(16) NOT NULL,
+  annotation_uuid binary(16) NOT NULL,
+  PRIMARY KEY (daemon_set_uuid, annotation_uuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE stateful_set_annotation (
+  stateful_set_uuid binary(16) NOT NULL,
+  annotation_uuid binary(16) NOT NULL,
+  PRIMARY KEY (stateful_set_uuid, annotation_uuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE namespace_annotation (
+  namespace_uuid binary(16) NOT NULL,
+  annotation_uuid binary(16) NOT NULL,
+  PRIMARY KEY (namespace_uuid, annotation_uuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE node_annotation (
+  node_uuid binary(16) NOT NULL,
+  annotation_uuid binary(16) NOT NULL,
+  PRIMARY KEY (node_uuid, annotation_uuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE secret_annotation (
+  secret_uuid binary(16) NOT NULL,
+  annotation_uuid binary(16) NOT NULL,
+  PRIMARY KEY (secret_uuid, annotation_uuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE config_map_annotation (
+  config_map_uuid binary(16) NOT NULL,
+  annotation_uuid binary(16) NOT NULL,
+  PRIMARY KEY (config_map_uuid, annotation_uuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE service_annotation (
+  service_uuid binary(16) NOT NULL,
+  annotation_uuid binary(16) NOT NULL,
+  PRIMARY KEY (service_uuid, annotation_uuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE job_annotation (
+  job_uuid binary(16) NOT NULL,
+  annotation_uuid binary(16) NOT NULL,
+  PRIMARY KEY (job_uuid, annotation_uuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE cron_job_annotation (
+  cron_job_uuid binary(16) NOT NULL,
+  annotation_uuid binary(16) NOT NULL,
+  PRIMARY KEY (cron_job_uuid, annotation_uuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE pvc_annotation (
+  pvc_uuid binary(16) NOT NULL,
+  annotation_uuid binary(16) NOT NULL,
+  PRIMARY KEY (pvc_uuid, annotation_uuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
 CREATE TABLE event (
   uuid binary(16) NOT NULL,
   namespace varchar(63) NOT NULL,

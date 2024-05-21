@@ -30,12 +30,14 @@ type Service struct {
 	LoadBalancerClass             string
 	InternalTrafficPolicy         string
 	Yaml                          string
-	Selectors                     []Selector         `db:"-"`
-	ServiceSelectors              []ServiceSelector  `db:"-"`
-	Ports                         []ServicePort      `db:"-"`
-	Conditions                    []ServiceCondition `db:"-"`
-	Labels                        []Label            `db:"-"`
-	ServiceLabels                 []ServiceLabel     `db:"-"`
+	Selectors                     []Selector          `db:"-"`
+	ServiceSelectors              []ServiceSelector   `db:"-"`
+	Ports                         []ServicePort       `db:"-"`
+	Conditions                    []ServiceCondition  `db:"-"`
+	Labels                        []Label             `db:"-"`
+	ServiceLabels                 []ServiceLabel      `db:"-"`
+	Annotations                   []Annotation        `db:"-"`
+	ServiceAnnotations            []ServiceAnnotation `db:"-"`
 }
 
 type ServiceSelector struct {
@@ -66,6 +68,11 @@ type ServiceCondition struct {
 type ServiceLabel struct {
 	ServiceUuid types.UUID
 	LabelUuid   types.UUID
+}
+
+type ServiceAnnotation struct {
+	ServiceUuid    types.UUID
+	AnnotationUuid types.UUID
 }
 
 func NewService() Resource {
@@ -182,6 +189,19 @@ func (s *Service) Obtain(k8s kmetav1.Object) {
 		})
 	}
 
+	for annotationName, annotationValue := range service.Annotations {
+		annotationUuid := NewUUID(s.Uuid, strings.ToLower(annotationName+":"+annotationValue))
+		s.Annotations = append(s.Annotations, Annotation{
+			Uuid:  annotationUuid,
+			Name:  annotationName,
+			Value: annotationValue,
+		})
+		s.ServiceAnnotations = append(s.ServiceAnnotations, ServiceAnnotation{
+			ServiceUuid:    s.Uuid,
+			AnnotationUuid: annotationUuid,
+		})
+	}
+
 	scheme := kruntime.NewScheme()
 	_ = kcorev1.AddToScheme(scheme)
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kcorev1.SchemeGroupVersion)
@@ -199,5 +219,7 @@ func (s *Service) Relations() []database.Relation {
 		database.HasMany(s.ServiceLabels, fk),
 		database.HasMany(s.Selectors, database.WithoutCascadeDelete()),
 		database.HasMany(s.ServiceSelectors, fk),
+		database.HasMany(s.ServiceAnnotations, fk),
+		database.HasMany(s.Annotations, database.WithoutCascadeDelete()),
 	}
 }

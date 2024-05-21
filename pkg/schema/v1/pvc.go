@@ -45,9 +45,11 @@ type Pvc struct {
 	VolumeMode         sql.NullString
 	StorageClass       sql.NullString
 	Yaml               string
-	Conditions         []PvcCondition `db:"-"`
-	Labels             []Label        `db:"-"`
-	PvcLabels          []PvcLabel     `db:"-"`
+	Conditions         []PvcCondition  `db:"-"`
+	Labels             []Label         `db:"-"`
+	PvcLabels          []PvcLabel      `db:"-"`
+	Annotations        []Annotation    `db:"-"`
+	PvcAnnotations     []PvcAnnotation `db:"-"`
 }
 
 type PvcCondition struct {
@@ -63,6 +65,11 @@ type PvcCondition struct {
 type PvcLabel struct {
 	PvcUuid   types.UUID
 	LabelUuid types.UUID
+}
+
+type PvcAnnotation struct {
+	PvcUuid        types.UUID
+	AnnotationUuid types.UUID
 }
 
 func NewPvc() Resource {
@@ -120,6 +127,19 @@ func (p *Pvc) Obtain(k8s kmetav1.Object) {
 		p.PvcLabels = append(p.PvcLabels, PvcLabel{
 			PvcUuid:   p.Uuid,
 			LabelUuid: labelUuid,
+		})
+	}
+
+	for annotationName, annotationValue := range pvc.Annotations {
+		annotationUuid := NewUUID(p.Uuid, strings.ToLower(annotationName+":"+annotationValue))
+		p.Annotations = append(p.Annotations, Annotation{
+			Uuid:  annotationUuid,
+			Name:  annotationName,
+			Value: annotationValue,
+		})
+		p.PvcAnnotations = append(p.PvcAnnotations, PvcAnnotation{
+			PvcUuid:        p.Uuid,
+			AnnotationUuid: annotationUuid,
 		})
 	}
 
