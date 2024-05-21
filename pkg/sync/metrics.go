@@ -469,6 +469,10 @@ func (pms *PromMetricSync) Run(ctx context.Context) error {
 
 				for _, res := range result.(model.Vector) {
 
+					if res.Metric["pod"] == "" {
+						continue
+					}
+
 					podId := sha1.Sum([]byte(res.Metric["namespace"] + "/" + res.Metric["pod"]))
 
 					name := ""
