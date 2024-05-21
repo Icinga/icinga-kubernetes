@@ -1,4 +1,4 @@
-package sync
+package metrics
 
 import (
 	"context"
@@ -325,12 +325,6 @@ func (pms *PromMetricSync) Run(ctx context.Context) error {
 		},
 	}
 
-	//promv1.Range{
-	//	Start: time.Now().Add(time.Duration(-2) * time.Hour),
-	//	End:   time.Now(),
-	//	Step:  time.Second * 10,
-	//},
-
 	for _, promQuery := range promQueriesCluster {
 		promQuery := promQuery
 
@@ -561,91 +555,20 @@ func (pms *PromMetricSync) Run(ctx context.Context) error {
 	}
 
 	g.Go(func() error {
-		return database.NewUpsert(pms.db, database.WithStatement(pms.promMetricClusterUpsertStmt(), 3)).Stream(ctx, upsertClusterMetrics)
+		return database.NewUpsert(pms.db, database.WithStatement(pms.promMetricClusterUpsertStmt(), 4)).Stream(ctx, upsertClusterMetrics)
 	})
 
 	g.Go(func() error {
-		return database.NewUpsert(pms.db, database.WithStatement(pms.promMetricNodeUpsertStmt(), 4)).Stream(ctx, upsertNodeMetrics)
+		return database.NewUpsert(pms.db, database.WithStatement(pms.promMetricNodeUpsertStmt(), 5)).Stream(ctx, upsertNodeMetrics)
 	})
 
 	g.Go(func() error {
-		return database.NewUpsert(pms.db, database.WithStatement(pms.promMetricPodUpsertStmt(), 4)).Stream(ctx, upsertPodMetrics)
+		return database.NewUpsert(pms.db, database.WithStatement(pms.promMetricPodUpsertStmt(), 5)).Stream(ctx, upsertPodMetrics)
 	})
 
 	g.Go(func() error {
-		return database.NewUpsert(pms.db, database.WithStatement(pms.promMetricContainerUpsertStmt(), 4)).Stream(ctx, upsertContainerMetrics)
+		return database.NewUpsert(pms.db, database.WithStatement(pms.promMetricContainerUpsertStmt(), 5)).Stream(ctx, upsertContainerMetrics)
 	})
 
 	return g.Wait()
 }
-
-// Clean deletes metrics from the database if the belonging pod is deleted
-//func (ms *MetricSync) Clean(ctx context.Context, deleteChannel <-chan contracts.KDelete) error {
-//
-//	g, ctx := errgroup.WithContext(ctx)
-//
-//	deletesPod := make(chan any)
-//	deletesContainer := make(chan any)
-//
-//	g.Go(func() error {
-//		defer close(deletesPod)
-//		defer close(deletesContainer)
-//
-//		for {
-//			select {
-//			case kdelete, more := <-deleteChannel:
-//				if !more {
-//					return nil
-//				}
-//
-//				deletesPod <- kdelete.ID()
-//				deletesContainer <- kdelete.ID()
-//
-//			case <-ctx.Done():
-//				return ctx.Err()
-//			}
-//		}
-//	})
-//
-//	g.Go(func() error {
-//		return database.NewDelete(ms.db, database.ByColumn("reference_id")).Stream(ctx, &schema.PodMetric{}, deletesPod)
-//	})
-//
-//	g.Go(func() error {
-//		return database.NewDelete(ms.db, database.ByColumn("pod_reference_id")).Stream(ctx, &schema.ContainerMetric{}, deletesContainer)
-//	})
-//
-//	return g.Wait()
-//}
-//
-// Clean deletes metrics from the database if the belonging node is deleted
-//func (nms *NodeMetricSync) Clean(ctx context.Context, deleteChannel <-chan contracts.KDelete) error {
-//
-//	g, ctx := errgroup.WithContext(ctx)
-//
-//	deletes := make(chan any)
-//
-//	g.Go(func() error {
-//		defer close(deletes)
-//
-//		for {
-//			select {
-//			case kdelete, more := <-deleteChannel:
-//				if !more {
-//					return nil
-//				}
-//
-//				deletes <- kdelete.ID()
-//
-//			case <-ctx.Done():
-//				return ctx.Err()
-//			}
-//		}
-//	})
-//
-//	g.Go(func() error {
-//		return database.NewDelete(nms.db, database.ByColumn("node_id")).Stream(ctx, &schema.NodeMetric{}, deletes)
-//	})
-//
-//	return g.Wait()
-//}

@@ -39,3 +39,12 @@ logging:
   # Valid units are "ms", "s", "m", "h".
   # Defaults to "20s".
 #  interval: 20s
+
+# Configuration for Prometheus metrics API.
+prometheus:
+
+  # Prometheus host
+#  host: http://localhost
+
+    # Prometheus port
+#  port: 9090

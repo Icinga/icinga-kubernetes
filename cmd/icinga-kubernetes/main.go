@@ -8,6 +8,7 @@ import (
 	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-kubernetes/internal"
 	"github.com/icinga/icinga-kubernetes/pkg/contracts"
+	"github.com/icinga/icinga-kubernetes/pkg/metrics"
 	"github.com/icinga/icinga-kubernetes/pkg/schema"
 	"github.com/icinga/icinga-kubernetes/pkg/sync"
 	"github.com/okzk/sdnotify"
@@ -18,6 +19,7 @@ import (
 	kinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	kclientcmd "k8s.io/client-go/tools/clientcmd"
+	"strconv"
 )
 
 func main() {
@@ -42,7 +44,7 @@ func main() {
 		logging.Fatal(errors.Wrap(err, "can't create configuration"))
 	}
 
-	promClient, err := promapi.NewClient(promapi.Config{Address: "http://localhost:9090"})
+	promClient, err := promapi.NewClient(promapi.Config{Address: cfg.Prometheus.Host + ":" + strconv.Itoa(cfg.Prometheus.Port)})
 	if err != nil {
 		logging.Fatal(errors.Wrap(err, "error creating promClient"))
 	}
@@ -139,11 +141,9 @@ func main() {
 	})
 
 	// sync prometheus metrics
-	promMetricSync := sync.NewPromMetricSync(promApiClient, db)
+	promMetricSync := metrics.NewPromMetricSync(promApiClient, db)
 
 	g.Go(func() error { return promMetricSync.Run(ctx) })
-
-	//g.Go(func() error {return promMetricSync.Clean(ctx, forwardDeletePodsToMetricChannel)})
 
 	if err := g.Wait(); err != nil {
 		logging.Fatal(errors.Wrap(err, "can't sync"))
