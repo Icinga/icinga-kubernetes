@@ -58,12 +58,12 @@ func main() {
 
 	cfg, err := config.FromYAMLFile[internal.Config](flags.Config)
 	if err != nil {
-		logging.Fatal(errors.Wrap(err, "can't create configuration"))
+		klog.Fatal(errors.Wrap(err, "can't create configuration"))
 	}
 
 	promClient, err := promapi.NewClient(promapi.Config{Address: cfg.Prometheus.Host + ":" + strconv.Itoa(cfg.Prometheus.Port)})
 	if err != nil {
-		logging.Fatal(errors.Wrap(err, "error creating promClient"))
+		klog.Fatal(errors.Wrap(err, "error creating promClient"))
 	}
 
 	promApiClient := promv1.NewAPI(promClient)

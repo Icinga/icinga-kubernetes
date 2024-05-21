@@ -5,7 +5,7 @@ import (
 	"crypto/sha1"
 	"fmt"
 	"github.com/icinga/icinga-go-library/database"
-	"github.com/icinga/icinga-kubernetes/pkg/schema"
+	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
 	"github.com/pkg/errors"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
@@ -349,15 +349,18 @@ func (pms *PromMetricSync) Run(ctx context.Context) error {
 
 				for _, res := range result.(model.Vector) {
 
+					clusterId := sha1.Sum([]byte(""))
+
 					name := ""
 
 					if promQuery.nameLabel != "" {
 						name = string(res.Metric[promQuery.nameLabel])
 					}
 
-					newClusterMetric := &schema.PrometheusClusterMetric{
+					newClusterMetric := &schemav1.PrometheusClusterMetric{
+						ClusterId: clusterId[:],
 						Timestamp: (res.Timestamp.UnixNano() - res.Timestamp.UnixNano()%(60*1000000000)) / 1000000,
-						Group:     promQuery.metricGroup,
+						Category:  promQuery.metricGroup,
 						Name:      name,
 						Value:     float64(res.Value),
 					}
@@ -415,10 +418,10 @@ func (pms *PromMetricSync) Run(ctx context.Context) error {
 						name = string(res.Metric[promQuery.nameLabel])
 					}
 
-					newNodeMetric := &schema.PrometheusNodeMetric{
+					newNodeMetric := &schemav1.PrometheusNodeMetric{
 						NodeId:    nodeId[:],
 						Timestamp: (res.Timestamp.UnixNano() - res.Timestamp.UnixNano()%(60*1000000000)) / 1000000,
-						Group:     promQuery.metricGroup,
+						Category:  promQuery.metricGroup,
 						Name:      name,
 						Value:     float64(res.Value),
 					}
@@ -475,10 +478,10 @@ func (pms *PromMetricSync) Run(ctx context.Context) error {
 						name = string(res.Metric[promQuery.nameLabel])
 					}
 
-					newPodMetric := &schema.PrometheusPodMetric{
+					newPodMetric := &schemav1.PrometheusPodMetric{
 						PodId:     podId[:],
 						Timestamp: (res.Timestamp.UnixNano() - res.Timestamp.UnixNano()%(60*1000000000)) / 1000000,
-						Group:     promQuery.metricGroup,
+						Category:  promQuery.metricGroup,
 						Name:      name,
 						Value:     float64(res.Value),
 					}
@@ -530,10 +533,10 @@ func (pms *PromMetricSync) Run(ctx context.Context) error {
 						name = string(res.Metric[promQuery.nameLabel])
 					}
 
-					newContainerMetric := &schema.PrometheusContainerMetric{
+					newContainerMetric := &schemav1.PrometheusContainerMetric{
 						ContainerId: containerId[:],
 						Timestamp:   (res.Timestamp.UnixNano() - res.Timestamp.UnixNano()%(60*1000000000)) / 1000000,
-						Group:       promQuery.metricGroup,
+						Category:    promQuery.metricGroup,
 						Name:        name,
 						Value:       float64(res.Value),
 					}
@@ -555,7 +558,7 @@ func (pms *PromMetricSync) Run(ctx context.Context) error {
 	}
 
 	g.Go(func() error {
-		return database.NewUpsert(pms.db, database.WithStatement(pms.promMetricClusterUpsertStmt(), 4)).Stream(ctx, upsertClusterMetrics)
+		return database.NewUpsert(pms.db, database.WithStatement(pms.promMetricClusterUpsertStmt(), 5)).Stream(ctx, upsertClusterMetrics)
 	})
 
 	g.Go(func() error {

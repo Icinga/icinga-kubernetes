@@ -865,6 +865,7 @@ INSERT INTO kubernetes_schema (version, timestamp, success, reason)
 VALUES ('0.1.0', UNIX_TIMESTAMP() * 1000, 'y', 'Initial import');
 
 CREATE TABLE prometheus_cluster_metric (
+    cluster_id binary(20) NOT NULL,
     timestamp bigint NOT NULL,
     category varchar(255) NOT NULL,
     name varchar(255) NOT NULL,
