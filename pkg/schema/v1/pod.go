@@ -68,6 +68,7 @@ type PodLabel struct {
 
 type PodOwner struct {
 	PodUuid            types.UUID
+	OwnerUuid          types.UUID
 	Kind               string
 	Name               string
 	Uid                ktypes.UID
@@ -226,10 +227,11 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 			controller = *ownerReference.Controller
 		}
 		p.Owners = append(p.Owners, PodOwner{
-			PodUuid: p.Uuid,
-			Kind:    strcase.Snake(ownerReference.Kind),
-			Name:    ownerReference.Name,
-			Uid:     ownerReference.UID,
+			PodUuid:   p.Uuid,
+			OwnerUuid: EnsureUUID(p.Uid),
+			Kind:      strcase.Snake(ownerReference.Kind),
+			Name:      ownerReference.Name,
+			Uid:       ownerReference.UID,
 			BlockOwnerDeletion: types.Bool{
 				Bool:  blockOwnerDeletion,
 				Valid: true,

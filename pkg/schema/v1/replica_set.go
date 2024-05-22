@@ -39,6 +39,7 @@ type ReplicaSetCondition struct {
 
 type ReplicaSetOwner struct {
 	ReplicaSetUuid     types.UUID
+	OwnerUuid          types.UUID
 	Kind               string
 	Name               string
 	Uid                ktypes.UID
@@ -92,6 +93,7 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object) {
 		}
 		r.Owners = append(r.Owners, ReplicaSetOwner{
 			ReplicaSetUuid: r.Uuid,
+			OwnerUuid:      EnsureUUID(r.Uid),
 			Kind:           strcase.Snake(ownerReference.Kind),
 			Name:           ownerReference.Name,
 			Uid:            ownerReference.UID,
