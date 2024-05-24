@@ -71,6 +71,10 @@ func EnsureUUID(uid ktypes.UID) types.UUID {
 	return types.UUID{UUID: uuid.NewSHA1(NameSpaceKubernetes, []byte(uid))}
 }
 
+func NewUUID(space types.UUID, data string) types.UUID {
+	return types.UUID{UUID: uuid.NewSHA1(space.UUID, []byte(data))}
+}
+
 // Assert interface compliance.
 var (
 	_ kmetav1.Object = (*Meta)(nil)
