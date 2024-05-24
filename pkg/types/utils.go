@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/pkg/errors"
-	"golang.org/x/exp/constraints"
 	"math"
 	"strings"
 	"time"
@@ -82,12 +81,4 @@ func FromUnixMilli(ms int64) time.Time {
 	sec, dec := math.Modf(float64(ms) / 1e3)
 
 	return time.Unix(int64(sec), int64(dec*(1e9)))
-}
-
-func MaxInt[T constraints.Integer](x, y T) T {
-	if x > y {
-		return x
-	}
-
-	return y
 }

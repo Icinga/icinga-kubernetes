@@ -2,6 +2,7 @@ package v1
 
 import (
 	"github.com/icinga/icinga-kubernetes/pkg/types"
+	"golang.org/x/exp/constraints"
 	"reflect"
 )
 
@@ -20,4 +21,12 @@ func MarshalFirstNonNilStructFieldToJSON(i any) (string, string, error) {
 	}
 
 	return "", "", nil
+}
+
+func MaxInt[T constraints.Integer](x, y T) T {
+	if x > y {
+		return x
+	}
+
+	return y
 }
