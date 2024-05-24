@@ -13,7 +13,7 @@ import (
 type PersistentVolume struct {
 	Meta
 	Id               types.Binary
-	AccessModes      types.Bitmask[kpersistentVolumeAccessModesSize]
+	AccessModes      Bitmask[kpersistentVolumeAccessModesSize]
 	Capacity         int64
 	ReclaimPolicy    string
 	StorageClass     string

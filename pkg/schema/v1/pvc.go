@@ -14,8 +14,8 @@ type kpersistentVolumeAccessModesSize byte
 
 type kpersistentVolumeAccessModes map[kcorev1.PersistentVolumeAccessMode]kpersistentVolumeAccessModesSize
 
-func (modes kpersistentVolumeAccessModes) Bitmask(mode ...kcorev1.PersistentVolumeAccessMode) types.Bitmask[kpersistentVolumeAccessModesSize] {
-	b := types.Bitmask[kpersistentVolumeAccessModesSize]{}
+func (modes kpersistentVolumeAccessModes) Bitmask(mode ...kcorev1.PersistentVolumeAccessMode) Bitmask[kpersistentVolumeAccessModesSize] {
+	b := Bitmask[kpersistentVolumeAccessModesSize]{}
 
 	for _, m := range mode {
 		b.Set(modes[m])
@@ -34,8 +34,8 @@ var persistentVolumeAccessModes = kpersistentVolumeAccessModes{
 type Pvc struct {
 	Meta
 	Id                 types.Binary
-	DesiredAccessModes types.Bitmask[kpersistentVolumeAccessModesSize]
-	ActualAccessModes  types.Bitmask[kpersistentVolumeAccessModesSize]
+	DesiredAccessModes Bitmask[kpersistentVolumeAccessModesSize]
+	ActualAccessModes  Bitmask[kpersistentVolumeAccessModesSize]
 	MinimumCapacity    sql.NullInt64
 	ActualCapacity     int64
 	Phase              string
