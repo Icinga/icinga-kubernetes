@@ -870,7 +870,7 @@ CREATE TABLE prometheus_cluster_metric (
     category varchar(255) NOT NULL,
     name varchar(255) NOT NULL,
     value double NOT NULL,
-    PRIMARY KEY (timestamp, category, name)
+    PRIMARY KEY (cluster_id, timestamp, category, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE prometheus_node_metric (
