@@ -15,9 +15,9 @@ import (
 
 // PromQuery defines a prometheus query with the metric group, the query and the name label
 type PromQuery struct {
-	metricGroup string
-	query       string
-	nameLabel   model.LabelName
+	metricCategory string
+	query          string
+	nameLabel      model.LabelName
 }
 
 // PromMetricSync synchronizes prometheus metrics from the prometheus API to the database
@@ -39,8 +39,8 @@ func (pms *PromMetricSync) promMetricClusterUpsertStmt() string {
 	return fmt.Sprintf(
 		`INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s`,
 		`prometheus_cluster_metric`,
-		"timestamp, `group`, name, value",
-		`:timestamp, :group, :name, :value`,
+		"cluster_id, timestamp, category, name, value",
+		`:cluster_id, :timestamp, :category, :name, :value`,
 		`value=VALUES(value)`,
 	)
 }
@@ -50,8 +50,8 @@ func (pms *PromMetricSync) promMetricNodeUpsertStmt() string {
 	return fmt.Sprintf(
 		`INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s`,
 		`prometheus_node_metric`,
-		"node_id, timestamp, `group`, name, value",
-		`:node_id, :timestamp, :group, :name, :value`,
+		"node_id, timestamp, category, name, value",
+		`:node_id, :timestamp, :category, :name, :value`,
 		`value=VALUES(value)`,
 	)
 }
@@ -61,8 +61,8 @@ func (pms *PromMetricSync) promMetricPodUpsertStmt() string {
 	return fmt.Sprintf(
 		`INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s`,
 		`prometheus_pod_metric`,
-		"pod_id, timestamp, `group`, name, value",
-		`:pod_id, :timestamp, :group, :name, :value`,
+		"pod_id, timestamp, category, name, value",
+		`:pod_id, :timestamp, :category, :name, :value`,
 		`value=VALUES(value)`,
 	)
 }
@@ -72,8 +72,8 @@ func (pms *PromMetricSync) promMetricContainerUpsertStmt() string {
 	return fmt.Sprintf(
 		`INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s`,
 		`prometheus_container_metric`,
-		"container_id, timestamp, `group`, name, value",
-		`:container_id, :timestamp, :group, :name, :value`,
+		"container_id, timestamp, category, name, value",
+		`:container_id, :timestamp, :category, :name, :value`,
 		`value=VALUES(value)`,
 	)
 }
@@ -334,7 +334,6 @@ func (pms *PromMetricSync) Run(ctx context.Context) error {
 					ctx,
 					promQuery.query,
 					time.Time{},
-					//promQuery.queryRange,
 				)
 				if err != nil {
 					return errors.Wrap(err, "error querying Prometheus")
@@ -348,6 +347,9 @@ func (pms *PromMetricSync) Run(ctx context.Context) error {
 				}
 
 				for _, res := range result.(model.Vector) {
+					if res.Value.String() == "NaN" {
+						continue
+					}
 
 					clusterId := sha1.Sum([]byte(""))
 
@@ -360,7 +362,7 @@ func (pms *PromMetricSync) Run(ctx context.Context) error {
 					newClusterMetric := &schemav1.PrometheusClusterMetric{
 						ClusterId: clusterId[:],
 						Timestamp: (res.Timestamp.UnixNano() - res.Timestamp.UnixNano()%(60*1000000000)) / 1000000,
-						Category:  promQuery.metricGroup,
+						Category:  promQuery.metricCategory,
 						Name:      name,
 						Value:     float64(res.Value),
 					}
@@ -390,7 +392,6 @@ func (pms *PromMetricSync) Run(ctx context.Context) error {
 					ctx,
 					promQuery.query,
 					time.Time{},
-					//promQuery.queryRange,
 				)
 				if err != nil {
 					return errors.Wrap(err, "error querying Prometheus")
@@ -404,6 +405,10 @@ func (pms *PromMetricSync) Run(ctx context.Context) error {
 				}
 
 				for _, res := range result.(model.Vector) {
+					if res.Value.String() == "NaN" {
+						continue
+					}
+
 					nodeName := res.Metric["node"]
 
 					if nodeName == "" {
@@ -421,7 +426,7 @@ func (pms *PromMetricSync) Run(ctx context.Context) error {
 					newNodeMetric := &schemav1.PrometheusNodeMetric{
 						NodeId:    nodeId[:],
 						Timestamp: (res.Timestamp.UnixNano() - res.Timestamp.UnixNano()%(60*1000000000)) / 1000000,
-						Category:  promQuery.metricGroup,
+						Category:  promQuery.metricCategory,
 						Name:      name,
 						Value:     float64(res.Value),
 					}
@@ -451,7 +456,6 @@ func (pms *PromMetricSync) Run(ctx context.Context) error {
 					ctx,
 					promQuery.query,
 					time.Time{},
-					//promQuery.queryRange,
 				)
 				if err != nil {
 					return errors.Wrap(err, "error querying Prometheus")
@@ -465,6 +469,9 @@ func (pms *PromMetricSync) Run(ctx context.Context) error {
 				}
 
 				for _, res := range result.(model.Vector) {
+					if res.Value.String() == "NaN" {
+						continue
+					}
 
 					if res.Metric["pod"] == "" {
 						continue
@@ -481,7 +488,7 @@ func (pms *PromMetricSync) Run(ctx context.Context) error {
 					newPodMetric := &schemav1.PrometheusPodMetric{
 						PodId:     podId[:],
 						Timestamp: (res.Timestamp.UnixNano() - res.Timestamp.UnixNano()%(60*1000000000)) / 1000000,
-						Category:  promQuery.metricGroup,
+						Category:  promQuery.metricCategory,
 						Name:      name,
 						Value:     float64(res.Value),
 					}
@@ -511,7 +518,6 @@ func (pms *PromMetricSync) Run(ctx context.Context) error {
 					ctx,
 					promQuery.query,
 					time.Time{},
-					//promQuery.queryRange,
 				)
 				if err != nil {
 					return errors.Wrap(err, "error querying Prometheus")
@@ -525,6 +531,10 @@ func (pms *PromMetricSync) Run(ctx context.Context) error {
 				}
 
 				for _, res := range result.(model.Vector) {
+					if res.Value.String() == "NaN" {
+						continue
+					}
+
 					containerId := sha1.Sum([]byte(res.Metric["namespace"] + "/" + res.Metric["pod"] + "/" + res.Metric["container"]))
 
 					name := ""
@@ -536,7 +546,7 @@ func (pms *PromMetricSync) Run(ctx context.Context) error {
 					newContainerMetric := &schemav1.PrometheusContainerMetric{
 						ContainerId: containerId[:],
 						Timestamp:   (res.Timestamp.UnixNano() - res.Timestamp.UnixNano()%(60*1000000000)) / 1000000,
-						Category:    promQuery.metricGroup,
+						Category:    promQuery.metricCategory,
 						Name:        name,
 						Value:       float64(res.Value),
 					}
