@@ -1,8 +1,9 @@
 package v1
 
 import (
+	"github.com/icinga/icinga-go-library/types"
+	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
-	"github.com/icinga/icinga-kubernetes/pkg/types"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strings"
@@ -37,7 +38,7 @@ func (c *ConfigMap) Obtain(k8s kmetav1.Object) {
 
 	configMap := k8s.(*kcorev1.ConfigMap)
 
-	c.Id = types.Checksum(configMap.Namespace + "/" + configMap.Name)
+	c.Id = utils.Checksum(configMap.Namespace + "/" + configMap.Name)
 
 	var immutable bool
 	if configMap.Immutable != nil {
@@ -49,7 +50,7 @@ func (c *ConfigMap) Obtain(k8s kmetav1.Object) {
 	}
 
 	for dataName, dataValue := range configMap.Data {
-		dataId := types.Checksum(dataName + ":" + dataValue)
+		dataId := utils.Checksum(dataName + ":" + dataValue)
 		c.Data = append(c.Data, Data{
 			Id:    dataId,
 			Name:  dataName,
@@ -62,7 +63,7 @@ func (c *ConfigMap) Obtain(k8s kmetav1.Object) {
 	}
 
 	for labelName, labelValue := range configMap.Labels {
-		labelId := types.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		labelId := utils.Checksum(strings.ToLower(labelName + ":" + labelValue))
 		c.Labels = append(c.Labels, Label{
 			Id:    labelId,
 			Name:  labelName,

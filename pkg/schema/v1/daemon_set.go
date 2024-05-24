@@ -1,9 +1,10 @@
 package v1
 
 import (
+	"github.com/icinga/icinga-go-library/types"
+	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
-	"github.com/icinga/icinga-kubernetes/pkg/types"
 	kappsv1 "k8s.io/api/apps/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strings"
@@ -49,7 +50,7 @@ func (d *DaemonSet) Obtain(k8s kmetav1.Object) {
 
 	daemonSet := k8s.(*kappsv1.DaemonSet)
 
-	d.Id = types.Checksum(daemonSet.Namespace + "/" + daemonSet.Name)
+	d.Id = utils.Checksum(daemonSet.Namespace + "/" + daemonSet.Name)
 	d.UpdateStrategy = strcase.Snake(string(daemonSet.Spec.UpdateStrategy.Type))
 	d.MinReadySeconds = daemonSet.Spec.MinReadySeconds
 	d.DesiredNumberScheduled = daemonSet.Status.DesiredNumberScheduled
@@ -72,7 +73,7 @@ func (d *DaemonSet) Obtain(k8s kmetav1.Object) {
 	}
 
 	for labelName, labelValue := range daemonSet.Labels {
-		labelId := types.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		labelId := utils.Checksum(strings.ToLower(labelName + ":" + labelValue))
 		d.Labels = append(d.Labels, Label{
 			Id:    labelId,
 			Name:  labelName,

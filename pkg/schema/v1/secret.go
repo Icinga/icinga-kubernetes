@@ -2,8 +2,9 @@ package v1
 
 import (
 	b64 "encoding/base64"
+	"github.com/icinga/icinga-go-library/types"
+	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
-	"github.com/icinga/icinga-kubernetes/pkg/types"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strings"
@@ -39,7 +40,7 @@ func (s *Secret) Obtain(k8s kmetav1.Object) {
 
 	secret := k8s.(*kcorev1.Secret)
 
-	s.Id = types.Checksum(s.Namespace + "/" + s.Name)
+	s.Id = utils.Checksum(s.Namespace + "/" + s.Name)
 	s.Type = string(secret.Type)
 
 	var immutable bool
@@ -61,7 +62,7 @@ func (s *Secret) Obtain(k8s kmetav1.Object) {
 			value = string(dataValue[:n])
 		}
 
-		dataId := types.Checksum(dataName + ":" + value)
+		dataId := utils.Checksum(dataName + ":" + value)
 		s.Data = append(s.Data, Data{
 			Id:    dataId,
 			Name:  dataName,
@@ -74,7 +75,7 @@ func (s *Secret) Obtain(k8s kmetav1.Object) {
 	}
 
 	for labelName, labelValue := range secret.Labels {
-		labelId := types.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		labelId := utils.Checksum(strings.ToLower(labelName + ":" + labelValue))
 		s.Labels = append(s.Labels, Label{
 			Id:    labelId,
 			Name:  labelName,

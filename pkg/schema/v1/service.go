@@ -2,9 +2,10 @@ package v1
 
 import (
 	"database/sql"
+	"github.com/icinga/icinga-go-library/types"
+	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
-	"github.com/icinga/icinga-kubernetes/pkg/types"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strings"
@@ -98,7 +99,7 @@ func (s *Service) Obtain(k8s kmetav1.Object) {
 		internalTrafficPolicy = strcase.Snake(string(*service.Spec.InternalTrafficPolicy))
 	}
 
-	s.Id = types.Checksum(service.Namespace + "/" + service.Name)
+	s.Id = utils.Checksum(service.Namespace + "/" + service.Name)
 	s.Type = strcase.Snake(string(service.Spec.Type))
 	s.ClusterIP = service.Spec.ClusterIP
 	for _, clusterIP := range service.Spec.ClusterIPs {
@@ -127,7 +128,7 @@ func (s *Service) Obtain(k8s kmetav1.Object) {
 	s.InternalTrafficPolicy = internalTrafficPolicy
 
 	for selectorName, selectorValue := range service.Spec.Selector {
-		selectorId := types.Checksum(strings.ToLower(selectorName + ":" + selectorValue))
+		selectorId := utils.Checksum(strings.ToLower(selectorName + ":" + selectorValue))
 		s.Selectors = append(s.Selectors, Selector{
 			Id:    selectorId,
 			Name:  selectorName,
@@ -168,7 +169,7 @@ func (s *Service) Obtain(k8s kmetav1.Object) {
 	}
 
 	for labelName, labelValue := range service.Labels {
-		labelId := types.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		labelId := utils.Checksum(strings.ToLower(labelName + ":" + labelValue))
 		s.Labels = append(s.Labels, Label{
 			Id:    labelId,
 			Name:  labelName,

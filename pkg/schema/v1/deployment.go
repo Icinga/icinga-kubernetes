@@ -1,9 +1,10 @@
 package v1
 
 import (
+	"github.com/icinga/icinga-go-library/types"
+	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
-	"github.com/icinga/icinga-kubernetes/pkg/types"
 	kappsv1 "k8s.io/api/apps/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strings"
@@ -58,7 +59,7 @@ func (d *Deployment) Obtain(k8s kmetav1.Object) {
 	if deployment.Spec.ProgressDeadlineSeconds != nil {
 		progressDeadlineSeconds = *deployment.Spec.ProgressDeadlineSeconds
 	}
-	d.Id = types.Checksum(deployment.Namespace + "/" + deployment.Name)
+	d.Id = utils.Checksum(deployment.Namespace + "/" + deployment.Name)
 	d.DesiredReplicas = replicas
 	d.Strategy = strcase.Snake(string(deployment.Spec.Strategy.Type))
 	d.MinReadySeconds = deployment.Spec.MinReadySeconds
@@ -86,7 +87,7 @@ func (d *Deployment) Obtain(k8s kmetav1.Object) {
 	}
 
 	for labelName, labelValue := range deployment.Labels {
-		labelId := types.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		labelId := utils.Checksum(strings.ToLower(labelName + ":" + labelValue))
 		d.Labels = append(d.Labels, Label{
 			Id:    labelId,
 			Name:  labelName,

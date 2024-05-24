@@ -2,9 +2,10 @@ package v1
 
 import (
 	"database/sql"
+	"github.com/icinga/icinga-go-library/types"
+	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
-	"github.com/icinga/icinga-kubernetes/pkg/types"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strings"
@@ -71,7 +72,7 @@ func (p *Pvc) Obtain(k8s kmetav1.Object) {
 
 	pvc := k8s.(*kcorev1.PersistentVolumeClaim)
 
-	p.Id = types.Checksum(pvc.Namespace + "/" + pvc.Name)
+	p.Id = utils.Checksum(pvc.Namespace + "/" + pvc.Name)
 	p.DesiredAccessModes = persistentVolumeAccessModes.Bitmask(pvc.Spec.AccessModes...)
 	p.ActualAccessModes = persistentVolumeAccessModes.Bitmask(pvc.Status.AccessModes...)
 	if requestsStorage, ok := pvc.Spec.Resources.Requests[kcorev1.ResourceStorage]; ok {
@@ -109,7 +110,7 @@ func (p *Pvc) Obtain(k8s kmetav1.Object) {
 	}
 
 	for labelName, labelValue := range pvc.Labels {
-		labelId := types.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		labelId := utils.Checksum(strings.ToLower(labelName + ":" + labelValue))
 		p.Labels = append(p.Labels, Label{
 			Id:    labelId,
 			Name:  labelName,

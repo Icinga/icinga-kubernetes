@@ -1,7 +1,7 @@
 package v1
 
 import (
-	"github.com/icinga/icinga-kubernetes/pkg/types"
+	"github.com/icinga/icinga-go-library/types"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ktypes "k8s.io/apimachinery/pkg/types"
 )

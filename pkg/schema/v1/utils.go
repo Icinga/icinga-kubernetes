@@ -1,7 +1,7 @@
 package v1
 
 import (
-	"github.com/icinga/icinga-kubernetes/pkg/types"
+	"github.com/icinga/icinga-go-library/types"
 	"golang.org/x/exp/constraints"
 	"reflect"
 )

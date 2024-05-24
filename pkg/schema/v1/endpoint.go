@@ -2,8 +2,9 @@ package v1
 
 import (
 	"database/sql"
+	"github.com/icinga/icinga-go-library/types"
+	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
-	"github.com/icinga/icinga-kubernetes/pkg/types"
 	v1 "k8s.io/api/core/v1"
 	kdiscoveryv1 "k8s.io/api/discovery/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -60,11 +61,11 @@ func (e *EndpointSlice) Obtain(k8s kmetav1.Object) {
 
 	endpointSlice := k8s.(*kdiscoveryv1.EndpointSlice)
 
-	e.Id = types.Checksum(strings.ToLower(endpointSlice.Namespace + "/" + endpointSlice.Name))
+	e.Id = utils.Checksum(strings.ToLower(endpointSlice.Namespace + "/" + endpointSlice.Name))
 	e.AddressType = string(endpointSlice.AddressType)
 
 	for labelName, labelValue := range endpointSlice.Labels {
-		labelId := types.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		labelId := utils.Checksum(strings.ToLower(labelName + ":" + labelValue))
 		e.Labels = append(e.Labels, Label{
 			Id:    labelId,
 			Name:  labelName,
@@ -113,7 +114,7 @@ func (e *EndpointSlice) Obtain(k8s kmetav1.Object) {
 				appProtocol = *endpointPort.AppProtocol
 			}
 			for _, address := range endpoint.Addresses {
-				endpointId := types.Checksum(e.Id.String() + name + address + string(port))
+				endpointId := utils.Checksum(e.Id.String() + name + address + string(port))
 				e.Endpoints = append(e.Endpoints, Endpoint{
 					Id:              endpointId,
 					EndpointSliceId: e.Id,

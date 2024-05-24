@@ -1,9 +1,10 @@
 package v1
 
 import (
+	"github.com/icinga/icinga-go-library/types"
+	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
-	"github.com/icinga/icinga-kubernetes/pkg/types"
 	kappsv1 "k8s.io/api/apps/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ktypes "k8s.io/apimachinery/pkg/types"
@@ -61,7 +62,7 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object) {
 	if replicaSet.Spec.Replicas != nil {
 		desiredReplicas = *replicaSet.Spec.Replicas
 	}
-	r.Id = types.Checksum(r.Namespace + "/" + r.Name)
+	r.Id = utils.Checksum(r.Namespace + "/" + r.Name)
 	r.DesiredReplicas = desiredReplicas
 	r.MinReadySeconds = replicaSet.Spec.MinReadySeconds
 	r.ActualReplicas = replicaSet.Status.Replicas
@@ -105,7 +106,7 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object) {
 	}
 
 	for labelName, labelValue := range replicaSet.Labels {
-		labelId := types.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		labelId := utils.Checksum(strings.ToLower(labelName + ":" + labelValue))
 		r.Labels = append(r.Labels, Label{
 			Id:    labelId,
 			Name:  labelName,

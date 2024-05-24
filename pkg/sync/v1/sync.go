@@ -3,11 +3,11 @@ package v1
 import (
 	"context"
 	"github.com/go-logr/logr"
+	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
 	"github.com/icinga/icinga-kubernetes/pkg/sync"
-	"github.com/icinga/icinga-kubernetes/pkg/types"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/cache"
@@ -86,7 +86,7 @@ func (s *Sync) sync(ctx context.Context, c *sync.Controller, features ...sync.Fe
 
 		return entity
 	}, func(k interface{}) interface{} {
-		return types.Checksum(k)
+		return utils.Checksum(k)
 	})
 
 	with := sync.NewFeatures(features...)

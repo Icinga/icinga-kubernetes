@@ -2,9 +2,10 @@ package v1
 
 import (
 	"database/sql"
+	"github.com/icinga/icinga-go-library/types"
+	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
-	"github.com/icinga/icinga-kubernetes/pkg/types"
 	kbatchv1 "k8s.io/api/batch/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strings"
@@ -98,7 +99,7 @@ func (j *Job) Obtain(k8s kmetav1.Object) {
 		completionTime = *job.Status.CompletionTime
 	}
 
-	j.Id = types.Checksum(j.Namespace + "/" + j.Name)
+	j.Id = utils.Checksum(j.Namespace + "/" + j.Name)
 	j.Parallelism = parallelism
 	j.Completions = completions
 	j.ActiveDeadlineSeconds = activeDeadlineSeconds
@@ -125,7 +126,7 @@ func (j *Job) Obtain(k8s kmetav1.Object) {
 	}
 
 	for labelName, labelValue := range job.Labels {
-		labelId := types.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		labelId := utils.Checksum(strings.ToLower(labelName + ":" + labelValue))
 		j.Labels = append(j.Labels, Label{
 			Id:    labelId,
 			Name:  labelName,

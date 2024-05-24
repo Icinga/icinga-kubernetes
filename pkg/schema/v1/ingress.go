@@ -2,8 +2,9 @@ package v1
 
 import (
 	"database/sql"
+	"github.com/icinga/icinga-go-library/types"
+	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
-	"github.com/icinga/icinga-kubernetes/pkg/types"
 	networkingv1 "k8s.io/api/networking/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -59,7 +60,7 @@ func (i *Ingress) Obtain(k8s kmetav1.Object) {
 
 	ingress := k8s.(*networkingv1.Ingress)
 
-	i.Id = types.Checksum(i.Namespace + "/" + i.Name)
+	i.Id = utils.Checksum(i.Namespace + "/" + i.Name)
 	for _, tls := range ingress.Spec.TLS {
 		for _, host := range tls.Hosts {
 			i.IngressTls = append(i.IngressTls, IngressTls{
@@ -72,7 +73,7 @@ func (i *Ingress) Obtain(k8s kmetav1.Object) {
 
 	if ingress.Spec.DefaultBackend != nil {
 		if ingress.Spec.DefaultBackend.Service != nil {
-			serviceId := types.Checksum(i.Namespace + ingress.Spec.DefaultBackend.Service.Name + ingress.Spec.DefaultBackend.Service.Port.Name)
+			serviceId := utils.Checksum(i.Namespace + ingress.Spec.DefaultBackend.Service.Name + ingress.Spec.DefaultBackend.Service.Port.Name)
 			i.IngressBackendService = append(i.IngressBackendService, IngressBackendService{
 				ServiceId:         serviceId,
 				IngressId:         i.Id,
@@ -82,7 +83,7 @@ func (i *Ingress) Obtain(k8s kmetav1.Object) {
 			})
 		}
 		if ingress.Spec.DefaultBackend.Resource != nil {
-			resourceId := types.Checksum(i.Namespace + ingress.Spec.DefaultBackend.Resource.Kind + ingress.Spec.DefaultBackend.Resource.Name)
+			resourceId := utils.Checksum(i.Namespace + ingress.Spec.DefaultBackend.Resource.Kind + ingress.Spec.DefaultBackend.Resource.Name)
 			var apiGroup sql.NullString
 			if ingress.Spec.DefaultBackend.Resource.APIGroup != nil {
 				apiGroup.String = *ingress.Spec.DefaultBackend.Resource.APIGroup
@@ -110,8 +111,8 @@ func (i *Ingress) Obtain(k8s kmetav1.Object) {
 				pathType.Valid = true
 			}
 			if ruleValue.Backend.Service != nil {
-				ingressRuleId := types.Checksum(string(i.Id) + rules.Host + ruleValue.Path + ruleValue.Backend.Service.Name)
-				serviceId := types.Checksum(string(ingressRuleId) + i.Namespace + ruleValue.Backend.Service.Name)
+				ingressRuleId := utils.Checksum(string(i.Id) + rules.Host + ruleValue.Path + ruleValue.Backend.Service.Name)
+				serviceId := utils.Checksum(string(ingressRuleId) + i.Namespace + ruleValue.Backend.Service.Name)
 				i.IngressBackendService = append(i.IngressBackendService, IngressBackendService{
 					ServiceId:         serviceId,
 					IngressId:         i.Id,
@@ -129,8 +130,8 @@ func (i *Ingress) Obtain(k8s kmetav1.Object) {
 					PathType:  pathType,
 				})
 			} else if ruleValue.Backend.Resource != nil {
-				ingressRuleId := types.Checksum(string(i.Id) + rules.Host + ruleValue.Path + ruleValue.Backend.Resource.Name)
-				resourceId := types.Checksum(string(ingressRuleId) + i.Namespace + ruleValue.Backend.Resource.Name)
+				ingressRuleId := utils.Checksum(string(i.Id) + rules.Host + ruleValue.Path + ruleValue.Backend.Resource.Name)
+				resourceId := utils.Checksum(string(ingressRuleId) + i.Namespace + ruleValue.Backend.Resource.Name)
 				var apiGroup sql.NullString
 				if ruleValue.Backend.Resource.APIGroup != nil {
 					apiGroup.String = *ruleValue.Backend.Resource.APIGroup

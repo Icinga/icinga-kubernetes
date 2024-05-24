@@ -1,8 +1,9 @@
 package v1
 
 import (
+	"github.com/icinga/icinga-go-library/types"
+	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
-	"github.com/icinga/icinga-kubernetes/pkg/types"
 	"github.com/pkg/errors"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -60,7 +61,7 @@ func (n *Node) Obtain(k8s kmetav1.Object) {
 
 	node := k8s.(*kcorev1.Node)
 
-	n.Id = types.Checksum(n.Namespace + "/" + n.Name)
+	n.Id = utils.Checksum(n.Namespace + "/" + n.Name)
 	n.PodCIDR = node.Spec.PodCIDR
 	if n.PodCIDR != "" {
 		_, cidr, err := net.ParseCIDR(n.PodCIDR)
@@ -114,7 +115,7 @@ func (n *Node) Obtain(k8s kmetav1.Object) {
 	}
 
 	for labelName, labelValue := range node.Labels {
-		labelId := types.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		labelId := utils.Checksum(strings.ToLower(labelName + ":" + labelValue))
 		n.Labels = append(n.Labels, Label{
 			Id:    labelId,
 			Name:  labelName,

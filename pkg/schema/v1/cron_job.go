@@ -1,8 +1,9 @@
 package v1
 
 import (
+	"github.com/icinga/icinga-go-library/types"
+	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
-	"github.com/icinga/icinga-kubernetes/pkg/types"
 	kbatchv1 "k8s.io/api/batch/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strings"
@@ -67,7 +68,7 @@ func (c *CronJob) Obtain(k8s kmetav1.Object) {
 		c.LastSuccessfulTime = types.UnixMilli(cronJob.Status.LastSuccessfulTime.Time)
 	}
 
-	c.Id = types.Checksum(c.Namespace + "/" + c.Name)
+	c.Id = utils.Checksum(c.Namespace + "/" + c.Name)
 	c.Schedule = cronJob.Spec.Schedule
 	c.Timezone = timeZone
 	c.StartingDeadlineSeconds = startingDeadlineSeconds
@@ -78,7 +79,7 @@ func (c *CronJob) Obtain(k8s kmetav1.Object) {
 	c.Active = int32(len(cronJob.Status.Active))
 
 	for labelName, labelValue := range cronJob.Labels {
-		labelId := types.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		labelId := utils.Checksum(strings.ToLower(labelName + ":" + labelValue))
 		c.Labels = append(c.Labels, Label{
 			Id:    labelId,
 			Name:  labelName,

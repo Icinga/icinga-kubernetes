@@ -1,6 +1,6 @@
 package v1
 
-import "github.com/icinga/icinga-kubernetes/pkg/types"
+import "github.com/icinga/icinga-go-library/types"
 
 type Data struct {
 	Id    types.Binary

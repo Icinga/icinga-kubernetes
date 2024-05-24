@@ -2,9 +2,10 @@ package v1
 
 import (
 	"database/sql"
+	"github.com/icinga/icinga-go-library/types"
+	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
-	"github.com/icinga/icinga-kubernetes/pkg/types"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ktypes "k8s.io/apimachinery/pkg/types"
@@ -94,7 +95,7 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 
 	pod := k8s.(*kcorev1.Pod)
 
-	p.Id = types.Checksum(pod.Namespace + "/" + pod.Name)
+	p.Id = utils.Checksum(pod.Namespace + "/" + pod.Name)
 	p.NodeName = pod.Spec.NodeName
 	p.NominatedNodeName = pod.Status.NominatedNodeName
 	p.Ip = pod.Status.PodIP
@@ -137,7 +138,7 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 
 		container := Container{
 			ContainerMeta: ContainerMeta{
-				Id:    types.Checksum(pod.Namespace + "/" + pod.Name + "/" + k8sContainer.Name),
+				Id:    utils.Checksum(pod.Namespace + "/" + pod.Name + "/" + k8sContainer.Name),
 				PodId: p.Id,
 			},
 			Name:           k8sContainer.Name,
@@ -196,7 +197,7 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 	}
 
 	for labelName, labelValue := range pod.Labels {
-		labelId := types.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		labelId := utils.Checksum(strings.ToLower(labelName + ":" + labelValue))
 		p.Labels = append(p.Labels, Label{
 			Id:    labelId,
 			Name:  labelName,

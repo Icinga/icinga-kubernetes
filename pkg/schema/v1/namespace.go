@@ -1,8 +1,9 @@
 package v1
 
 import (
+	"github.com/icinga/icinga-go-library/types"
+	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
-	"github.com/icinga/icinga-kubernetes/pkg/types"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strings"
@@ -40,7 +41,7 @@ func (n *Namespace) Obtain(k8s kmetav1.Object) {
 
 	namespace := k8s.(*kcorev1.Namespace)
 
-	n.Id = types.Checksum(namespace.Name)
+	n.Id = utils.Checksum(namespace.Name)
 	n.Phase = strings.ToLower(string(namespace.Status.Phase))
 
 	for _, condition := range namespace.Status.Conditions {
@@ -55,7 +56,7 @@ func (n *Namespace) Obtain(k8s kmetav1.Object) {
 	}
 
 	for labelName, labelValue := range namespace.Labels {
-		labelId := types.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		labelId := utils.Checksum(strings.ToLower(labelName + ":" + labelValue))
 		n.Labels = append(n.Labels, Label{
 			Id:    labelId,
 			Name:  labelName,

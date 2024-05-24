@@ -2,9 +2,10 @@ package v1
 
 import (
 	"database/sql"
+	"github.com/icinga/icinga-go-library/types"
+	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
-	"github.com/icinga/icinga-kubernetes/pkg/types"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ktypes "k8s.io/apimachinery/pkg/types"
@@ -42,7 +43,7 @@ func (p *PersistentVolume) Obtain(k8s kmetav1.Object) {
 
 	persistentVolume := k8s.(*kcorev1.PersistentVolume)
 
-	p.Id = types.Checksum(persistentVolume.Namespace + "/" + persistentVolume.Name)
+	p.Id = utils.Checksum(persistentVolume.Namespace + "/" + persistentVolume.Name)
 	p.AccessModes = persistentVolumeAccessModes.Bitmask(persistentVolume.Spec.AccessModes...)
 	p.Capacity = persistentVolume.Spec.Capacity.Storage().MilliValue()
 	p.ReclaimPolicy = strcase.Snake(string(persistentVolume.Spec.PersistentVolumeReclaimPolicy))

@@ -1,9 +1,10 @@
 package v1
 
 import (
+	"github.com/icinga/icinga-go-library/types"
+	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
-	"github.com/icinga/icinga-kubernetes/pkg/types"
 	kappsv1 "k8s.io/api/apps/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strings"
@@ -67,7 +68,7 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object) {
 	} else {
 		pvcRetentionPolicyDeleted, pvcRetentionPolicyScaled = kappsv1.RetainPersistentVolumeClaimRetentionPolicyType, kappsv1.RetainPersistentVolumeClaimRetentionPolicyType
 	}
-	s.Id = types.Checksum(s.Namespace + "/" + s.Name)
+	s.Id = utils.Checksum(s.Namespace + "/" + s.Name)
 	s.DesiredReplicas = replicas
 	s.ServiceName = statefulSet.Spec.ServiceName
 	s.PodManagementPolicy = strcase.Snake(string(statefulSet.Spec.PodManagementPolicy))
@@ -95,7 +96,7 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object) {
 	}
 
 	for labelName, labelValue := range statefulSet.Labels {
-		labelId := types.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		labelId := utils.Checksum(strings.ToLower(labelName + ":" + labelValue))
 		s.Labels = append(s.Labels, Label{
 			Id:    labelId,
 			Name:  labelName,
