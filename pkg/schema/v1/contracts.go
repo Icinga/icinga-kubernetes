@@ -1,10 +1,13 @@
 package v1
 
 import (
+	"github.com/google/uuid"
 	"github.com/icinga/icinga-go-library/types"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ktypes "k8s.io/apimachinery/pkg/types"
 )
+
+var NameSpaceKubernetes = uuid.MustParse("3f249403-2bb0-428f-8e91-504d1fd7ddb6")
 
 type Resource interface {
 	kmetav1.Object
@@ -12,6 +15,7 @@ type Resource interface {
 }
 
 type Meta struct {
+	Uuid            types.UUID
 	Uid             ktypes.UID
 	Namespace       string
 	Name            string
@@ -20,6 +24,7 @@ type Meta struct {
 }
 
 func (m *Meta) ObtainMeta(k8s kmetav1.Object) {
+	m.Uuid = EnsureUUID(k8s.GetUID())
 	m.Uid = k8s.GetUID()
 	m.Namespace = k8s.GetNamespace()
 	m.Name = k8s.GetName()
@@ -57,6 +62,14 @@ func (m *Meta) GetOwnerReferences() []kmetav1.OwnerReference   { panic("Not expe
 func (m *Meta) SetOwnerReferences([]kmetav1.OwnerReference)    { panic("Not expected to be called") }
 func (m *Meta) GetManagedFields() []kmetav1.ManagedFieldsEntry { panic("Not expected to be called") }
 func (m *Meta) SetManagedFields([]kmetav1.ManagedFieldsEntry)  { panic("Not expected to be called") }
+
+func EnsureUUID(uid ktypes.UID) types.UUID {
+	if id, err := uuid.Parse(string(uid)); err == nil {
+		return types.UUID{UUID: id}
+	}
+
+	return types.UUID{UUID: uuid.NewSHA1(NameSpaceKubernetes, []byte(uid))}
+}
 
 // Assert interface compliance.
 var (
