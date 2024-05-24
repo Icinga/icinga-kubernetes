@@ -4,6 +4,9 @@ import (
 	"context"
 	"flag"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/icinga/icinga-go-library/config"
+	igldatabase "github.com/icinga/icinga-go-library/database"
+	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-kubernetes/internal"
 	"github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
@@ -14,6 +17,8 @@ import (
 	syncv1 "github.com/icinga/icinga-kubernetes/pkg/sync/v1"
 	k8sMysql "github.com/icinga/icinga-kubernetes/schema/mysql"
 	"github.com/pkg/errors"
+	promapi "github.com/prometheus/client_golang/api"
+	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/informers"
@@ -35,7 +40,7 @@ func main() {
 		klog.Fatal(err)
 	}
 
-	var config string
+	var configLocation string
 
 	klog.InitFlags(nil)
 
@@ -45,7 +50,7 @@ func main() {
 
 		return nil
 	})
-	flag.StringVar(&config, "config", "./config.yml", "path to the config file")
+	flag.StringVar(&configLocation, "config", "./config.yml", "path to the config file")
 	flag.Parse()
 
 	clientset, err := kubernetes.NewForConfig(kconfig)
@@ -56,7 +61,9 @@ func main() {
 	factory := informers.NewSharedInformerFactory(clientset, 0)
 	log := klog.NewKlogr()
 
-	cfg, err := config.FromYAMLFile[internal.Config](flags.Config)
+	cfg := internal.Config{}
+
+	err = config.FromYAMLFile(configLocation, &cfg)
 	if err != nil {
 		klog.Fatal(errors.Wrap(err, "can't create configuration"))
 	}
@@ -68,7 +75,17 @@ func main() {
 
 	promApiClient := promv1.NewAPI(promClient)
 
-	db, err := database.NewDbFromConfig(&cfg.Database, logs.GetChildLogger("Database"))
+	logs, err := logging.NewLoggingFromConfig("Icinga Kubernetes", cfg.Logging)
+	if err != nil {
+		klog.Fatal(errors.Wrap(err, "can't configure logging"))
+	}
+
+	db2, err := igldatabase.NewDbFromConfig(&cfg.Database, logs.GetChildLogger("database"), igldatabase.RetryConnectorCallbacks{})
+	if err != nil {
+		klog.Fatal("IGL_DATABASE: ", err)
+	}
+
+	d, err := database.FromYAMLFile(configLocation)
 	if err != nil {
 		klog.Fatal(err)
 	}
@@ -192,7 +209,7 @@ func main() {
 		return s.Run(ctx)
 	})
 	g.Go(func() error {
-		promMetricSync := metrics.NewPromMetricSync(promApiClient, db)
+		promMetricSync := metrics.NewPromMetricSync(promApiClient, db2)
 
 		return promMetricSync.Run(ctx)
 	})
