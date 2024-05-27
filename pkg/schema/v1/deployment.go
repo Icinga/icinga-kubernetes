@@ -114,6 +114,10 @@ func (d *Deployment) Obtain(k8s kmetav1.Object) {
 }
 
 func (d *Deployment) getIcingaState() (IcingaState, string) {
+	if gracePeriodReason := IsWithinGracePeriod(d); gracePeriodReason != nil {
+		return Ok, *gracePeriodReason
+	}
+
 	for _, condition := range d.Conditions {
 		if condition.Type == string(kappsv1.DeploymentAvailable) && condition.Status != string(kcorev1.ConditionTrue) {
 			reason := fmt.Sprintf("Deployment %s/%s is not available: %s", d.Namespace, d.Name, condition.Message)
