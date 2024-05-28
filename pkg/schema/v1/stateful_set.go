@@ -2,7 +2,6 @@ package v1
 
 import (
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
 	kappsv1 "k8s.io/api/apps/v1"
@@ -12,7 +11,6 @@ import (
 
 type StatefulSet struct {
 	Meta
-	Id                                              types.Binary
 	DesiredReplicas                                 int32
 	ServiceName                                     string
 	PodManagementPolicy                             string
@@ -32,17 +30,17 @@ type StatefulSet struct {
 }
 
 type StatefulSetCondition struct {
-	StatefulSetId  types.Binary
-	Type           string
-	Status         string
-	LastTransition types.UnixMilli
-	Reason         string
-	Message        string
+	StatefulSetUuid types.UUID
+	Type            string
+	Status          string
+	LastTransition  types.UnixMilli
+	Reason          string
+	Message         string
 }
 
 type StatefulSetLabel struct {
-	StatefulSetId types.Binary
-	LabelId       types.Binary
+	StatefulSetUuid types.UUID
+	LabelUuid       types.UUID
 }
 
 func NewStatefulSet() Resource {
@@ -68,7 +66,7 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object) {
 	} else {
 		pvcRetentionPolicyDeleted, pvcRetentionPolicyScaled = kappsv1.RetainPersistentVolumeClaimRetentionPolicyType, kappsv1.RetainPersistentVolumeClaimRetentionPolicyType
 	}
-	s.Id = utils.Checksum(s.Namespace + "/" + s.Name)
+
 	s.DesiredReplicas = replicas
 	s.ServiceName = statefulSet.Spec.ServiceName
 	s.PodManagementPolicy = strcase.Snake(string(statefulSet.Spec.PodManagementPolicy))
@@ -86,31 +84,31 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object) {
 
 	for _, condition := range statefulSet.Status.Conditions {
 		s.Conditions = append(s.Conditions, StatefulSetCondition{
-			StatefulSetId:  s.Id,
-			Type:           string(condition.Type),
-			Status:         string(condition.Status),
-			LastTransition: types.UnixMilli(condition.LastTransitionTime.Time),
-			Reason:         condition.Reason,
-			Message:        condition.Message,
+			StatefulSetUuid: s.Uuid,
+			Type:            string(condition.Type),
+			Status:          string(condition.Status),
+			LastTransition:  types.UnixMilli(condition.LastTransitionTime.Time),
+			Reason:          condition.Reason,
+			Message:         condition.Message,
 		})
 	}
 
 	for labelName, labelValue := range statefulSet.Labels {
-		labelId := utils.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		labelUuid := NewUUID(s.Uuid, strings.ToLower(labelName+":"+labelValue))
 		s.Labels = append(s.Labels, Label{
-			Id:    labelId,
+			Uuid:  labelUuid,
 			Name:  labelName,
 			Value: labelValue,
 		})
 		s.StatefulSetLabels = append(s.StatefulSetLabels, StatefulSetLabel{
-			StatefulSetId: s.Id,
-			LabelId:       labelId,
+			StatefulSetUuid: s.Uuid,
+			LabelUuid:       labelUuid,
 		})
 	}
 }
 
 func (s *StatefulSet) Relations() []database.Relation {
-	fk := database.WithForeignKey("stateful_set_id")
+	fk := database.WithForeignKey("stateful_set_uuid")
 
 	return []database.Relation{
 		database.HasMany(s.Conditions, fk),

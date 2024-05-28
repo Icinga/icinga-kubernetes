@@ -32,8 +32,8 @@ const (
 )
 
 type ContainerMeta struct {
-	Id    types.Binary `db:"id"`
-	PodId types.Binary `db:"pod_id"`
+	Uuid    types.UUID `db:"uuid"`
+	PodUuid types.UUID `db:"pod_uuid"`
 }
 
 type Container struct {
@@ -68,19 +68,19 @@ func (c *Container) Relations() []database.Relation {
 }
 
 type ContainerDevice struct {
-	ContainerId types.Binary
-	PodId       types.Binary
-	Name        string
-	Path        string
+	ContainerUuid types.UUID
+	PodUuid       types.UUID
+	Name          string
+	Path          string
 }
 
 type ContainerMount struct {
-	ContainerId types.Binary
-	PodId       types.Binary
-	VolumeName  string
-	Path        string
-	SubPath     sql.NullString
-	ReadOnly    types.Bool
+	ContainerUuid types.UUID
+	PodUuid       types.UUID
+	VolumeName    string
+	Path          string
+	SubPath       sql.NullString
+	ReadOnly      types.Bool
 }
 
 type ContainerLogMeta struct {
@@ -89,8 +89,8 @@ type ContainerLogMeta struct {
 }
 
 type ContainerLog struct {
-	PodId       types.Binary `db:"pod_id"`
-	ContainerId types.Binary `db:"container_id"`
+	PodUuid       types.UUID `db:"pod_uuid"`
+	ContainerUuid types.UUID `db:"container_uuid"`
 	ContainerLogMeta
 
 	Namespace     string `db:"-"`
@@ -163,24 +163,24 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 		scheduler.StartAsync()
 		defer scheduler.Stop()
 
-		query := db.BuildSelectStmt(&Container{}, ContainerMeta{}) + ` WHERE pod_id=:pod_id`
+		query := db.BuildSelectStmt(&Container{}, ContainerMeta{}) + ` WHERE pod_uuid=:pod_uuid`
 
 		for {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case podId, ok := <-deletePods:
+			case podUuid, ok := <-deletePods:
 				if !ok {
 					return nil
 				}
 
-				meta := &ContainerMeta{PodId: podId.([]byte)}
-				if _, ok := deletedPodIds[meta.PodId.String()]; ok {
+				meta := &ContainerMeta{PodUuid: podUuid.(types.UUID)}
+				if _, ok := deletedPodIds[meta.PodUuid.String()]; ok {
 					// Due to the recursive relation resolution in the `DB#DeleteStreamed()` method, we may get the
 					// same pod ID multiple times since they all share the same `on success` handler.
 					break
 				}
-				deletedPodIds[meta.PodId.String()] = true
+				deletedPodIds[meta.PodUuid.String()] = true
 
 				entities, errs := db.YieldAll(ctx, func() (interface{}, error) {
 					return &Container{}, nil
@@ -201,18 +201,18 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 
 							container := e.(*Container)
 							select {
-							case containerIds <- container.Id:
+							case containerIds <- container.Uuid:
 							case <-ctx.Done():
 								return ctx.Err()
 							}
 
-							err := scheduler.RemoveByTag(container.Id.String())
+							err := scheduler.RemoveByTag(container.Uuid.String())
 							if err != nil && !errors.Is(err, gocron.ErrJobNotFoundWithTag) {
 								return err
 							}
 
 							containerLogsMu.Lock()
-							delete(containerLogs, container.Id.String())
+							delete(containerLogs, container.Uuid.String())
 							containerLogsMu.Unlock()
 						}
 					}
@@ -224,42 +224,42 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 
 				pod := e.(*Pod)
 
-				delete(deletedPodIds, pod.Id.String())
+				delete(deletedPodIds, pod.Uuid.String())
 
 				for _, container := range pod.Containers {
-					_, err := scheduler.FindJobsByTag(container.Id.String())
+					_, err := scheduler.FindJobsByTag(container.Uuid.String())
 					if err != nil && !errors.Is(err, gocron.ErrJobNotFoundWithTag) {
 						return err
 					}
 
 					if container.Started.Bool && err != nil {
 						containerLog := &ContainerLog{
-							ContainerId:   container.Id,
-							PodId:         container.PodId,
+							ContainerUuid: container.Uuid,
+							PodUuid:       container.PodUuid,
 							ContainerName: container.Name,
 							Namespace:     pod.Namespace,
 							PodName:       pod.Name,
 						}
 
 						containerLogsMu.Lock()
-						if cl, ok := containerLogs[container.Id.String()]; ok {
+						if cl, ok := containerLogs[container.Uuid.String()]; ok {
 							containerLog.Logs = cl.Logs
 						}
 						containerLogsMu.Unlock()
 
-						scheduler.Every(ScheduleInterval.String()).Tag(container.Id.String())
+						scheduler.Every(ScheduleInterval.String()).Tag(container.Uuid.String())
 						_, err = scheduler.Do(containerLog.syncContainerLogs, ctx, pod.factory.clientset, db)
 						if err != nil {
 							return err
 						}
 					} else if err == nil {
-						err := scheduler.RemoveByTag(container.Id.String())
+						err := scheduler.RemoveByTag(container.Uuid.String())
 						if err != nil {
 							return err
 						}
 
 						containerLogsMu.Lock()
-						delete(containerLogs, container.Id.String())
+						delete(containerLogs, container.Uuid.String())
 						containerLogsMu.Unlock()
 					}
 				}
@@ -293,7 +293,7 @@ func warmup(ctx context.Context, db *database.Database) error {
 				}
 
 				containerLog := e.(*ContainerLog)
-				containerLogs[containerLog.ContainerId.String()] = *containerLog
+				containerLogs[containerLog.ContainerUuid.String()] = *containerLog
 			}
 		}
 	})

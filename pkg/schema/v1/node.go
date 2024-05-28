@@ -2,7 +2,6 @@ package v1
 
 import (
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/pkg/errors"
 	kcorev1 "k8s.io/api/core/v1"
@@ -14,7 +13,6 @@ import (
 
 type Node struct {
 	Meta
-	Id                types.Binary
 	PodCIDR           string
 	NumIps            int64
 	Unschedulable     types.Bool
@@ -31,7 +29,7 @@ type Node struct {
 }
 
 type NodeCondition struct {
-	NodeId         types.Binary
+	NodeUuid       types.UUID
 	Type           string
 	Status         string
 	LastHeartbeat  types.UnixMilli
@@ -41,15 +39,15 @@ type NodeCondition struct {
 }
 
 type NodeVolume struct {
-	NodeId     types.Binary
+	NodeUuid   types.UUID
 	Name       kcorev1.UniqueVolumeName
 	DevicePath string
 	Mounted    types.Bool
 }
 
 type NodeLabel struct {
-	NodeId  types.Binary
-	LabelId types.Binary
+	NodeUuid  types.UUID
+	LabelUuid types.UUID
 }
 
 func NewNode() Resource {
@@ -61,7 +59,6 @@ func (n *Node) Obtain(k8s kmetav1.Object) {
 
 	node := k8s.(*kcorev1.Node)
 
-	n.Id = utils.Checksum(n.Namespace + "/" + n.Name)
 	n.PodCIDR = node.Spec.PodCIDR
 	if n.PodCIDR != "" {
 		_, cidr, err := net.ParseCIDR(n.PodCIDR)
@@ -86,7 +83,7 @@ func (n *Node) Obtain(k8s kmetav1.Object) {
 
 	for _, condition := range node.Status.Conditions {
 		n.Conditions = append(n.Conditions, NodeCondition{
-			NodeId:         n.Id,
+			NodeUuid:       n.Uuid,
 			Type:           string(condition.Type),
 			Status:         string(condition.Status),
 			LastHeartbeat:  types.UnixMilli(condition.LastHeartbeatTime.Time),
@@ -104,7 +101,7 @@ func (n *Node) Obtain(k8s kmetav1.Object) {
 	for _, volume := range node.Status.VolumesAttached {
 		_, mounted := volumesMounted[volume.Name]
 		n.Volumes = append(n.Volumes, NodeVolume{
-			NodeId:     n.Id,
+			NodeUuid:   n.Uuid,
 			Name:       volume.Name,
 			DevicePath: volume.DevicePath,
 			Mounted: types.Bool{
@@ -115,21 +112,21 @@ func (n *Node) Obtain(k8s kmetav1.Object) {
 	}
 
 	for labelName, labelValue := range node.Labels {
-		labelId := utils.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		labelUuid := NewUUID(n.Uuid, strings.ToLower(labelName+":"+labelValue))
 		n.Labels = append(n.Labels, Label{
-			Id:    labelId,
+			Uuid:  labelUuid,
 			Name:  labelName,
 			Value: labelValue,
 		})
 		n.NodeLabels = append(n.NodeLabels, NodeLabel{
-			NodeId:  n.Id,
-			LabelId: labelId,
+			NodeUuid:  n.Uuid,
+			LabelUuid: labelUuid,
 		})
 	}
 }
 
 func (n *Node) Relations() []database.Relation {
-	fk := database.WithForeignKey("node_id")
+	fk := database.WithForeignKey("node_uuid")
 
 	return []database.Relation{
 		database.HasMany(n.Conditions, fk),

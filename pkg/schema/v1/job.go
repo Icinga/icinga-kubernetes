@@ -3,7 +3,6 @@ package v1
 import (
 	"database/sql"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
 	kbatchv1 "k8s.io/api/batch/v1"
@@ -13,7 +12,6 @@ import (
 
 type Job struct {
 	Meta
-	Id                      types.Binary
 	Parallelism             sql.NullInt32
 	Completions             sql.NullInt32
 	ActiveDeadlineSeconds   sql.NullInt64
@@ -32,7 +30,7 @@ type Job struct {
 }
 
 type JobCondition struct {
-	JobId          types.Binary
+	JobUuid        types.UUID
 	Type           string
 	Status         string
 	LastProbe      types.UnixMilli
@@ -42,8 +40,8 @@ type JobCondition struct {
 }
 
 type JobLabel struct {
-	JobId   types.Binary
-	LabelId types.Binary
+	JobUuid   types.UUID
+	LabelUuid types.UUID
 }
 
 func NewJob() Resource {
@@ -99,7 +97,6 @@ func (j *Job) Obtain(k8s kmetav1.Object) {
 		completionTime = *job.Status.CompletionTime
 	}
 
-	j.Id = utils.Checksum(j.Namespace + "/" + j.Name)
 	j.Parallelism = parallelism
 	j.Completions = completions
 	j.ActiveDeadlineSeconds = activeDeadlineSeconds
@@ -115,7 +112,7 @@ func (j *Job) Obtain(k8s kmetav1.Object) {
 
 	for _, condition := range job.Status.Conditions {
 		j.Conditions = append(j.Conditions, JobCondition{
-			JobId:          j.Id,
+			JobUuid:        j.Uuid,
 			Type:           strcase.Snake(string(condition.Type)),
 			Status:         strcase.Snake(string(condition.Status)),
 			LastProbe:      types.UnixMilli(condition.LastProbeTime.Time),
@@ -126,21 +123,21 @@ func (j *Job) Obtain(k8s kmetav1.Object) {
 	}
 
 	for labelName, labelValue := range job.Labels {
-		labelId := utils.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		labelUuid := NewUUID(j.Uuid, strings.ToLower(labelName+":"+labelValue))
 		j.Labels = append(j.Labels, Label{
-			Id:    labelId,
+			Uuid:  labelUuid,
 			Name:  labelName,
 			Value: labelValue,
 		})
 		j.JobLabels = append(j.JobLabels, JobLabel{
-			JobId:   j.Id,
-			LabelId: labelId,
+			JobUuid:   j.Uuid,
+			LabelUuid: labelUuid,
 		})
 	}
 }
 
 func (j *Job) Relations() []database.Relation {
-	fk := database.WithForeignKey("job_id")
+	fk := database.WithForeignKey("job_uuid")
 
 	return []database.Relation{
 		database.HasMany(j.Conditions, fk),

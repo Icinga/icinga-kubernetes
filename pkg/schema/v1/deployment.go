@@ -2,7 +2,6 @@ package v1
 
 import (
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
 	kappsv1 "k8s.io/api/apps/v1"
@@ -12,7 +11,6 @@ import (
 
 type Deployment struct {
 	Meta
-	Id                      types.Binary
 	DesiredReplicas         int32
 	Strategy                string
 	MinReadySeconds         int32
@@ -29,7 +27,7 @@ type Deployment struct {
 }
 
 type DeploymentCondition struct {
-	DeploymentId   types.Binary
+	DeploymentUuid types.UUID
 	Type           string
 	Status         string
 	LastUpdate     types.UnixMilli
@@ -39,8 +37,8 @@ type DeploymentCondition struct {
 }
 
 type DeploymentLabel struct {
-	DeploymentId types.Binary
-	LabelId      types.Binary
+	DeploymentUuid types.UUID
+	LabelUuid      types.UUID
 }
 
 func NewDeployment() Resource {
@@ -59,7 +57,7 @@ func (d *Deployment) Obtain(k8s kmetav1.Object) {
 	if deployment.Spec.ProgressDeadlineSeconds != nil {
 		progressDeadlineSeconds = *deployment.Spec.ProgressDeadlineSeconds
 	}
-	d.Id = utils.Checksum(deployment.Namespace + "/" + deployment.Name)
+
 	d.DesiredReplicas = replicas
 	d.Strategy = strcase.Snake(string(deployment.Spec.Strategy.Type))
 	d.MinReadySeconds = deployment.Spec.MinReadySeconds
@@ -76,7 +74,7 @@ func (d *Deployment) Obtain(k8s kmetav1.Object) {
 
 	for _, condition := range deployment.Status.Conditions {
 		d.Conditions = append(d.Conditions, DeploymentCondition{
-			DeploymentId:   d.Id,
+			DeploymentUuid: d.Uuid,
 			Type:           strcase.Snake(string(condition.Type)),
 			Status:         string(condition.Status),
 			LastUpdate:     types.UnixMilli(condition.LastUpdateTime.Time),
@@ -87,21 +85,21 @@ func (d *Deployment) Obtain(k8s kmetav1.Object) {
 	}
 
 	for labelName, labelValue := range deployment.Labels {
-		labelId := utils.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		labelUuid := NewUUID(d.Uuid, strings.ToLower(labelName+":"+labelValue))
 		d.Labels = append(d.Labels, Label{
-			Id:    labelId,
+			Uuid:  labelUuid,
 			Name:  labelName,
 			Value: labelValue,
 		})
 		d.DeploymentLabels = append(d.DeploymentLabels, DeploymentLabel{
-			DeploymentId: d.Id,
-			LabelId:      labelId,
+			DeploymentUuid: d.Uuid,
+			LabelUuid:      labelUuid,
 		})
 	}
 }
 
 func (d *Deployment) Relations() []database.Relation {
-	fk := database.WithForeignKey("deployment_id")
+	fk := database.WithForeignKey("deployment_uuid")
 
 	return []database.Relation{
 		database.HasMany(d.Conditions, fk),

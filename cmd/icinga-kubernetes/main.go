@@ -185,7 +185,7 @@ func main() {
 		_, err := db.CleanupOlderThan(
 			ctx, database.CleanupStmt{
 				Table:  "event",
-				PK:     "id",
+				PK:     "uuid",
 				Column: "created",
 			}, 5000, olderThan,
 		)

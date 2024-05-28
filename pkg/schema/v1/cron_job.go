@@ -2,7 +2,6 @@ package v1
 
 import (
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	kbatchv1 "k8s.io/api/batch/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -11,7 +10,6 @@ import (
 
 type CronJob struct {
 	Meta
-	Id                         types.Binary
 	Schedule                   string
 	Timezone                   string
 	StartingDeadlineSeconds    int64
@@ -27,8 +25,8 @@ type CronJob struct {
 }
 
 type CronJobLabel struct {
-	CronJobId types.Binary
-	LabelId   types.Binary
+	CronJobUuid types.UUID
+	LabelUuid   types.UUID
 }
 
 func NewCronJob() Resource {
@@ -68,7 +66,6 @@ func (c *CronJob) Obtain(k8s kmetav1.Object) {
 		c.LastSuccessfulTime = types.UnixMilli(cronJob.Status.LastSuccessfulTime.Time)
 	}
 
-	c.Id = utils.Checksum(c.Namespace + "/" + c.Name)
 	c.Schedule = cronJob.Spec.Schedule
 	c.Timezone = timeZone
 	c.StartingDeadlineSeconds = startingDeadlineSeconds
@@ -79,21 +76,21 @@ func (c *CronJob) Obtain(k8s kmetav1.Object) {
 	c.Active = int32(len(cronJob.Status.Active))
 
 	for labelName, labelValue := range cronJob.Labels {
-		labelId := utils.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		labelUuid := NewUUID(c.Uuid, strings.ToLower(labelName+":"+labelValue))
 		c.Labels = append(c.Labels, Label{
-			Id:    labelId,
+			Uuid:  labelUuid,
 			Name:  labelName,
 			Value: labelValue,
 		})
 		c.CronJobLabels = append(c.CronJobLabels, CronJobLabel{
-			CronJobId: c.Id,
-			LabelId:   labelId,
+			CronJobUuid: c.Uuid,
+			LabelUuid:   labelUuid,
 		})
 	}
 }
 
 func (c *CronJob) Relations() []database.Relation {
-	fk := database.WithForeignKey("cron_job_id")
+	fk := database.WithForeignKey("cron_job_uuid")
 
 	return []database.Relation{
 		database.HasMany(c.Labels, database.WithoutCascadeDelete()),

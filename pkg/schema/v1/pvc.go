@@ -3,7 +3,6 @@ package v1
 import (
 	"database/sql"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
 	kcorev1 "k8s.io/api/core/v1"
@@ -34,7 +33,6 @@ var persistentVolumeAccessModes = kpersistentVolumeAccessModes{
 
 type Pvc struct {
 	Meta
-	Id                 types.Binary
 	DesiredAccessModes Bitmask[kpersistentVolumeAccessModesSize]
 	ActualAccessModes  Bitmask[kpersistentVolumeAccessModesSize]
 	MinimumCapacity    sql.NullInt64
@@ -49,7 +47,7 @@ type Pvc struct {
 }
 
 type PvcCondition struct {
-	PvcId          types.Binary
+	PvcUuid        types.UUID
 	Type           string
 	Status         string
 	LastProbe      types.UnixMilli
@@ -59,8 +57,8 @@ type PvcCondition struct {
 }
 
 type PvcLabel struct {
-	PvcId   types.Binary
-	LabelId types.Binary
+	PvcUuid   types.UUID
+	LabelUuid types.UUID
 }
 
 func NewPvc() Resource {
@@ -72,7 +70,6 @@ func (p *Pvc) Obtain(k8s kmetav1.Object) {
 
 	pvc := k8s.(*kcorev1.PersistentVolumeClaim)
 
-	p.Id = utils.Checksum(pvc.Namespace + "/" + pvc.Name)
 	p.DesiredAccessModes = persistentVolumeAccessModes.Bitmask(pvc.Spec.AccessModes...)
 	p.ActualAccessModes = persistentVolumeAccessModes.Bitmask(pvc.Status.AccessModes...)
 	if requestsStorage, ok := pvc.Spec.Resources.Requests[kcorev1.ResourceStorage]; ok {
@@ -99,7 +96,7 @@ func (p *Pvc) Obtain(k8s kmetav1.Object) {
 
 	for _, condition := range pvc.Status.Conditions {
 		p.Conditions = append(p.Conditions, PvcCondition{
-			PvcId:          p.Id,
+			PvcUuid:        p.Uuid,
 			Type:           strcase.Snake(string(condition.Type)),
 			Status:         string(condition.Status),
 			LastProbe:      types.UnixMilli(condition.LastProbeTime.Time),
@@ -110,21 +107,21 @@ func (p *Pvc) Obtain(k8s kmetav1.Object) {
 	}
 
 	for labelName, labelValue := range pvc.Labels {
-		labelId := utils.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		labelUuid := NewUUID(p.Uuid, strings.ToLower(labelName+":"+labelValue))
 		p.Labels = append(p.Labels, Label{
-			Id:    labelId,
+			Uuid:  labelUuid,
 			Name:  labelName,
 			Value: labelValue,
 		})
 		p.PvcLabels = append(p.PvcLabels, PvcLabel{
-			PvcId:   p.Id,
-			LabelId: labelId,
+			PvcUuid:   p.Uuid,
+			LabelUuid: labelUuid,
 		})
 	}
 }
 
 func (p *Pvc) Relations() []database.Relation {
-	fk := database.WithForeignKey("pvc_id")
+	fk := database.WithForeignKey("pvc_uuid")
 
 	return []database.Relation{
 		database.HasMany(p.Conditions, fk),
