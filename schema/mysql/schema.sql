@@ -35,7 +35,7 @@ CREATE TABLE node (
   memory_allocatable bigint unsigned NOT NULL,
   pod_capacity int unsigned NOT NULL,
   created bigint unsigned NOT NULL,
-  PRIMARY KEY (namespace, name)
+  PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE node_condition (
