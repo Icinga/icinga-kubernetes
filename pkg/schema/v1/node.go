@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"fmt"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/pkg/errors"
@@ -37,6 +38,8 @@ type Node struct {
 	ContainerRuntimeVersion string
 	KubeletVersion          string
 	KubeProxyVersion        string
+	IcingaState             IcingaState
+	IcingaStateReason       string
 	Conditions              []NodeCondition  `db:"-"`
 	Volumes                 []NodeVolume     `db:"-"`
 	Labels                  []Label          `db:"-"`
@@ -122,6 +125,8 @@ func (n *Node) Obtain(k8s kmetav1.Object) {
 	}
 	n.Roles = strings.Join(roles, ", ")
 
+	n.IcingaState, n.IcingaStateReason = n.getIcingaState(node)
+
 	for _, condition := range node.Status.Conditions {
 		n.Conditions = append(n.Conditions, NodeCondition{
 			NodeUuid:       n.Uuid,
@@ -183,6 +188,47 @@ func (n *Node) Obtain(k8s kmetav1.Object) {
 			AnnotationUuid: annotationUuid,
 		})
 	}
+}
+
+func (n *Node) getIcingaState(node *kcorev1.Node) (IcingaState, string) {
+	if node.Status.Phase == kcorev1.NodePending {
+		return Pending, fmt.Sprintf("Node %s is pending", node.Name)
+	}
+
+	if node.Status.Phase == kcorev1.NodeTerminated {
+		return Ok, fmt.Sprintf("Node %s is terminated", node.Name)
+	}
+
+	var state IcingaState
+
+	if node.Status.Phase == kcorev1.NodeRunning {
+		var reason []string
+
+		for _, condition := range n.Conditions {
+			if condition.Status == string(kcorev1.ConditionTrue) {
+				switch condition.Type {
+				case string(kcorev1.NodeDiskPressure):
+					state = Critical
+					reason = append(reason, fmt.Sprintf("Node %s is running out of disk space", n.Name))
+				case string(kcorev1.NodeMemoryPressure):
+					state = Critical
+					reason = append(reason, fmt.Sprintf("Node %s is running out of available memory", n.Name))
+				case string(kcorev1.NodePIDPressure):
+					state = Critical
+					reason = append(reason, fmt.Sprintf("Node %s is running out of process IDs", n.Name))
+				case string(kcorev1.NodeNetworkUnavailable):
+					state = Critical
+					reason = append(reason, fmt.Sprintf("Node %s network is not correctly configured", n.Name))
+				}
+			}
+		}
+
+		if state != Ok {
+			return state, strings.Join(reason, ". ")
+		}
+	}
+
+	return Ok, fmt.Sprintf("Node %s is healthy", n.Name)
 }
 
 func (n *Node) Relations() []database.Relation {
