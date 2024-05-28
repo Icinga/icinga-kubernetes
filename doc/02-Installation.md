@@ -49,7 +49,7 @@ GRANT ALL ON kubernetes.* TO 'kubernetes'@'localhost';
 Icinga for Kubernetes automatically imports the schema on first start and also applies schema migrations if required.
 <!-- {% if not from_source %} -->
 You can also import the schema file manually, which is located at
-`/usr/share/kubernetes/schema/mysql/schema.sql`.
+`/usr/share/icinga-kubernetes/schema/mysql/schema.sql`.
 <!-- {% endif %} -->
 
 <!-- {% if not from_source %} -->
