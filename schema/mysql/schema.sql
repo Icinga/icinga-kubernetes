@@ -129,7 +129,7 @@ CREATE TABLE container (
   state_details longtext NOT NULL,
   ready enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
   started enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
-  restart_count smallint unsigned NOT NULL,
+  restart_count int unsigned NOT NULL,
   PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
