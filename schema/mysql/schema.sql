@@ -15,7 +15,7 @@ CREATE TABLE namespace_condition (
   status varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   last_transition bigint unsigned NOT NULL,
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  message varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  message text,
   PRIMARY KEY (namespace_id, type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
@@ -45,7 +45,7 @@ CREATE TABLE node_condition (
   last_heartbeat bigint unsigned NOT NULL,
   last_transition bigint unsigned NOT NULL,
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  message varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  message text,
   PRIMARY KEY (node_id, type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
@@ -86,7 +86,7 @@ CREATE TABLE pod_condition (
   last_probe bigint unsigned NULL DEFAULT NULL,
   last_transition bigint unsigned NOT NULL,
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  message varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  message text,
   PRIMARY KEY (pod_id, type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
@@ -187,7 +187,7 @@ CREATE TABLE deployment_condition (
   last_update bigint unsigned NOT NULL,
   last_transition bigint unsigned NOT NULL,
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  message varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  message text,
   PRIMARY KEY (deployment_id, type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
@@ -235,7 +235,7 @@ CREATE TABLE service_condition (
   observed_generation bigint unsigned NULL DEFAULT NULL,
   last_transition bigint unsigned NULL DEFAULT NULL,
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  message varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  message text,
   PRIMARY KEY (service_id, type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
@@ -363,7 +363,7 @@ CREATE TABLE replica_set_condition (
   status varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   last_transition bigint unsigned NOT NULL,
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  message varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  message text,
   PRIMARY KEY (replica_set_id, type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
@@ -402,7 +402,7 @@ CREATE TABLE daemon_set_condition (
   status varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   last_transition bigint unsigned NOT NULL,
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  message varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  message text,
   PRIMARY KEY (daemon_set_id, type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
@@ -435,7 +435,7 @@ CREATE TABLE stateful_set_condition (
   status varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   last_transition bigint unsigned NOT NULL,
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  message varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  message text,
   PRIMARY KEY (stateful_set_id, type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
@@ -614,7 +614,7 @@ CREATE TABLE pvc_condition (
   last_probe bigint unsigned NULL DEFAULT NULL,
   last_transition bigint unsigned NOT NULL,
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  message varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  message text,
   PRIMARY KEY (pvc_id, type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
@@ -627,7 +627,7 @@ CREATE TABLE persistent_volume (
   capacity bigint unsigned NOT NULL,
   phase enum('pending', 'available', 'bound', 'released', 'failed') COLLATE utf8mb4_unicode_ci NOT NULL,
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  message varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  message text,
   access_modes tinyint unsigned NULL DEFAULT NULL,
   volume_mode enum('block', 'filesystem') COLLATE utf8mb4_unicode_ci NOT NULL,
   volume_source_type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -675,7 +675,7 @@ CREATE TABLE job_condition (
   last_probe bigint unsigned NULL DEFAULT NULL,
   last_transition bigint unsigned NOT NULL,
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  message varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  message text,
   PRIMARY KEY (job_id, type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
