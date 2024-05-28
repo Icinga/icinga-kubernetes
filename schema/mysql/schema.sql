@@ -51,7 +51,7 @@ CREATE TABLE node_condition (
 
 CREATE TABLE node_volume (
   node_id binary(20) NOT NULL,
-  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   device_path varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   mounted enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (node_id, name)
@@ -102,8 +102,8 @@ CREATE TABLE pod_owner (
 
 CREATE TABLE pod_pvc (
   pod_id binary(20) NOT NULL,
-  volume_name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
-  claim_name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  volume_name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
+  claim_name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   read_only enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (pod_id, volume_name, claim_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
@@ -136,7 +136,7 @@ CREATE TABLE container (
 CREATE TABLE container_device (
   container_id binary(20) NOT NULL,
   pod_id binary(20) NOT NULL,
-  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   path varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (container_id, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
@@ -464,7 +464,7 @@ CREATE TABLE config_map (
 
 CREATE TABLE data (
   id binary(20) NOT NULL,
-  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   value mediumblob NOT NULL,
   PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
@@ -557,7 +557,7 @@ CREATE TABLE service_label (
 CREATE TABLE event (
   id binary(20) NOT NULL,
   namespace varchar(63) NOT NULL,
-  name varchar(253) NOT NULL,
+  name varchar(270) NOT NULL,
   uid varchar(255) NOT NULL,
   resource_version varchar(255) NOT NULL,
   reporting_controller varchar(253) NOT NULL,
@@ -592,7 +592,7 @@ CREATE TABLE pod_metrics (
 CREATE TABLE pvc (
   id binary(20) NOT NULL,
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
-  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
   desired_access_modes tinyint unsigned NOT NULL,
@@ -600,7 +600,7 @@ CREATE TABLE pvc (
   minimum_capacity bigint unsigned NULL DEFAULT NULL,
   actual_capacity bigint unsigned NOT NULL,
   phase enum('pending', 'bound', 'lost') COLLATE utf8mb4_unicode_ci NOT NULL,
-  volume_name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  volume_name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   volume_mode enum('block', 'filesystem') COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   storage_class varchar(255) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   created bigint unsigned NOT NULL,
@@ -621,7 +621,7 @@ CREATE TABLE pvc_condition (
 CREATE TABLE persistent_volume (
   id binary(20) NOT NULL,
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
-  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
   capacity bigint unsigned NOT NULL,
@@ -641,7 +641,7 @@ CREATE TABLE persistent_volume (
 CREATE TABLE persistent_volume_claim_ref (
   persistent_volume_id binary(20) NOT NULL,
   kind varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (persistent_volume_id, uid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
