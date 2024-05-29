@@ -70,7 +70,7 @@ All available settings can be found under [Configuration](03-Configuration.md).
 
 ## Running Icinga for Kubernetes
 
-With locally accessible kubeconfig and `config.yml` files, `icinga-kubernetes` can be executed by running:
+With locally accessible [kubeconfig](04-Kubeconfig.md) and `config.yml` files, `icinga-kubernetes` can be executed by running:
 
 ```bash
 icinga-kubernetes -config /path/to/config.yml
@@ -78,7 +78,7 @@ icinga-kubernetes -config /path/to/config.yml
 
 ## Using a Container
 
-With locally accessible kubeconfig and `config.yml` files,
+With locally accessible [kubeconfig](04-Kubeconfig.md) and `config.yml` files,
 run the `icinga/icinga-kubernetes` image using a container runtime of you choice, e.g. Docker:
 
 ```bash
