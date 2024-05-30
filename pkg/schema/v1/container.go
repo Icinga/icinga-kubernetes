@@ -125,6 +125,10 @@ func (cl *ContainerLog) syncContainerLogs(ctx context.Context, clientset *kubern
 	}
 
 	cl.LastUpdate = types.UnixMilli(time.Now())
+	// Calculate period
+	currentTimeMillis := time.Now().UnixMilli()
+	periodStartMillis := currentTimeMillis - (currentTimeMillis % (3600 * 1000))
+	cl.Period = types.UnixMilli(time.UnixMilli(periodStartMillis))
 	cl.Logs += string(logs)
 	entities := make(chan interface{}, 1)
 	entities <- cl
