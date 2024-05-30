@@ -175,7 +175,7 @@ CREATE TABLE container_log (
   last_update bigint NOT NULL,
   `period` bigint unsigned NOT NULL,
 
-  PRIMARY KEY (container_uuid, pod_uuid)
+  PRIMARY KEY (container_uuid, pod_uuid, period)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE deployment (
