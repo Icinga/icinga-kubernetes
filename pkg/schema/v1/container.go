@@ -86,6 +86,7 @@ type ContainerMount struct {
 type ContainerLogMeta struct {
 	Logs       string          `db:"logs"`
 	LastUpdate types.UnixMilli `db:"last_update"`
+	Period     types.UnixMilli
 }
 
 type ContainerLog struct {
