@@ -129,7 +129,19 @@ func (cl *ContainerLog) syncContainerLogs(ctx context.Context, clientset *kubern
 	currentTimeMillis := time.Now().UnixMilli()
 	periodStartMillis := currentTimeMillis - (currentTimeMillis % (3600 * 1000))
 	cl.Period = types.UnixMilli(time.UnixMilli(periodStartMillis))
-	cl.Logs += string(logs)
+
+	// Check if logs for the current period already exist
+	existingLog := &ContainerLog{}
+	err = db.Get(existingLog, "SELECT * FROM container_log WHERE container_uuid = ? AND pod_uuid = ? AND period = ?", cl.ContainerUuid, cl.PodUuid, cl.Period)
+	if errors.Is(err, sql.ErrNoRows) {
+		// No existing logs for this period, insert new log
+		cl.Logs = string(logs)
+	} else if err != nil {
+		return err
+	} else {
+		// Existing logs found for this period, concatenate logs
+		cl.Logs += string(logs)
+	}
 	entities := make(chan interface{}, 1)
 	entities <- cl
 	close(entities)
