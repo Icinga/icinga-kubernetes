@@ -2,6 +2,7 @@ package v1
 
 import (
 	"database/sql"
+	"fmt"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
@@ -13,7 +14,10 @@ import (
 	ktypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"strings"
+	"time"
 )
+
+const prolongedInitializationThreshold = 10 * time.Minute
 
 type PodFactory struct {
 	clientset *kubernetes.Clientset
@@ -25,6 +29,8 @@ type Pod struct {
 	NominatedNodeName string
 	Ip                string
 	Phase             string
+	IcingaState       IcingaState
+	IcingaStateReason string
 	CpuLimits         int64
 	CpuRequests       int64
 	MemoryLimits      int64
@@ -116,6 +122,7 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 	p.NominatedNodeName = pod.Status.NominatedNodeName
 	p.Ip = pod.Status.PodIP
 	p.Phase = strcase.Snake(string(pod.Status.Phase))
+	p.IcingaState, p.IcingaStateReason = p.getIcingaState(pod)
 	p.Reason = pod.Status.Reason
 	p.Message = pod.Status.Message
 	p.Qos = strcase.Snake(string(pod.Status.QOSClass))
@@ -304,6 +311,123 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kcorev1.SchemeGroupVersion)
 	output, _ := kruntime.Encode(codec, pod)
 	p.Yaml = string(output)
+}
+
+func (p *Pod) getIcingaState(pod *kcorev1.Pod) (IcingaState, string) {
+	readyContainers := 0
+	state := Unknown
+	reason := string(pod.Status.Phase)
+
+	if pod.Status.Reason != "" {
+		reason = fmt.Sprintf("Pod %s/%s is in %s state with reason: %s", pod.Namespace, pod.Name, pod.Status.Phase, pod.Status.Reason)
+	}
+
+	if pod.DeletionTimestamp != nil {
+		reason = fmt.Sprintf("Pod %s/%s is being deleted", pod.Namespace, pod.Name)
+
+		return Ok, reason
+	}
+
+	// If the Pod carries {type:PodScheduled, reason:SchedulingGated}, set reason to 'SchedulingGated'.
+	for _, condition := range pod.Status.Conditions {
+		if condition.Type == kcorev1.PodScheduled && condition.Reason == kcorev1.PodReasonSchedulingGated {
+			state = Critical
+			reason = fmt.Sprintf("Pod %s/%s scheduling skipped because one or more scheduling gates are still present: %s", pod.Namespace, pod.Name, kcorev1.PodReasonSchedulingGated)
+		}
+	}
+
+	initializing := false
+	for i, container := range pod.Status.InitContainerStatuses {
+		switch {
+		case container.State.Terminated != nil && container.State.Terminated.ExitCode == 0:
+			continue
+		case container.State.Terminated != nil:
+			// Initialization failed
+			if len(container.State.Terminated.Reason) == 0 {
+				if container.State.Terminated.Signal != 0 {
+					reason = fmt.Sprintf("Init container %s is terminated with signal: %d", container.Name, container.State.Terminated.Signal)
+				} else {
+					reason = fmt.Sprintf("Init container %s is terminated with non-zero exit code %d: %s", container.Name, container.State.Terminated.ExitCode, container.State.Terminated.Reason)
+				}
+			} else {
+				reason = fmt.Sprintf("Init container %s is terminated. Reason %s: ", container.Name, container.State.Terminated.Reason)
+			}
+			state = Critical
+			initializing = true
+		case container.State.Waiting != nil && len(container.State.Waiting.Reason) > 0 && container.State.Waiting.Reason != "PodInitializing":
+			state = Critical
+			reason = fmt.Sprintf("Init container %s is waiting: %s", container.Name, container.State.Waiting.Reason)
+			initializing = true
+		default:
+			initializing = true
+			if container.State.Running != nil {
+				duration := time.Since(container.State.Running.StartedAt.Time).Round(time.Second)
+				if duration > prolongedInitializationThreshold {
+					state = Critical
+					reason = fmt.Sprintf("Init container %s has been initializing for too long (%d/%d, %s elapsed)", container.Name, i+1, len(pod.Spec.InitContainers), duration)
+				} else {
+					reason = fmt.Sprintf("Init container %s is currently initializing (%d/%d)", container.Name, i+1, len(pod.Spec.InitContainers))
+				}
+			}
+		}
+		break
+	}
+
+	if !initializing {
+		hasRunning := false
+		for _, container := range pod.Status.ContainerStatuses {
+			if container.State.Waiting != nil && container.State.Waiting.Reason != "" && container.RestartCount >= 3 {
+				state = Critical
+				reason = fmt.Sprintf("Container %s is waiting and has restarted %d times: %s", container.Name, container.RestartCount, container.State.Waiting.Reason)
+				continue
+			} else if container.State.Terminated != nil {
+				if container.State.Terminated.Reason == "Completed" {
+					state = Ok
+					reason = fmt.Sprintf("Container %s has completed successfully", container.Name)
+				} else if container.State.Terminated.Reason != "" {
+					state = Critical
+					reason = fmt.Sprintf("Container %s is terminated. Reason: %s", container.Name, container.State.Terminated.Reason)
+				} else {
+					if container.State.Terminated.Signal != 0 {
+						state = Critical
+						reason = fmt.Sprintf("Container %s is terminated with signal: %d", container.Name, container.State.Terminated.Signal)
+					} else if container.State.Terminated.ExitCode != 0 {
+						state = Critical
+						reason = fmt.Sprintf("Container %s is terminated with non-zero exit code %d: %s", container.Name, container.State.Terminated.ExitCode, container.State.Terminated.Reason)
+					} else {
+						state = Ok
+						reason = fmt.Sprintf("Container %s is terminated normally", container.Name)
+					}
+				}
+			} else if container.State.Running != nil && container.Ready {
+				readyContainers++
+				hasRunning = true
+				state = Ok
+				reason = fmt.Sprintf("Container %s is running", container.Name)
+			}
+		}
+
+		if reason == "Completed" && hasRunning {
+			for _, condition := range pod.Status.Conditions {
+				if pod.Status.Phase == kcorev1.PodRunning {
+					if condition.Type == kcorev1.PodReady && condition.Status == kcorev1.ConditionTrue {
+						state = Ok
+						reason = fmt.Sprintf("Pod %s/%s is %s", pod.Namespace, pod.Name, string(kcorev1.PodRunning))
+					} else {
+						state = Critical
+						reason = fmt.Sprintf("Pod %s/%s is not ready", pod.Namespace, pod.Name)
+					}
+				}
+			}
+		}
+	}
+
+	if readyContainers == len(pod.Spec.Containers) {
+		state = Ok
+		reason = "All containers are ready"
+	}
+
+	return state, reason
 }
 
 func (p *Pod) Relations() []database.Relation {

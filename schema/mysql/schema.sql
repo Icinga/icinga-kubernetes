@@ -87,6 +87,8 @@ CREATE TABLE pod (
   memory_limits bigint unsigned NOT NULL,
   memory_requests bigint unsigned NOT NULL,
   phase enum('pending', 'running', 'succeeded', 'failed') COLLATE utf8mb4_unicode_ci NOT NULL,
+  icinga_state enum('ok', 'warning', 'critical', 'unknown') COLLATE utf8mb4_unicode_ci NOT NULL,
+  icinga_state_reason text NULL DEFAULT NULL,
   reason varchar(255) NULL DEFAULT NULL,
   message varchar(255) NULL DEFAULT NULL,
   qos enum('guaranteed', 'burstable', 'best_effort') COLLATE utf8mb4_unicode_ci NOT NULL,
