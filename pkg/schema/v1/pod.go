@@ -373,7 +373,7 @@ func (p *Pod) getIcingaState(pod *kcorev1.Pod) (IcingaState, string) {
 		break
 	}
 
-	if !initializing {
+	if !initializing || isPodInitializedConditionTrue(&pod.Status) {
 		hasRunning := false
 		for _, container := range pod.Status.ContainerStatuses {
 			if container.State.Waiting != nil && container.State.Waiting.Reason != "" && container.RestartCount >= 3 {
