@@ -430,6 +430,17 @@ func (p *Pod) getIcingaState(pod *kcorev1.Pod) (IcingaState, string) {
 	return state, reason
 }
 
+func isPodInitializedConditionTrue(status *kcorev1.PodStatus) bool {
+	for _, condition := range status.Conditions {
+		if condition.Type != kcorev1.PodInitialized {
+			continue
+		}
+
+		return condition.Status == kcorev1.ConditionTrue
+	}
+	return false
+}
+
 func (p *Pod) Relations() []database.Relation {
 	fk := database.WithForeignKey("pod_uuid")
 
