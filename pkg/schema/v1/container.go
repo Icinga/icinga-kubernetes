@@ -289,9 +289,13 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 func warmup(ctx context.Context, db *database.Database) error {
 	g, ctx := errgroup.WithContext(ctx)
 
+	query := `SELECT cl.* FROM container_log cl INNER JOIN (SELECT container_uuid, pod_uuid, MAX(last_update) as last_update
+       FROM container_log GROUP BY container_uuid) max_cl ON cl.container_uuid = max_cl.container_uuid AND cl.pod_uuid = max_cl.pod_uuid 
+	   AND cl.last_update = max_cl.last_update`
+
 	entities, errs := db.YieldAll(ctx, func() (interface{}, error) {
 		return &ContainerLog{}, nil
-	}, db.BuildSelectStmt(ContainerLog{}, ContainerLog{}))
+	}, query)
 	com.ErrgroupReceive(ctx, g, errs)
 
 	g.Go(func() error {
