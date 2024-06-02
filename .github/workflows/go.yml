@@ -3,106 +3,81 @@ on:
   push:
     branches:
       - main
-  pull_request: {}
+  pull_request: { }
 
 jobs:
-  build-test:
-
-    strategy:
-      matrix:
-        os: [ macos-latest, ubuntu-latest ]
-    runs-on: ${{ matrix.os }}
-
+  build-and-test:
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v2
+      - uses: actions/setup-go@v5
         with:
-          go-version: 1.21.x
+          go-version: stable
 
-      - run: go build -gcflags="-m" ./...
+      - name: Build
+        run: go build -gcflags="-m" ./...
 
-      - run: go test -v -race ./...
+      - name: Test
+        run: go test -v -race ./...
 
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v2
+      - uses: actions/setup-go@v5
         with:
-          go-version: 1.21.x
+          go-version: stable
 
-      - uses: dominikh/staticcheck-action@29e9b80fb8de0521ba4ed3fdf68fed5bbe82a2d2 # v1.1.0
+      - uses: golangci/golangci-lint-action@v6
         with:
-          install-go: false
-
-  vet:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-
-      - uses: actions/setup-go@v2
-        with:
-          go-version: 1.21.x
-
-      - run: go vet ./...
-
-  fmt:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-
-      - uses: actions/setup-go@v2
-        with:
-          go-version: 1.21.x
-
-      - name: Run gofmt -d .
-        run: |
-            fmtvar="$(gofmt -d .)"
-            echo "$fmtvar"
-            test -z "$fmtvar"
+          version: latest
+          only-new-issues: true
+          args: -E gosec --timeout=2m --verbose
 
   modtidy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v2
+      - uses: actions/setup-go@v5
         with:
-          go-version: 1.21.x
+          go-version: stable
 
       - name: Run go mod tidy
         run: |
-            go mod tidy
-            gitdiff="$(git diff -U0)"
-            echo "$gitdiff"
-            test -z "$gitdiff"
+          go mod tidy
+          gitdiff="$(git diff -U0)"
+          echo "$gitdiff"
+          test -z "$gitdiff"
 
   vendor-diff:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/setup-go@v3
-      with:
-        go-version: ^1.20
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
 
-    - name: Checkout base commit
-      uses: actions/checkout@v3
-      with:
-        path: a
-        ref: ${{ github.base_ref }}
-    - name: Download dependencies of base commit
-      run: go mod vendor
-      working-directory: a
+      - name: Checkout base commit
+        uses: actions/checkout@v4
+        with:
+          path: a
+          ref: ${{ github.base_ref }}
 
-    - name: Checkout PR
-      uses: actions/checkout@v3
-      with:
-        path: b
-    - name: Download dependencies of PR
-      run: go mod vendor
-      working-directory: b
+      - name: Download dependencies of base commit
+        run: go mod vendor
+        working-directory: a
 
-    - name: Diff of dependencies
-      run: diff -ur --color=always a/vendor b/vendor || true
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          path: b
+
+      - name: Download dependencies of PR
+        run: go mod vendor
+        working-directory: b
+
+      - name: Diff of dependencies
+        run: diff -ur --color=always a/vendor b/vendor || true
