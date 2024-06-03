@@ -31,9 +31,11 @@ type StatefulSet struct {
 	Yaml                                            string
 	IcingaState                                     IcingaState
 	IcingaStateReason                               string
-	Conditions                                      []StatefulSetCondition `db:"-"`
-	Labels                                          []Label                `db:"-"`
-	StatefulSetLabels                               []StatefulSetLabel     `db:"-"`
+	Conditions                                      []StatefulSetCondition  `db:"-"`
+	Labels                                          []Label                 `db:"-"`
+	StatefulSetLabels                               []StatefulSetLabel      `db:"-"`
+	Annotations                                     []Annotation            `db:"-"`
+	StatefulSetAnnotations                          []StatefulSetAnnotation `db:"-"`
 }
 
 type StatefulSetCondition struct {
@@ -48,6 +50,11 @@ type StatefulSetCondition struct {
 type StatefulSetLabel struct {
 	StatefulSetUuid types.UUID
 	LabelUuid       types.UUID
+}
+
+type StatefulSetAnnotation struct {
+	StatefulSetUuid types.UUID
+	AnnotationUuid  types.UUID
 }
 
 func NewStatefulSet() Resource {
@@ -114,6 +121,19 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object) {
 		})
 	}
 
+	for annotationName, annotationValue := range statefulSet.Annotations {
+		annotationUuid := NewUUID(s.Uuid, strings.ToLower(annotationName+":"+annotationValue))
+		s.Annotations = append(s.Annotations, Annotation{
+			Uuid:  annotationUuid,
+			Name:  annotationName,
+			Value: annotationValue,
+		})
+		s.StatefulSetAnnotations = append(s.StatefulSetAnnotations, StatefulSetAnnotation{
+			StatefulSetUuid: s.Uuid,
+			AnnotationUuid:  annotationUuid,
+		})
+	}
+
 	scheme := kruntime.NewScheme()
 	_ = kappsv1.AddToScheme(scheme)
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kappsv1.SchemeGroupVersion)
@@ -149,5 +169,7 @@ func (s *StatefulSet) Relations() []database.Relation {
 		database.HasMany(s.Conditions, fk),
 		database.HasMany(s.StatefulSetLabels, fk),
 		database.HasMany(s.Labels, database.WithoutCascadeDelete()),
+		database.HasMany(s.StatefulSetAnnotations, fk),
+		database.HasMany(s.Annotations, database.WithoutCascadeDelete()),
 	}
 }

@@ -34,13 +34,15 @@ type Pod struct {
 	Qos               string
 	RestartPolicy     string
 	Yaml              string
-	Conditions        []PodCondition `db:"-"`
-	Containers        []Container    `db:"-"`
-	Owners            []PodOwner     `db:"-"`
-	Labels            []Label        `db:"-"`
-	PodLabels         []PodLabel     `db:"-"`
-	Pvcs              []PodPvc       `db:"-"`
-	Volumes           []PodVolume    `db:"-"`
+	Conditions        []PodCondition  `db:"-"`
+	Containers        []Container     `db:"-"`
+	Owners            []PodOwner      `db:"-"`
+	Labels            []Label         `db:"-"`
+	PodLabels         []PodLabel      `db:"-"`
+	Annotations       []Annotation    `db:"-"`
+	PodAnnotations    []PodAnnotation `db:"-"`
+	Pvcs              []PodPvc        `db:"-"`
+	Volumes           []PodVolume     `db:"-"`
 	factory           *PodFactory
 }
 
@@ -64,6 +66,11 @@ type PodCondition struct {
 type PodLabel struct {
 	PodUuid   types.UUID
 	LabelUuid types.UUID
+}
+
+type PodAnnotation struct {
+	PodUuid        types.UUID
+	AnnotationUuid types.UUID
 }
 
 type PodOwner struct {
@@ -218,6 +225,19 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 		})
 	}
 
+	for annotationName, annotationValue := range pod.Annotations {
+		annotationUuid := NewUUID(p.Uuid, strings.ToLower(annotationName+":"+annotationValue))
+		p.Annotations = append(p.Annotations, Annotation{
+			Uuid:  annotationUuid,
+			Name:  annotationName,
+			Value: annotationValue,
+		})
+		p.PodAnnotations = append(p.PodAnnotations, PodAnnotation{
+			PodUuid:        p.Uuid,
+			AnnotationUuid: annotationUuid,
+		})
+	}
+
 	for _, ownerReference := range pod.OwnerReferences {
 		var blockOwnerDeletion, controller bool
 		if ownerReference.BlockOwnerDeletion != nil {
@@ -295,6 +315,8 @@ func (p *Pod) Relations() []database.Relation {
 		database.HasMany(p.Owners, fk),
 		database.HasMany(p.Labels, database.WithoutCascadeDelete()),
 		database.HasMany(p.PodLabels, fk),
+		database.HasMany(p.Annotations, database.WithoutCascadeDelete()),
+		database.HasMany(p.PodAnnotations, fk),
 		database.HasMany(p.Pvcs, fk),
 		database.HasMany(p.Volumes, fk),
 	}

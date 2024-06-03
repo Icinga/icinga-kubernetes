@@ -28,9 +28,11 @@ type Job struct {
 	Succeeded               int32
 	Failed                  int32
 	Yaml                    string
-	Conditions              []JobCondition `db:"-"`
-	Labels                  []Label        `db:"-"`
-	JobLabels               []JobLabel     `db:"-"`
+	Conditions              []JobCondition  `db:"-"`
+	Labels                  []Label         `db:"-"`
+	JobLabels               []JobLabel      `db:"-"`
+	Annotations             []Annotation    `db:"-"`
+	JobAnnotations          []JobAnnotation `db:"-"`
 }
 
 type JobCondition struct {
@@ -46,6 +48,11 @@ type JobCondition struct {
 type JobLabel struct {
 	JobUuid   types.UUID
 	LabelUuid types.UUID
+}
+
+type JobAnnotation struct {
+	JobUuid        types.UUID
+	AnnotationUuid types.UUID
 }
 
 func NewJob() Resource {
@@ -139,6 +146,19 @@ func (j *Job) Obtain(k8s kmetav1.Object) {
 		})
 	}
 
+	for annotationName, annotationValue := range job.Annotations {
+		annotationUuid := NewUUID(j.Uuid, strings.ToLower(annotationName+":"+annotationValue))
+		j.Annotations = append(j.Annotations, Annotation{
+			Uuid:  annotationUuid,
+			Name:  annotationName,
+			Value: annotationValue,
+		})
+		j.JobAnnotations = append(j.JobAnnotations, JobAnnotation{
+			JobUuid:        j.Uuid,
+			AnnotationUuid: annotationUuid,
+		})
+	}
+
 	scheme := kruntime.NewScheme()
 	_ = kbatchv1.AddToScheme(scheme)
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kbatchv1.SchemeGroupVersion)
@@ -153,5 +173,7 @@ func (j *Job) Relations() []database.Relation {
 		database.HasMany(j.Conditions, fk),
 		database.HasMany(j.Labels, database.WithoutCascadeDelete()),
 		database.HasMany(j.JobLabels, fk),
+		database.HasMany(j.JobAnnotations, fk),
+		database.HasMany(j.Annotations, database.WithoutCascadeDelete()),
 	}
 }

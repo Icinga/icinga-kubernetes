@@ -27,9 +27,11 @@ type DaemonSet struct {
 	Yaml                   string
 	IcingaState            IcingaState
 	IcingaStateReason      string
-	Conditions             []DaemonSetCondition `db:"-"`
-	Labels                 []Label              `db:"-"`
-	DaemonSetLabels        []DaemonSetLabel     `db:"-"`
+	Conditions             []DaemonSetCondition  `db:"-"`
+	Labels                 []Label               `db:"-"`
+	DaemonSetLabels        []DaemonSetLabel      `db:"-"`
+	Annotations            []Annotation          `db:"-"`
+	DaemonSetAnnotations   []DaemonSetAnnotation `db:"-"`
 }
 
 type DaemonSetCondition struct {
@@ -44,6 +46,11 @@ type DaemonSetCondition struct {
 type DaemonSetLabel struct {
 	DaemonSetUuid types.UUID
 	LabelUuid     types.UUID
+}
+
+type DaemonSetAnnotation struct {
+	DaemonSetUuid  types.UUID
+	AnnotationUuid types.UUID
 }
 
 func NewDaemonSet() Resource {
@@ -89,6 +96,20 @@ func (d *DaemonSet) Obtain(k8s kmetav1.Object) {
 			LabelUuid:     labelUuid,
 		})
 	}
+
+	for annotationName, annotationValue := range daemonSet.Annotations {
+		annotationUuid := NewUUID(d.Uuid, strings.ToLower(annotationName+":"+annotationValue))
+		d.Annotations = append(d.Annotations, Annotation{
+			Uuid:  annotationUuid,
+			Name:  annotationName,
+			Value: annotationValue,
+		})
+		d.DaemonSetAnnotations = append(d.DaemonSetAnnotations, DaemonSetAnnotation{
+			DaemonSetUuid:  d.Uuid,
+			AnnotationUuid: annotationUuid,
+		})
+	}
+
 	scheme := kruntime.NewScheme()
 	_ = kappsv1.AddToScheme(scheme)
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kappsv1.SchemeGroupVersion)
@@ -130,5 +151,7 @@ func (d *DaemonSet) Relations() []database.Relation {
 		database.HasMany(d.Conditions, fk),
 		database.HasMany(d.DaemonSetLabels, fk),
 		database.HasMany(d.Labels, database.WithoutCascadeDelete()),
+		database.HasMany(d.DaemonSetAnnotations, fk),
+		database.HasMany(d.Annotations, database.WithoutCascadeDelete()),
 	}
 }

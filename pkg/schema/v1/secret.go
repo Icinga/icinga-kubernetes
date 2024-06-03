@@ -14,13 +14,15 @@ import (
 
 type Secret struct {
 	Meta
-	Type         string
-	Immutable    types.Bool
-	Yaml         string
-	Data         []Data        `db:"-"`
-	SecretData   []SecretData  `db:"-"`
-	Labels       []Label       `db:"-"`
-	SecretLabels []SecretLabel `db:"-"`
+	Type              string
+	Immutable         types.Bool
+	Yaml              string
+	Data              []Data             `db:"-"`
+	SecretData        []SecretData       `db:"-"`
+	Labels            []Label            `db:"-"`
+	SecretLabels      []SecretLabel      `db:"-"`
+	Annotations       []Annotation       `db:"-"`
+	SecretAnnotations []SecretAnnotation `db:"-"`
 }
 
 type SecretData struct {
@@ -31,6 +33,11 @@ type SecretData struct {
 type SecretLabel struct {
 	SecretUuid types.UUID
 	LabelUuid  types.UUID
+}
+
+type SecretAnnotation struct {
+	SecretUuid     types.UUID
+	AnnotationUuid types.UUID
 }
 
 func NewSecret() Resource {
@@ -88,6 +95,19 @@ func (s *Secret) Obtain(k8s kmetav1.Object) {
 		})
 	}
 
+	for annotationName, annotationValue := range secret.Annotations {
+		annotationUuid := NewUUID(s.Uuid, strings.ToLower(annotationName+":"+annotationValue))
+		s.Annotations = append(s.Annotations, Annotation{
+			Uuid:  annotationUuid,
+			Name:  annotationName,
+			Value: annotationValue,
+		})
+		s.SecretAnnotations = append(s.SecretAnnotations, SecretAnnotation{
+			SecretUuid:     s.Uuid,
+			AnnotationUuid: annotationUuid,
+		})
+	}
+
 	scheme := kruntime.NewScheme()
 	_ = kcorev1.AddToScheme(scheme)
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kcorev1.SchemeGroupVersion)
@@ -103,5 +123,7 @@ func (s *Secret) Relations() []database.Relation {
 		database.HasMany(s.SecretLabels, fk),
 		database.HasMany(s.Data, database.WithoutCascadeDelete()),
 		database.HasMany(s.SecretData, fk),
+		database.HasMany(s.SecretAnnotations, fk),
+		database.HasMany(s.Annotations, database.WithoutCascadeDelete()),
 	}
 }

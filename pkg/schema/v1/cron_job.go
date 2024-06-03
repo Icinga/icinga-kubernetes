@@ -24,13 +24,20 @@ type CronJob struct {
 	LastScheduleTime           types.UnixMilli
 	LastSuccessfulTime         types.UnixMilli
 	Yaml                       string
-	Labels                     []Label        `db:"-"`
-	CronJobLabels              []CronJobLabel `db:"-"`
+	Labels                     []Label             `db:"-"`
+	CronJobLabels              []CronJobLabel      `db:"-"`
+	Annotations                []Annotation        `db:"-"`
+	CronJobAnnotations         []CronJobAnnotation `db:"-"`
 }
 
 type CronJobLabel struct {
 	CronJobUuid types.UUID
 	LabelUuid   types.UUID
+}
+
+type CronJobAnnotation struct {
+	CronJobUuid    types.UUID
+	AnnotationUuid types.UUID
 }
 
 func NewCronJob() Resource {
@@ -92,6 +99,19 @@ func (c *CronJob) Obtain(k8s kmetav1.Object) {
 		})
 	}
 
+	for annotationName, annotationValue := range cronJob.Annotations {
+		annotationUuid := NewUUID(c.Uuid, strings.ToLower(annotationName+":"+annotationValue))
+		c.Annotations = append(c.Annotations, Annotation{
+			Uuid:  annotationUuid,
+			Name:  annotationName,
+			Value: annotationValue,
+		})
+		c.CronJobAnnotations = append(c.CronJobAnnotations, CronJobAnnotation{
+			CronJobUuid:    c.Uuid,
+			AnnotationUuid: annotationUuid,
+		})
+	}
+
 	scheme := kruntime.NewScheme()
 	_ = kbatchv1.AddToScheme(scheme)
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kbatchv1.SchemeGroupVersion)
@@ -105,5 +125,7 @@ func (c *CronJob) Relations() []database.Relation {
 	return []database.Relation{
 		database.HasMany(c.Labels, database.WithoutCascadeDelete()),
 		database.HasMany(c.CronJobLabels, fk),
+		database.HasMany(c.CronJobAnnotations, fk),
+		database.HasMany(c.Annotations, database.WithoutCascadeDelete()),
 	}
 }

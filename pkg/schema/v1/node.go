@@ -37,10 +37,12 @@ type Node struct {
 	ContainerRuntimeVersion string
 	KubeletVersion          string
 	KubeProxyVersion        string
-	Conditions              []NodeCondition `db:"-"`
-	Volumes                 []NodeVolume    `db:"-"`
-	Labels                  []Label         `db:"-"`
-	NodeLabels              []NodeLabel     `db:"-"`
+	Conditions              []NodeCondition  `db:"-"`
+	Volumes                 []NodeVolume     `db:"-"`
+	Labels                  []Label          `db:"-"`
+	NodeLabels              []NodeLabel      `db:"-"`
+	Annotations             []Annotation     `db:"-"`
+	NodeAnnotations         []NodeAnnotation `db:"-"`
 }
 
 type NodeCondition struct {
@@ -63,6 +65,11 @@ type NodeVolume struct {
 type NodeLabel struct {
 	NodeUuid  types.UUID
 	LabelUuid types.UUID
+}
+
+type NodeAnnotation struct {
+	NodeUuid       types.UUID
+	AnnotationUuid types.UUID
 }
 
 func NewNode() Resource {
@@ -163,6 +170,19 @@ func (n *Node) Obtain(k8s kmetav1.Object) {
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kcorev1.SchemeGroupVersion)
 	output, _ := kruntime.Encode(codec, node)
 	n.Yaml = string(output)
+
+	for annotationName, annotationValue := range node.Annotations {
+		annotationUuid := NewUUID(n.Uuid, strings.ToLower(annotationName+":"+annotationValue))
+		n.Annotations = append(n.Annotations, Annotation{
+			Uuid:  annotationUuid,
+			Name:  annotationName,
+			Value: annotationValue,
+		})
+		n.NodeAnnotations = append(n.NodeAnnotations, NodeAnnotation{
+			NodeUuid:       n.Uuid,
+			AnnotationUuid: annotationUuid,
+		})
+	}
 }
 
 func (n *Node) Relations() []database.Relation {
@@ -173,6 +193,8 @@ func (n *Node) Relations() []database.Relation {
 		database.HasMany(n.Volumes, fk),
 		database.HasMany(n.NodeLabels, fk),
 		database.HasMany(n.Labels, database.WithoutCascadeDelete()),
+		database.HasMany(n.NodeAnnotations, fk),
+		database.HasMany(n.Annotations, database.WithoutCascadeDelete()),
 	}
 }
 

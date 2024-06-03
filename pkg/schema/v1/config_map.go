@@ -13,12 +13,14 @@ import (
 
 type ConfigMap struct {
 	Meta
-	Immutable       types.Bool
-	Yaml            string
-	Data            []Data           `db:"-"`
-	ConfigMapsData  []ConfigMapData  `db:"-"`
-	Labels          []Label          `db:"-"`
-	ConfigMapLabels []ConfigMapLabel `db:"-"`
+	Immutable            types.Bool
+	Yaml                 string
+	Data                 []Data                `db:"-"`
+	ConfigMapsData       []ConfigMapData       `db:"-"`
+	Labels               []Label               `db:"-"`
+	ConfigMapLabels      []ConfigMapLabel      `db:"-"`
+	Annotations          []Annotation          `db:"-"`
+	ConfigMapAnnotations []ConfigMapAnnotation `db:"-"`
 }
 
 type ConfigMapData struct {
@@ -29,6 +31,11 @@ type ConfigMapData struct {
 type ConfigMapLabel struct {
 	ConfigMapUuid types.UUID
 	LabelUuid     types.UUID
+}
+
+type ConfigMapAnnotation struct {
+	ConfigMapUuid  types.UUID
+	AnnotationUuid types.UUID
 }
 
 func NewConfigMap() Resource {
@@ -75,6 +82,19 @@ func (c *ConfigMap) Obtain(k8s kmetav1.Object) {
 		})
 	}
 
+	for annotationName, annotationValue := range configMap.Annotations {
+		annotationUuid := NewUUID(c.Uuid, strings.ToLower(annotationName+":"+annotationValue))
+		c.Annotations = append(c.Annotations, Annotation{
+			Uuid:  annotationUuid,
+			Name:  annotationName,
+			Value: annotationValue,
+		})
+		c.ConfigMapAnnotations = append(c.ConfigMapAnnotations, ConfigMapAnnotation{
+			ConfigMapUuid:  c.Uuid,
+			AnnotationUuid: annotationUuid,
+		})
+	}
+
 	scheme := kruntime.NewScheme()
 	_ = kcorev1.AddToScheme(scheme)
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kcorev1.SchemeGroupVersion)
@@ -90,5 +110,7 @@ func (c *ConfigMap) Relations() []database.Relation {
 		database.HasMany(c.ConfigMapLabels, fk),
 		database.HasMany(c.Data, database.WithoutCascadeDelete()),
 		database.HasMany(c.ConfigMapsData, fk),
+		database.HasMany(c.ConfigMapAnnotations, fk),
+		database.HasMany(c.Annotations, database.WithoutCascadeDelete()),
 	}
 }
