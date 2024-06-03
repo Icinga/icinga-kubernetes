@@ -865,37 +865,37 @@ INSERT INTO kubernetes_schema (version, timestamp, success, reason)
 VALUES ('0.1.0', UNIX_TIMESTAMP() * 1000, 'y', 'Initial import');
 
 CREATE TABLE prometheus_cluster_metric (
-    cluster_id binary(20) NOT NULL,
+    cluster_uuid binary(16) NOT NULL,
     timestamp bigint NOT NULL,
     category varchar(255) NOT NULL,
     name varchar(255) NOT NULL,
     value double NOT NULL,
-    PRIMARY KEY (cluster_id, timestamp, category, name)
+    PRIMARY KEY (cluster_uuid, timestamp, category, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE prometheus_node_metric (
-    node_id binary(20) NOT NULL,
+    node_uuid binary(16) NOT NULL,
     timestamp bigint NOT NULL,
     category varchar(255) NOT NULL,
     name varchar(255) NOT NULL,
     value double NOT NULL,
-    PRIMARY KEY (node_id, timestamp, category, name)
+    PRIMARY KEY (node_uuid, timestamp, category, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE prometheus_pod_metric (
-    pod_id binary(20) NOT NULL,
+    pod_uuid binary(16) NOT NULL,
     timestamp bigint NOT NULL,
     category varchar(255) NOT NULL,
     name varchar(255) NOT NULL,
     value double NOT NULL,
-    PRIMARY KEY (pod_id, timestamp, category, name)
+    PRIMARY KEY (pod_uuid, timestamp, category, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE prometheus_container_metric (
-    container_id binary(20) NOT NULL,
+    container_uuid binary(16) NOT NULL,
     timestamp bigint NOT NULL,
     category varchar(255) NOT NULL,
     name varchar(255) NOT NULL,
     value double NOT NULL,
-    PRIMARY KEY (container_id, timestamp, category, name)
+    PRIMARY KEY (container_uuid, timestamp, category, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;

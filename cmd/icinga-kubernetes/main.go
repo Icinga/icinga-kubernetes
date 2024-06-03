@@ -26,7 +26,6 @@ import (
 	kclientcmd "k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -67,23 +66,6 @@ func main() {
 		klog.Fatal(errors.Wrap(err, "can't create configuration"))
 	}
 
-	promClient, err := promapi.NewClient(promapi.Config{Address: cfg.Prometheus.Host + ":" + strconv.Itoa(cfg.Prometheus.Port)})
-	if err != nil {
-		klog.Fatal(errors.Wrap(err, "error creating promClient"))
-	}
-
-	promApiClient := promv1.NewAPI(promClient)
-
-	logs, err := logging.NewLoggingFromConfig("Icinga Kubernetes", cfg.Logging)
-	if err != nil {
-		klog.Fatal(errors.Wrap(err, "can't configure logging"))
-	}
-
-	db2, err := igldatabase.NewDbFromConfig(&cfg.Database, logs.GetChildLogger("database"), igldatabase.RetryConnectorCallbacks{})
-	if err != nil {
-		klog.Fatal("IGL_DATABASE: ", err)
-	}
-
 	d, err := database.FromYAMLFile(configLocation)
 	if err != nil {
 		klog.Fatal(err)
@@ -115,6 +97,37 @@ func main() {
 	}
 
 	g, ctx := errgroup.WithContext(context.Background())
+
+	if cfg.Prometheus.Url != "" {
+		logs, err := logging.NewLoggingFromConfig("Icinga Kubernetes", cfg.Logging)
+		if err != nil {
+			klog.Fatal(errors.Wrap(err, "can't configure logging"))
+		}
+
+		db2, err := igldatabase.NewDbFromConfig(&cfg.Database, logs.GetChildLogger("database"), igldatabase.RetryConnectorCallbacks{})
+		if err != nil {
+			klog.Fatal("IGL_DATABASE: ", err)
+		}
+
+		promClient, err := promapi.NewClient(promapi.Config{Address: cfg.Prometheus.Url})
+		if err != nil {
+			klog.Fatal(errors.Wrap(err, "error creating promClient"))
+		}
+
+		promApiClient := promv1.NewAPI(promClient)
+		promMetricSync := metrics.NewPromMetricSync(promApiClient, db2)
+
+		g.Go(func() error {
+			return promMetricSync.Nodes(ctx, factory.Core().V1().Nodes().Informer())
+		})
+
+		g.Go(func() error {
+			return promMetricSync.Pods(ctx, factory.Core().V1().Pods().Informer())
+
+			//return promMetricSync.Run(ctx)
+		})
+	}
+
 	g.Go(func() error {
 		s := syncv1.NewSync(db, factory.Core().V1().Namespaces().Informer(), log.WithName("namespaces"), schemav1.NewNamespace)
 
@@ -206,13 +219,6 @@ func main() {
 		s := syncv1.NewSync(db, factory.Networking().V1().Ingresses().Informer(), log.WithName("ingresses"), schemav1.NewIngress)
 
 		return s.Run(ctx)
-	})
-	g.Go(func() error {
-		promMetricSync := metrics.NewPromMetricSync(promApiClient, db2)
-
-		return promMetricSync.Pods(ctx, factory.Core().V1().Pods().Informer())
-
-		//return promMetricSync.Run(ctx)
 	})
 
 	errs := make(chan error, 1)

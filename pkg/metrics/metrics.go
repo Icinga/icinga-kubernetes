@@ -2,9 +2,10 @@ package metrics
 
 import (
 	"context"
-	"crypto/sha1"
 	"fmt"
 	"github.com/icinga/icinga-go-library/database"
+	"github.com/icinga/icinga-go-library/periodic"
+	"github.com/icinga/icinga-go-library/types"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
 	"github.com/pkg/errors"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
@@ -13,6 +14,8 @@ import (
 	kcorev1 "k8s.io/api/core/v1"
 	kcache "k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+	"net"
+	"sync"
 	"time"
 )
 
@@ -53,8 +56,8 @@ func (pms *PromMetricSync) promMetricNodeUpsertStmt() string {
 	return fmt.Sprintf(
 		`INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s`,
 		`prometheus_node_metric`,
-		"node_id, timestamp, category, name, value",
-		`:node_id, :timestamp, :category, :name, :value`,
+		"node_uuid, timestamp, category, name, value",
+		`:node_uuid, :timestamp, :category, :name, :value`,
 		`value=VALUES(value)`,
 	)
 }
@@ -64,8 +67,8 @@ func (pms *PromMetricSync) promMetricPodUpsertStmt() string {
 	return fmt.Sprintf(
 		`INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s`,
 		`prometheus_pod_metric`,
-		"pod_id, timestamp, category, name, value",
-		`:pod_id, :timestamp, :category, :name, :value`,
+		"pod_uuid, timestamp, category, name, value",
+		`:pod_uuid, :timestamp, :category, :name, :value`,
 		`value=VALUES(value)`,
 	)
 }
@@ -79,6 +82,169 @@ func (pms *PromMetricSync) promMetricContainerUpsertStmt() string {
 		`:container_id, :timestamp, :category, :name, :value`,
 		`value=VALUES(value)`,
 	)
+}
+
+func (pms *PromMetricSync) Nodes(ctx context.Context, informer kcache.SharedIndexInformer) error {
+	if !kcache.WaitForCacheSync(ctx.Done(), informer.HasSynced) {
+		return errors.New("timed out waiting for caches to sync")
+	}
+
+	nodes := sync.Map{}
+	defer periodic.Start(ctx, 1*time.Hour, func(tick periodic.Tick) {
+		for _, item := range informer.GetStore().List() {
+			node := item.(*kcorev1.Node)
+			uuid := schemav1.EnsureUUID(node.UID)
+			nodes.Store(node.Name, uuid)
+			for _, address := range node.Status.Addresses {
+				if address.Type == kcorev1.NodeInternalIP {
+					nodes.Store(address.Address, uuid)
+				}
+			}
+		}
+	}, periodic.Immediate()).Stop()
+
+	promQueriesNode := []PromQuery{
+		{
+			"cpu.usage",
+			`avg by (instance) (sum by (instance, cpu) (rate(node_cpu_seconds_total{mode!~"idle|iowait|steal"}[1m])))`,
+			"",
+		},
+		{
+			"cpu.request",
+			`sum by (node) (kube_pod_container_resource_requests{resource="cpu"})`,
+			"",
+		},
+		{
+			"cpu.request.percentage",
+			`sum by (node) (kube_pod_container_resource_requests{resource="cpu"}) / on(node) group_left() (sum by (node) (machine_cpu_cores))`,
+			"",
+		},
+		{
+			"cpu.limit",
+			`sum by (node) (kube_pod_container_resource_limits{resource="cpu"})`,
+			"",
+		},
+		{
+			"cpu.limit.percentage",
+			`sum by (node) (kube_pod_container_resource_limits{resource="cpu"}) / on(node) group_left() (sum by (node) (machine_cpu_cores))`,
+			"",
+		},
+		{
+			"memory.usage",
+			`sum by (instance) (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / sum by (instance) (node_memory_MemTotal_bytes)`,
+			"",
+		},
+		{
+			"memory.request",
+			`sum by (node) (kube_pod_container_resource_requests{resource="memory"})`,
+			"",
+		},
+		{
+			"memory.request.percentage",
+			`sum by (node) (kube_pod_container_resource_requests{resource="memory"}) / on(node) group_left() (sum by (node) (machine_memory_bytes))`,
+			"",
+		},
+		{
+			"memory.limit",
+			`sum by (node) (kube_pod_container_resource_limits{resource="memory"})`,
+			"",
+		},
+		{
+			"memory.limit.percentage",
+			`sum by (node) (kube_pod_container_resource_limits{resource="memory"}) / on(node) group_left() (sum by (node) (machine_memory_bytes))`,
+			"",
+		},
+		{
+			"network.received.bytes",
+			`sum by (instance) (rate(node_network_receive_bytes_total[2m]))`,
+			"",
+		},
+		{
+			"network.transmitted.bytes",
+			`- sum by (instance) (rate(node_network_transmit_bytes_total[2m]))`,
+			"",
+		},
+		{
+			"filesystem.usage",
+			`sum by (instance, mountpoint) (1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes))`,
+			"mountpoint",
+		},
+	}
+
+	upsertNodeMetrics := make(chan database.Entity)
+
+	g, ctx := errgroup.WithContext(ctx)
+
+	for _, promQuery := range promQueriesNode {
+		g.Go(func() error {
+			for {
+				result, warnings, err := pms.promApiClient.Query(
+					ctx,
+					promQuery.query,
+					time.Time{},
+				)
+				if err != nil {
+					return errors.Wrap(err, "error querying Prometheus")
+				}
+				if len(warnings) > 0 {
+					klog.Warningf("Prometheus warnings: %v\n", warnings)
+				}
+				if result == nil {
+					continue
+				}
+
+				for _, res := range result.(model.Vector) {
+					if res.Value.String() == "NaN" {
+						continue
+					}
+
+					nodeName := string(res.Metric["node"])
+					if nodeName == "" {
+						if host, _, err := net.SplitHostPort(string(res.Metric["instance"])); err == nil {
+							nodeName = host
+						} else {
+							continue
+						}
+					}
+					uuid, exists := nodes.Load(nodeName)
+					if !exists {
+						continue
+					}
+
+					name := ""
+					if promQuery.nameLabel != "" {
+						name = string(res.Metric[promQuery.nameLabel])
+					}
+
+					newNodeMetric := &schemav1.PrometheusNodeMetric{
+						NodeUuid:  uuid.(types.UUID),
+						Timestamp: (res.Timestamp.UnixNano() - res.Timestamp.UnixNano()%(60*1000000000)) / 1000000,
+						Category:  promQuery.metricCategory,
+						Name:      name,
+						Value:     float64(res.Value),
+					}
+
+					select {
+					case upsertNodeMetrics <- newNodeMetric:
+					case <-ctx.Done():
+						return ctx.Err()
+					}
+				}
+
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(time.Second * 55):
+				}
+			}
+		})
+	}
+
+	g.Go(func() error {
+		return database.NewUpsert(pms.db, database.WithStatement(pms.promMetricNodeUpsertStmt(), 5)).Stream(ctx, upsertNodeMetrics)
+	})
+
+	return g.Wait()
 }
 
 func (pms *PromMetricSync) Pods(ctx context.Context, informer kcache.SharedIndexInformer) error {
@@ -182,11 +348,9 @@ func (pms *PromMetricSync) Pods(ctx context.Context, informer kcache.SharedIndex
 						return errors.Wrap(err, "can't get pod from store")
 					}
 					if !exists {
-						fmt.Printf("Can't get pod for %v\n", res.Metric)
 						continue
 					}
 					pod := item.(*kcorev1.Pod)
-					fmt.Println("Got", pod.UID)
 
 					name := ""
 					if promQuery.nameLabel != "" {
@@ -194,6 +358,7 @@ func (pms *PromMetricSync) Pods(ctx context.Context, informer kcache.SharedIndex
 					}
 
 					newPodMetric := &schemav1.PrometheusPodMetric{
+						PodUuid:   schemav1.EnsureUUID(pod.UID),
 						Timestamp: (res.Timestamp.UnixNano() - res.Timestamp.UnixNano()%(60*1000000000)) / 1000000,
 						Category:  promQuery.metricCategory,
 						Name:      name,
@@ -210,7 +375,7 @@ func (pms *PromMetricSync) Pods(ctx context.Context, informer kcache.SharedIndex
 				select {
 				case <-ctx.Done():
 					return ctx.Err()
-				case <-time.After(time.Second * 55):
+				case <-time.After(time.Second * 60):
 				}
 			}
 		})
@@ -229,7 +394,6 @@ func (pms *PromMetricSync) Run(ctx context.Context) error {
 	g, ctx := errgroup.WithContext(ctx)
 
 	upsertClusterMetrics := make(chan database.Entity)
-	upsertNodeMetrics := make(chan database.Entity)
 	upsertContainerMetrics := make(chan database.Entity)
 
 	promQueriesCluster := []PromQuery{
@@ -292,74 +456,6 @@ func (pms *PromMetricSync) Run(ctx context.Context) error {
 			"network.received.bytes.bydevice",
 			`sum by (device) (rate(node_network_receive_bytes_total{device!~"(veth|azv|lxc).*"}[2m]))`,
 			"device",
-		},
-	}
-
-	promQueriesNode := []PromQuery{
-		{
-			"cpu.usage",
-			`avg by (instance) (sum by (instance, cpu) (rate(node_cpu_seconds_total{mode!~"idle|iowait|steal"}[1m])))`,
-			"",
-		},
-		{
-			"cpu.request",
-			`sum by (node) (kube_pod_container_resource_requests{resource="cpu"})`,
-			"",
-		},
-		{
-			"cpu.request.percentage",
-			`sum by (node) (kube_pod_container_resource_requests{resource="cpu"}) / on(node) group_left() (sum by (node) (machine_cpu_cores))`,
-			"",
-		},
-		{
-			"cpu.limit",
-			`sum by (node) (kube_pod_container_resource_limits{resource="cpu"})`,
-			"",
-		},
-		{
-			"cpu.limit.percentage",
-			`sum by (node) (kube_pod_container_resource_limits{resource="cpu"}) / on(node) group_left() (sum by (node) (machine_cpu_cores))`,
-			"",
-		},
-		{
-			"memory.usage",
-			`sum by (instance) (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / sum by (instance) (node_memory_MemTotal_bytes)`,
-			"",
-		},
-		{
-			"memory.request",
-			`sum by (node) (kube_pod_container_resource_requests{resource="memory"})`,
-			"",
-		},
-		{
-			"memory.request.percentage",
-			`sum by (node) (kube_pod_container_resource_requests{resource="memory"}) / on(node) group_left() (sum by (node) (machine_memory_bytes))`,
-			"",
-		},
-		{
-			"memory.limit",
-			`sum by (node) (kube_pod_container_resource_limits{resource="memory"})`,
-			"",
-		},
-		{
-			"memory.limit.percentage",
-			`sum by (node) (kube_pod_container_resource_limits{resource="memory"}) / on(node) group_left() (sum by (node) (machine_memory_bytes))`,
-			"",
-		},
-		{
-			"network.received.bytes",
-			`sum by (instance) (rate(node_network_receive_bytes_total[2m]))`,
-			"",
-		},
-		{
-			"network.transmitted.bytes",
-			`- sum by (instance) (rate(node_network_transmit_bytes_total[2m]))`,
-			"",
-		},
-		{
-			"filesystem.usage",
-			`sum by (instance, mountpoint) (1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes))`,
-			"mountpoint",
 		},
 	}
 
@@ -432,7 +528,7 @@ func (pms *PromMetricSync) Run(ctx context.Context) error {
 						continue
 					}
 
-					clusterId := sha1.Sum([]byte(""))
+					//clusterId := sha1.Sum([]byte(""))
 
 					name := ""
 
@@ -441,7 +537,6 @@ func (pms *PromMetricSync) Run(ctx context.Context) error {
 					}
 
 					newClusterMetric := &schemav1.PrometheusClusterMetric{
-						ClusterId: clusterId[:],
 						Timestamp: (res.Timestamp.UnixNano() - res.Timestamp.UnixNano()%(60*1000000000)) / 1000000,
 						Category:  promQuery.metricCategory,
 						Name:      name,
@@ -450,70 +545,6 @@ func (pms *PromMetricSync) Run(ctx context.Context) error {
 
 					select {
 					case upsertClusterMetrics <- newClusterMetric:
-					case <-ctx.Done():
-						return ctx.Err()
-					}
-				}
-
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case <-time.After(time.Second * 55):
-				}
-			}
-		})
-	}
-
-	for _, promQuery := range promQueriesNode {
-		promQuery := promQuery
-
-		g.Go(func() error {
-			for {
-				result, warnings, err := pms.promApiClient.Query(
-					ctx,
-					promQuery.query,
-					time.Time{},
-				)
-				if err != nil {
-					return errors.Wrap(err, "error querying Prometheus")
-				}
-				if len(warnings) > 0 {
-					fmt.Printf("Warnings: %v\n", warnings)
-				}
-				if result == nil {
-					fmt.Println("No results found")
-					continue
-				}
-
-				for _, res := range result.(model.Vector) {
-					if res.Value.String() == "NaN" {
-						continue
-					}
-
-					nodeName := res.Metric["node"]
-
-					if nodeName == "" {
-						nodeName = res.Metric["instance"]
-					}
-
-					nodeId := sha1.Sum([]byte(nodeName))
-
-					name := ""
-
-					if promQuery.nameLabel != "" {
-						name = string(res.Metric[promQuery.nameLabel])
-					}
-
-					newNodeMetric := &schemav1.PrometheusNodeMetric{
-						NodeId:    nodeId[:],
-						Timestamp: (res.Timestamp.UnixNano() - res.Timestamp.UnixNano()%(60*1000000000)) / 1000000,
-						Category:  promQuery.metricCategory,
-						Name:      name,
-						Value:     float64(res.Value),
-					}
-
-					select {
-					case upsertNodeMetrics <- newNodeMetric:
 					case <-ctx.Done():
 						return ctx.Err()
 					}
@@ -554,7 +585,7 @@ func (pms *PromMetricSync) Run(ctx context.Context) error {
 						continue
 					}
 
-					containerId := sha1.Sum([]byte(res.Metric["namespace"] + "/" + res.Metric["pod"] + "/" + res.Metric["container"]))
+					//containerId := sha1.Sum([]byte(res.Metric["namespace"] + "/" + res.Metric["pod"] + "/" + res.Metric["container"]))
 
 					name := ""
 
@@ -563,11 +594,10 @@ func (pms *PromMetricSync) Run(ctx context.Context) error {
 					}
 
 					newContainerMetric := &schemav1.PrometheusContainerMetric{
-						ContainerId: containerId[:],
-						Timestamp:   (res.Timestamp.UnixNano() - res.Timestamp.UnixNano()%(60*1000000000)) / 1000000,
-						Category:    promQuery.metricCategory,
-						Name:        name,
-						Value:       float64(res.Value),
+						Timestamp: (res.Timestamp.UnixNano() - res.Timestamp.UnixNano()%(60*1000000000)) / 1000000,
+						Category:  promQuery.metricCategory,
+						Name:      name,
+						Value:     float64(res.Value),
 					}
 
 					select {
@@ -588,10 +618,6 @@ func (pms *PromMetricSync) Run(ctx context.Context) error {
 
 	g.Go(func() error {
 		return database.NewUpsert(pms.db, database.WithStatement(pms.promMetricClusterUpsertStmt(), 5)).Stream(ctx, upsertClusterMetrics)
-	})
-
-	g.Go(func() error {
-		return database.NewUpsert(pms.db, database.WithStatement(pms.promMetricNodeUpsertStmt(), 5)).Stream(ctx, upsertNodeMetrics)
 	})
 
 	g.Go(func() error {
