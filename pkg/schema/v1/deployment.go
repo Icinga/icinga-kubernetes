@@ -6,6 +6,9 @@ import (
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
 	kappsv1 "k8s.io/api/apps/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kruntime "k8s.io/apimachinery/pkg/runtime"
+	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
+	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"strings"
 )
 
@@ -21,6 +24,7 @@ type Deployment struct {
 	ReadyReplicas           int32
 	AvailableReplicas       int32
 	UnavailableReplicas     int32
+	Yaml                    string
 	Conditions              []DeploymentCondition `db:"-"`
 	Labels                  []Label               `db:"-"`
 	DeploymentLabels        []DeploymentLabel     `db:"-"`
@@ -96,6 +100,12 @@ func (d *Deployment) Obtain(k8s kmetav1.Object) {
 			LabelUuid:      labelUuid,
 		})
 	}
+
+	scheme := kruntime.NewScheme()
+	_ = kappsv1.AddToScheme(scheme)
+	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kappsv1.SchemeGroupVersion)
+	output, _ := kruntime.Encode(codec, deployment)
+	d.Yaml = string(output)
 }
 
 func (d *Deployment) Relations() []database.Relation {

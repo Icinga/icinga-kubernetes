@@ -7,6 +7,9 @@ import (
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kruntime "k8s.io/apimachinery/pkg/runtime"
+	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
+	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"strings"
 )
 
@@ -41,6 +44,7 @@ type Pvc struct {
 	VolumeName         string
 	VolumeMode         sql.NullString
 	StorageClass       sql.NullString
+	Yaml               string
 	Conditions         []PvcCondition `db:"-"`
 	Labels             []Label        `db:"-"`
 	PvcLabels          []PvcLabel     `db:"-"`
@@ -118,6 +122,12 @@ func (p *Pvc) Obtain(k8s kmetav1.Object) {
 			LabelUuid: labelUuid,
 		})
 	}
+
+	scheme := kruntime.NewScheme()
+	_ = kcorev1.AddToScheme(scheme)
+	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kcorev1.SchemeGroupVersion)
+	output, _ := kruntime.Encode(codec, pvc)
+	p.Yaml = string(output)
 }
 
 func (p *Pvc) Relations() []database.Relation {

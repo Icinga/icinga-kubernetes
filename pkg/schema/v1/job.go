@@ -7,6 +7,9 @@ import (
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
 	kbatchv1 "k8s.io/api/batch/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kruntime "k8s.io/apimachinery/pkg/runtime"
+	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
+	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"strings"
 )
 
@@ -24,6 +27,7 @@ type Job struct {
 	Active                  int32
 	Succeeded               int32
 	Failed                  int32
+	Yaml                    string
 	Conditions              []JobCondition `db:"-"`
 	Labels                  []Label        `db:"-"`
 	JobLabels               []JobLabel     `db:"-"`
@@ -134,6 +138,12 @@ func (j *Job) Obtain(k8s kmetav1.Object) {
 			LabelUuid: labelUuid,
 		})
 	}
+
+	scheme := kruntime.NewScheme()
+	_ = kbatchv1.AddToScheme(scheme)
+	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kbatchv1.SchemeGroupVersion)
+	output, _ := kruntime.Encode(codec, job)
+	j.Yaml = string(output)
 }
 
 func (j *Job) Relations() []database.Relation {

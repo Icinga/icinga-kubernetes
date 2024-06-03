@@ -6,6 +6,9 @@ import (
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kruntime "k8s.io/apimachinery/pkg/runtime"
+	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
+	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"strings"
 )
 
@@ -13,6 +16,7 @@ type Secret struct {
 	Meta
 	Type         string
 	Immutable    types.Bool
+	Yaml         string
 	Data         []Data        `db:"-"`
 	SecretData   []SecretData  `db:"-"`
 	Labels       []Label       `db:"-"`
@@ -83,6 +87,12 @@ func (s *Secret) Obtain(k8s kmetav1.Object) {
 			LabelUuid:  labelUuid,
 		})
 	}
+
+	scheme := kruntime.NewScheme()
+	_ = kcorev1.AddToScheme(scheme)
+	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kcorev1.SchemeGroupVersion)
+	output, _ := kruntime.Encode(codec, secret)
+	s.Yaml = string(output)
 }
 
 func (s *Secret) Relations() []database.Relation {

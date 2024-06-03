@@ -6,6 +6,9 @@ import (
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
 	kappsv1 "k8s.io/api/apps/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kruntime "k8s.io/apimachinery/pkg/runtime"
+	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
+	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"strings"
 )
 
@@ -24,6 +27,7 @@ type StatefulSet struct {
 	CurrentReplicas                                 int32
 	UpdatedReplicas                                 int32
 	AvailableReplicas                               int32
+	Yaml                                            string
 	Conditions                                      []StatefulSetCondition `db:"-"`
 	Labels                                          []Label                `db:"-"`
 	StatefulSetLabels                               []StatefulSetLabel     `db:"-"`
@@ -105,6 +109,12 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object) {
 			LabelUuid:       labelUuid,
 		})
 	}
+
+	scheme := kruntime.NewScheme()
+	_ = kappsv1.AddToScheme(scheme)
+	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kappsv1.SchemeGroupVersion)
+	output, _ := kruntime.Encode(codec, statefulSet)
+	s.Yaml = string(output)
 }
 
 func (s *StatefulSet) Relations() []database.Relation {
