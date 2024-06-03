@@ -2,7 +2,6 @@ package v1
 
 import (
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
 	kappsv1 "k8s.io/api/apps/v1"
@@ -13,7 +12,6 @@ import (
 
 type ReplicaSet struct {
 	Meta
-	Id                   types.Binary
 	DesiredReplicas      int32
 	MinReadySeconds      int32
 	ActualReplicas       int32
@@ -27,7 +25,7 @@ type ReplicaSet struct {
 }
 
 type ReplicaSetCondition struct {
-	ReplicaSetId   types.Binary
+	ReplicaSetUuid types.UUID
 	Type           string
 	Status         string
 	LastTransition types.UnixMilli
@@ -36,7 +34,7 @@ type ReplicaSetCondition struct {
 }
 
 type ReplicaSetOwner struct {
-	ReplicaSetId       types.Binary
+	ReplicaSetUuid     types.UUID
 	Kind               string
 	Name               string
 	Uid                ktypes.UID
@@ -45,8 +43,8 @@ type ReplicaSetOwner struct {
 }
 
 type ReplicaSetLabel struct {
-	ReplicaSetId types.Binary
-	LabelId      types.Binary
+	ReplicaSetUuid types.UUID
+	LabelUuid      types.UUID
 }
 
 func NewReplicaSet() Resource {
@@ -62,7 +60,6 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object) {
 	if replicaSet.Spec.Replicas != nil {
 		desiredReplicas = *replicaSet.Spec.Replicas
 	}
-	r.Id = utils.Checksum(r.Namespace + "/" + r.Name)
 	r.DesiredReplicas = desiredReplicas
 	r.MinReadySeconds = replicaSet.Spec.MinReadySeconds
 	r.ActualReplicas = replicaSet.Status.Replicas
@@ -72,7 +69,7 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object) {
 
 	for _, condition := range replicaSet.Status.Conditions {
 		r.Conditions = append(r.Conditions, ReplicaSetCondition{
-			ReplicaSetId:   r.Id,
+			ReplicaSetUuid: r.Uuid,
 			Type:           strcase.Snake(string(condition.Type)),
 			Status:         string(condition.Status),
 			LastTransition: types.UnixMilli(condition.LastTransitionTime.Time),
@@ -90,10 +87,10 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object) {
 			controller = *ownerReference.Controller
 		}
 		r.Owners = append(r.Owners, ReplicaSetOwner{
-			ReplicaSetId: r.Id,
-			Kind:         strcase.Snake(ownerReference.Kind),
-			Name:         ownerReference.Name,
-			Uid:          ownerReference.UID,
+			ReplicaSetUuid: r.Uuid,
+			Kind:           strcase.Snake(ownerReference.Kind),
+			Name:           ownerReference.Name,
+			Uid:            ownerReference.UID,
 			BlockOwnerDeletion: types.Bool{
 				Bool:  blockOwnerDeletion,
 				Valid: true,
@@ -106,21 +103,21 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object) {
 	}
 
 	for labelName, labelValue := range replicaSet.Labels {
-		labelId := utils.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		labelUuid := NewUUID(r.Uuid, strings.ToLower(labelName+":"+labelValue))
 		r.Labels = append(r.Labels, Label{
-			Id:    labelId,
+			Uuid:  labelUuid,
 			Name:  labelName,
 			Value: labelValue,
 		})
 		r.ReplicaSetLabels = append(r.ReplicaSetLabels, ReplicaSetLabel{
-			ReplicaSetId: r.Id,
-			LabelId:      labelId,
+			ReplicaSetUuid: r.Uuid,
+			LabelUuid:      labelUuid,
 		})
 	}
 }
 
 func (r *ReplicaSet) Relations() []database.Relation {
-	fk := database.WithForeignKey("replica_set_id")
+	fk := database.WithForeignKey("replica_set_uuid")
 
 	return []database.Relation{
 		database.HasMany(r.Conditions, fk),

@@ -3,7 +3,6 @@ package v1
 import (
 	"database/sql"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
 	kcorev1 "k8s.io/api/core/v1"
@@ -13,7 +12,6 @@ import (
 
 type PersistentVolume struct {
 	Meta
-	Id               types.Binary
 	AccessModes      Bitmask[kpersistentVolumeAccessModesSize]
 	Capacity         int64
 	ReclaimPolicy    string
@@ -28,10 +26,10 @@ type PersistentVolume struct {
 }
 
 type PersistentVolumeClaimRef struct {
-	PersistentVolumeId types.Binary
-	Kind               string
-	Name               string
-	Uid                ktypes.UID
+	PersistentVolumeUuid types.UUID
+	Kind                 string
+	Name                 string
+	Uid                  ktypes.UID
 }
 
 func NewPersistentVolume() Resource {
@@ -43,7 +41,6 @@ func (p *PersistentVolume) Obtain(k8s kmetav1.Object) {
 
 	persistentVolume := k8s.(*kcorev1.PersistentVolume)
 
-	p.Id = utils.Checksum(persistentVolume.Namespace + "/" + persistentVolume.Name)
 	p.AccessModes = persistentVolumeAccessModes.Bitmask(persistentVolume.Spec.AccessModes...)
 	p.Capacity = persistentVolume.Spec.Capacity.Storage().MilliValue()
 	p.ReclaimPolicy = strcase.Snake(string(persistentVolume.Spec.PersistentVolumeReclaimPolicy))
@@ -65,10 +62,10 @@ func (p *PersistentVolume) Obtain(k8s kmetav1.Object) {
 
 	if persistentVolume.Spec.ClaimRef != nil {
 		p.Claim = &PersistentVolumeClaimRef{
-			PersistentVolumeId: p.Id,
-			Kind:               persistentVolume.Spec.ClaimRef.Kind,
-			Name:               persistentVolume.Spec.ClaimRef.Name,
-			Uid:                persistentVolume.Spec.ClaimRef.UID,
+			PersistentVolumeUuid: p.Uuid,
+			Kind:                 persistentVolume.Spec.ClaimRef.Kind,
+			Name:                 persistentVolume.Spec.ClaimRef.Name,
+			Uid:                  persistentVolume.Spec.ClaimRef.UID,
 		}
 	}
 }
@@ -78,7 +75,7 @@ func (p *PersistentVolume) Relations() []database.Relation {
 		return []database.Relation{}
 	}
 
-	fk := database.WithForeignKey("persistent_volume_id")
+	fk := database.WithForeignKey("persistent_volume_uuid")
 
 	return []database.Relation{
 		database.HasOne(p.Claim, fk),

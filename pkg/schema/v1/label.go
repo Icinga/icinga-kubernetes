@@ -1,9 +1,11 @@
 package v1
 
-import "github.com/icinga/icinga-go-library/types"
+import (
+	"github.com/icinga/icinga-go-library/types"
+)
 
 type Label struct {
-	Id    types.Binary
+	Uuid  types.UUID
 	Name  string
 	Value string
 }

@@ -2,7 +2,6 @@ package v1
 
 import (
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
 	kappsv1 "k8s.io/api/apps/v1"
@@ -12,7 +11,6 @@ import (
 
 type DaemonSet struct {
 	Meta
-	Id                     types.Binary
 	UpdateStrategy         string
 	MinReadySeconds        int32
 	DesiredNumberScheduled int32
@@ -28,7 +26,7 @@ type DaemonSet struct {
 }
 
 type DaemonSetCondition struct {
-	DaemonSetId    types.Binary
+	DaemonSetUuid  types.UUID
 	Type           string
 	Status         string
 	LastTransition types.UnixMilli
@@ -37,8 +35,8 @@ type DaemonSetCondition struct {
 }
 
 type DaemonSetLabel struct {
-	DaemonSetId types.Binary
-	LabelId     types.Binary
+	DaemonSetUuid types.UUID
+	LabelUuid     types.UUID
 }
 
 func NewDaemonSet() Resource {
@@ -50,7 +48,6 @@ func (d *DaemonSet) Obtain(k8s kmetav1.Object) {
 
 	daemonSet := k8s.(*kappsv1.DaemonSet)
 
-	d.Id = utils.Checksum(daemonSet.Namespace + "/" + daemonSet.Name)
 	d.UpdateStrategy = strcase.Snake(string(daemonSet.Spec.UpdateStrategy.Type))
 	d.MinReadySeconds = daemonSet.Spec.MinReadySeconds
 	d.DesiredNumberScheduled = daemonSet.Status.DesiredNumberScheduled
@@ -63,7 +60,7 @@ func (d *DaemonSet) Obtain(k8s kmetav1.Object) {
 
 	for _, condition := range daemonSet.Status.Conditions {
 		d.Conditions = append(d.Conditions, DaemonSetCondition{
-			DaemonSetId:    d.Id,
+			DaemonSetUuid:  d.Uuid,
 			Type:           string(condition.Type),
 			Status:         string(condition.Status),
 			LastTransition: types.UnixMilli(condition.LastTransitionTime.Time),
@@ -73,21 +70,21 @@ func (d *DaemonSet) Obtain(k8s kmetav1.Object) {
 	}
 
 	for labelName, labelValue := range daemonSet.Labels {
-		labelId := utils.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		labelUuid := NewUUID(d.Uuid, strings.ToLower(labelName+":"+labelValue))
 		d.Labels = append(d.Labels, Label{
-			Id:    labelId,
+			Uuid:  labelUuid,
 			Name:  labelName,
 			Value: labelValue,
 		})
 		d.DaemonSetLabels = append(d.DaemonSetLabels, DaemonSetLabel{
-			DaemonSetId: d.Id,
-			LabelId:     labelId,
+			DaemonSetUuid: d.Uuid,
+			LabelUuid:     labelUuid,
 		})
 	}
 }
 
 func (d *DaemonSet) Relations() []database.Relation {
-	fk := database.WithForeignKey("daemon_set_id")
+	fk := database.WithForeignKey("daemon_set_uuid")
 
 	return []database.Relation{
 		database.HasMany(d.Conditions, fk),

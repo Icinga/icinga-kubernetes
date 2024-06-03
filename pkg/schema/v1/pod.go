@@ -3,7 +3,6 @@ package v1
 import (
 	"database/sql"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
 	kcorev1 "k8s.io/api/core/v1"
@@ -19,7 +18,6 @@ type PodFactory struct {
 
 type Pod struct {
 	Meta
-	Id                types.Binary
 	NodeName          string
 	NominatedNodeName string
 	Ip                string
@@ -43,7 +41,7 @@ type Pod struct {
 }
 
 type PodCondition struct {
-	PodId          types.Binary
+	PodUuid        types.UUID
 	Type           string
 	Status         string
 	LastProbe      types.UnixMilli
@@ -53,12 +51,12 @@ type PodCondition struct {
 }
 
 type PodLabel struct {
-	PodId   types.Binary
-	LabelId types.Binary
+	PodUuid   types.UUID
+	LabelUuid types.UUID
 }
 
 type PodOwner struct {
-	PodId              types.Binary
+	PodUuid            types.UUID
 	Kind               string
 	Name               string
 	Uid                ktypes.UID
@@ -67,14 +65,14 @@ type PodOwner struct {
 }
 
 type PodVolume struct {
-	PodId      types.Binary
+	PodUuid    types.UUID
 	VolumeName string
 	Type       string
 	Source     string
 }
 
 type PodPvc struct {
-	PodId      types.Binary
+	PodUuid    types.UUID
 	VolumeName string
 	ClaimName  string
 	ReadOnly   types.Bool
@@ -95,7 +93,6 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 
 	pod := k8s.(*kcorev1.Pod)
 
-	p.Id = utils.Checksum(pod.Namespace + "/" + pod.Name)
 	p.NodeName = pod.Spec.NodeName
 	p.NominatedNodeName = pod.Status.NominatedNodeName
 	p.Ip = pod.Status.PodIP
@@ -107,7 +104,7 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 
 	for _, condition := range pod.Status.Conditions {
 		p.Conditions = append(p.Conditions, PodCondition{
-			PodId:          p.Id,
+			PodUuid:        p.Uuid,
 			Type:           string(condition.Type),
 			Status:         string(condition.Status),
 			LastProbe:      types.UnixMilli(condition.LastProbeTime.Time),
@@ -138,8 +135,8 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 
 		container := Container{
 			ContainerMeta: ContainerMeta{
-				Id:    utils.Checksum(pod.Namespace + "/" + pod.Name + "/" + k8sContainer.Name),
-				PodId: p.Id,
+				Uuid:    NewUUID(p.Uuid, k8sContainer.Name),
+				PodUuid: p.Uuid,
 			},
 			Name:           k8sContainer.Name,
 			Image:          k8sContainer.Image,
@@ -167,10 +164,10 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 
 		for _, device := range k8sContainer.VolumeDevices {
 			container.Devices = append(container.Devices, ContainerDevice{
-				ContainerId: container.Id,
-				PodId:       p.Id,
-				Name:        device.Name,
-				Path:        device.DevicePath,
+				ContainerUuid: container.Uuid,
+				PodUuid:       p.Uuid,
+				Name:          device.Name,
+				Path:          device.DevicePath,
 			})
 		}
 
@@ -181,11 +178,11 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 				subPath.Valid = true
 			}
 			container.Mounts = append(container.Mounts, ContainerMount{
-				ContainerId: container.Id,
-				PodId:       p.Id,
-				VolumeName:  mount.Name,
-				Path:        mount.MountPath,
-				SubPath:     subPath,
+				ContainerUuid: container.Uuid,
+				PodUuid:       p.Uuid,
+				VolumeName:    mount.Name,
+				Path:          mount.MountPath,
+				SubPath:       subPath,
 				ReadOnly: types.Bool{
 					Bool:  mount.ReadOnly,
 					Valid: true,
@@ -197,15 +194,15 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 	}
 
 	for labelName, labelValue := range pod.Labels {
-		labelId := utils.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		labelUuid := NewUUID(p.Uuid, strings.ToLower(labelName+":"+labelValue))
 		p.Labels = append(p.Labels, Label{
-			Id:    labelId,
+			Uuid:  labelUuid,
 			Name:  labelName,
 			Value: labelValue,
 		})
 		p.PodLabels = append(p.PodLabels, PodLabel{
-			PodId:   p.Id,
-			LabelId: labelId,
+			PodUuid:   p.Uuid,
+			LabelUuid: labelUuid,
 		})
 	}
 
@@ -218,10 +215,10 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 			controller = *ownerReference.Controller
 		}
 		p.Owners = append(p.Owners, PodOwner{
-			PodId: p.Id,
-			Kind:  strcase.Snake(ownerReference.Kind),
-			Name:  ownerReference.Name,
-			Uid:   ownerReference.UID,
+			PodUuid: p.Uuid,
+			Kind:    strcase.Snake(ownerReference.Kind),
+			Name:    ownerReference.Name,
+			Uid:     ownerReference.UID,
 			BlockOwnerDeletion: types.Bool{
 				Bool:  blockOwnerDeletion,
 				Valid: true,
@@ -246,7 +243,7 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 	for _, volume := range pod.Spec.Volumes {
 		if volume.PersistentVolumeClaim != nil {
 			p.Pvcs = append(p.Pvcs, PodPvc{
-				PodId:      p.Id,
+				PodUuid:    p.Uuid,
 				VolumeName: volume.Name,
 				ClaimName:  volume.PersistentVolumeClaim.ClaimName,
 				ReadOnly: types.Bool{
@@ -261,7 +258,7 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 			}
 
 			p.Volumes = append(p.Volumes, PodVolume{
-				PodId:      p.Id,
+				PodUuid:    p.Uuid,
 				VolumeName: volume.Name,
 				Type:       t,
 				Source:     source,
@@ -271,7 +268,7 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 }
 
 func (p *Pod) Relations() []database.Relation {
-	fk := database.WithForeignKey("pod_id")
+	fk := database.WithForeignKey("pod_uuid")
 
 	return []database.Relation{
 		database.HasMany(p.Conditions, fk),

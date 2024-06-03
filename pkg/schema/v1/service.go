@@ -3,7 +3,6 @@ package v1
 import (
 	"database/sql"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
 	kcorev1 "k8s.io/api/core/v1"
@@ -13,7 +12,6 @@ import (
 
 type Service struct {
 	Meta
-	Id                            types.Binary
 	Type                          string
 	ClusterIP                     string
 	ClusterIPs                    string
@@ -37,12 +35,12 @@ type Service struct {
 }
 
 type ServiceSelector struct {
-	ServiceId  types.Binary
-	SelectorId types.Binary
+	ServiceUuid  types.UUID
+	SelectorUuid types.UUID
 }
 
 type ServicePort struct {
-	ServiceId   types.Binary
+	ServiceUuid types.UUID
 	Name        string
 	Protocol    string
 	AppProtocol string
@@ -52,7 +50,7 @@ type ServicePort struct {
 }
 
 type ServiceCondition struct {
-	ServiceId          types.Binary
+	ServiceUuid        types.UUID
 	Type               string
 	Status             string
 	ObservedGeneration int64
@@ -62,8 +60,8 @@ type ServiceCondition struct {
 }
 
 type ServiceLabel struct {
-	ServiceId types.Binary
-	LabelId   types.Binary
+	ServiceUuid types.UUID
+	LabelUuid   types.UUID
 }
 
 func NewService() Resource {
@@ -99,7 +97,6 @@ func (s *Service) Obtain(k8s kmetav1.Object) {
 		internalTrafficPolicy = strcase.Snake(string(*service.Spec.InternalTrafficPolicy))
 	}
 
-	s.Id = utils.Checksum(service.Namespace + "/" + service.Name)
 	s.Type = strcase.Snake(string(service.Spec.Type))
 	s.ClusterIP = service.Spec.ClusterIP
 	for _, clusterIP := range service.Spec.ClusterIPs {
@@ -128,15 +125,15 @@ func (s *Service) Obtain(k8s kmetav1.Object) {
 	s.InternalTrafficPolicy = internalTrafficPolicy
 
 	for selectorName, selectorValue := range service.Spec.Selector {
-		selectorId := utils.Checksum(strings.ToLower(selectorName + ":" + selectorValue))
+		selectorUuid := NewUUID(s.Uuid, strings.ToLower(selectorName+":"+selectorValue))
 		s.Selectors = append(s.Selectors, Selector{
-			Id:    selectorId,
+			Uuid:  selectorUuid,
 			Name:  selectorName,
 			Value: selectorValue,
 		})
 		s.ServiceSelectors = append(s.ServiceSelectors, ServiceSelector{
-			ServiceId:  s.Id,
-			SelectorId: selectorId,
+			ServiceUuid:  s.Uuid,
+			SelectorUuid: selectorUuid,
 		})
 	}
 
@@ -146,7 +143,7 @@ func (s *Service) Obtain(k8s kmetav1.Object) {
 			appProtocol = *port.AppProtocol
 		}
 		s.Ports = append(s.Ports, ServicePort{
-			ServiceId:   s.Id,
+			ServiceUuid: s.Uuid,
 			Name:        port.Name,
 			Protocol:    string(port.Protocol),
 			AppProtocol: appProtocol,
@@ -158,7 +155,7 @@ func (s *Service) Obtain(k8s kmetav1.Object) {
 
 	for _, condition := range service.Status.Conditions {
 		s.Conditions = append(s.Conditions, ServiceCondition{
-			ServiceId:          s.Id,
+			ServiceUuid:        s.Uuid,
 			Type:               condition.Type,
 			Status:             strcase.Snake(string(condition.Status)),
 			ObservedGeneration: condition.ObservedGeneration,
@@ -169,21 +166,21 @@ func (s *Service) Obtain(k8s kmetav1.Object) {
 	}
 
 	for labelName, labelValue := range service.Labels {
-		labelId := utils.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		labelUuid := NewUUID(s.Uuid, strings.ToLower(labelName+":"+labelValue))
 		s.Labels = append(s.Labels, Label{
-			Id:    labelId,
+			Uuid:  labelUuid,
 			Name:  labelName,
 			Value: labelValue,
 		})
 		s.ServiceLabels = append(s.ServiceLabels, ServiceLabel{
-			ServiceId: s.Id,
-			LabelId:   labelId,
+			ServiceUuid: s.Uuid,
+			LabelUuid:   labelUuid,
 		})
 	}
 }
 
 func (s *Service) Relations() []database.Relation {
-	fk := database.WithForeignKey("service_id")
+	fk := database.WithForeignKey("service_uuid")
 
 	return []database.Relation{
 		database.HasMany(s.Conditions, fk),

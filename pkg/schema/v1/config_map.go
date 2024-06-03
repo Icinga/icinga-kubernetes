@@ -2,7 +2,6 @@ package v1
 
 import (
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -11,7 +10,6 @@ import (
 
 type ConfigMap struct {
 	Meta
-	Id              types.Binary
 	Immutable       types.Bool
 	Data            []Data           `db:"-"`
 	ConfigMapsData  []ConfigMapData  `db:"-"`
@@ -20,13 +18,13 @@ type ConfigMap struct {
 }
 
 type ConfigMapData struct {
-	ConfigMapId types.Binary
-	DataId      types.Binary
+	ConfigMapUuid types.UUID
+	DataUuid      types.UUID
 }
 
 type ConfigMapLabel struct {
-	ConfigMapId types.Binary
-	LabelId     types.Binary
+	ConfigMapUuid types.UUID
+	LabelUuid     types.UUID
 }
 
 func NewConfigMap() Resource {
@@ -38,8 +36,6 @@ func (c *ConfigMap) Obtain(k8s kmetav1.Object) {
 
 	configMap := k8s.(*kcorev1.ConfigMap)
 
-	c.Id = utils.Checksum(configMap.Namespace + "/" + configMap.Name)
-
 	var immutable bool
 	if configMap.Immutable != nil {
 		immutable = *configMap.Immutable
@@ -50,34 +46,34 @@ func (c *ConfigMap) Obtain(k8s kmetav1.Object) {
 	}
 
 	for dataName, dataValue := range configMap.Data {
-		dataId := utils.Checksum(dataName + ":" + dataValue)
+		dataUuid := NewUUID(c.Uuid, strings.ToLower(dataName+":"+dataValue))
 		c.Data = append(c.Data, Data{
-			Id:    dataId,
+			Uuid:  dataUuid,
 			Name:  dataName,
 			Value: dataValue,
 		})
 		c.ConfigMapsData = append(c.ConfigMapsData, ConfigMapData{
-			ConfigMapId: c.Id,
-			DataId:      dataId,
+			ConfigMapUuid: c.Uuid,
+			DataUuid:      dataUuid,
 		})
 	}
 
 	for labelName, labelValue := range configMap.Labels {
-		labelId := utils.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		labelUuid := NewUUID(c.Uuid, strings.ToLower(labelName+":"+labelValue))
 		c.Labels = append(c.Labels, Label{
-			Id:    labelId,
+			Uuid:  labelUuid,
 			Name:  labelName,
 			Value: labelValue,
 		})
 		c.ConfigMapLabels = append(c.ConfigMapLabels, ConfigMapLabel{
-			ConfigMapId: c.Id,
-			LabelId:     labelId,
+			ConfigMapUuid: c.Uuid,
+			LabelUuid:     labelUuid,
 		})
 	}
 }
 
 func (c *ConfigMap) Relations() []database.Relation {
-	fk := database.WithForeignKey("config_map_id")
+	fk := database.WithForeignKey("config_map_uuid")
 
 	return []database.Relation{
 		database.HasMany(c.Labels, database.WithoutCascadeDelete()),

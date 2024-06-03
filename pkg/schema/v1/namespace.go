@@ -2,7 +2,6 @@ package v1
 
 import (
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -11,7 +10,6 @@ import (
 
 type Namespace struct {
 	Meta
-	Id              types.Binary
 	Phase           string
 	Conditions      []NamespaceCondition `db:"-"`
 	Labels          []Label              `db:"-"`
@@ -19,7 +17,7 @@ type Namespace struct {
 }
 
 type NamespaceCondition struct {
-	NamespaceId    types.Binary
+	NamespaceUuid  types.UUID
 	Type           string
 	Status         string
 	LastTransition types.UnixMilli
@@ -28,8 +26,8 @@ type NamespaceCondition struct {
 }
 
 type NamespaceLabel struct {
-	NamespaceId types.Binary
-	LabelId     types.Binary
+	NamespaceUuid types.UUID
+	LabelUuid     types.UUID
 }
 
 func NewNamespace() Resource {
@@ -41,12 +39,11 @@ func (n *Namespace) Obtain(k8s kmetav1.Object) {
 
 	namespace := k8s.(*kcorev1.Namespace)
 
-	n.Id = utils.Checksum(namespace.Name)
 	n.Phase = strings.ToLower(string(namespace.Status.Phase))
 
 	for _, condition := range namespace.Status.Conditions {
 		n.Conditions = append(n.Conditions, NamespaceCondition{
-			NamespaceId:    n.Id,
+			NamespaceUuid:  n.Uuid,
 			Type:           string(condition.Type),
 			Status:         string(condition.Status),
 			LastTransition: types.UnixMilli(condition.LastTransitionTime.Time),
@@ -56,21 +53,21 @@ func (n *Namespace) Obtain(k8s kmetav1.Object) {
 	}
 
 	for labelName, labelValue := range namespace.Labels {
-		labelId := utils.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		labelUuid := NewUUID(n.Uuid, strings.ToLower(labelName+":"+labelValue))
 		n.Labels = append(n.Labels, Label{
-			Id:    labelId,
+			Uuid:  labelUuid,
 			Name:  labelName,
 			Value: labelValue,
 		})
 		n.NamespaceLabels = append(n.NamespaceLabels, NamespaceLabel{
-			NamespaceId: n.Id,
-			LabelId:     labelId,
+			NamespaceUuid: n.Uuid,
+			LabelUuid:     labelUuid,
 		})
 	}
 }
 
 func (n *Namespace) Relations() []database.Relation {
-	fk := database.WithForeignKey("namespace_id")
+	fk := database.WithForeignKey("namespace_uuid")
 
 	return []database.Relation{
 		database.HasMany(n.Conditions, fk),

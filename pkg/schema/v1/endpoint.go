@@ -3,7 +3,6 @@ package v1
 import (
 	"database/sql"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	v1 "k8s.io/api/core/v1"
 	kdiscoveryv1 "k8s.io/api/discovery/v1"
@@ -14,7 +13,6 @@ import (
 
 type EndpointSlice struct {
 	Meta
-	Id                 types.Binary
 	AddressType        string
 	Endpoints          []Endpoint           `db:"-"`
 	Labels             []Label              `db:"-"`
@@ -23,33 +21,33 @@ type EndpointSlice struct {
 }
 
 type EndpointSliceLabel struct {
-	EndpointSliceId types.Binary
-	LabelId         types.Binary
+	EndpointSliceUuid types.UUID
+	LabelUuid         types.UUID
 }
 
 type Endpoint struct {
-	Id              types.Binary
-	EndpointSliceId types.Binary
-	HostName        string
-	NodeName        string
-	Ready           types.Bool
-	Serving         types.Bool
-	Terminating     types.Bool
-	Address         string
-	PortName        string
-	Protocol        string
-	Port            int32
-	AppProtocol     string
+	Uuid              types.UUID
+	EndpointSliceUuid types.UUID
+	HostName          string
+	NodeName          string
+	Ready             types.Bool
+	Serving           types.Bool
+	Terminating       types.Bool
+	Address           string
+	PortName          string
+	Protocol          string
+	Port              int32
+	AppProtocol       string
 }
 
 type EndpointTargetRef struct {
-	EndpointSliceId types.Binary
-	Kind            sql.NullString
-	Namespace       string
-	Name            string
-	Uid             ktypes.UID
-	ApiVersion      string
-	ResourceVersion string
+	EndpointSliceUuid types.UUID
+	Kind              sql.NullString
+	Namespace         string
+	Name              string
+	Uid               ktypes.UID
+	ApiVersion        string
+	ResourceVersion   string
 }
 
 func NewEndpointSlice() Resource {
@@ -61,19 +59,18 @@ func (e *EndpointSlice) Obtain(k8s kmetav1.Object) {
 
 	endpointSlice := k8s.(*kdiscoveryv1.EndpointSlice)
 
-	e.Id = utils.Checksum(strings.ToLower(endpointSlice.Namespace + "/" + endpointSlice.Name))
 	e.AddressType = string(endpointSlice.AddressType)
 
 	for labelName, labelValue := range endpointSlice.Labels {
-		labelId := utils.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		labelUuid := NewUUID(e.Uuid, strings.ToLower(labelName+":"+labelValue))
 		e.Labels = append(e.Labels, Label{
-			Id:    labelId,
+			Uuid:  labelUuid,
 			Name:  labelName,
 			Value: labelValue,
 		})
 		e.EndpointLabels = append(e.EndpointLabels, EndpointSliceLabel{
-			EndpointSliceId: e.Id,
-			LabelId:         labelId,
+			EndpointSliceUuid: e.Uuid,
+			LabelUuid:         labelUuid,
 		})
 	}
 
@@ -114,20 +111,20 @@ func (e *EndpointSlice) Obtain(k8s kmetav1.Object) {
 				appProtocol = *endpointPort.AppProtocol
 			}
 			for _, address := range endpoint.Addresses {
-				endpointId := utils.Checksum(e.Id.String() + name + address + string(port))
+				endpointUuid := NewUUID(e.Uuid, name+address+string(port))
 				e.Endpoints = append(e.Endpoints, Endpoint{
-					Id:              endpointId,
-					EndpointSliceId: e.Id,
-					HostName:        hostName,
-					NodeName:        nodeName,
-					Ready:           ready,
-					Serving:         serving,
-					Terminating:     terminating,
-					PortName:        name,
-					Protocol:        protocol,
-					Port:            port,
-					AppProtocol:     appProtocol,
-					Address:         address,
+					Uuid:              endpointUuid,
+					EndpointSliceUuid: e.Uuid,
+					HostName:          hostName,
+					NodeName:          nodeName,
+					Ready:             ready,
+					Serving:           serving,
+					Terminating:       terminating,
+					PortName:          name,
+					Protocol:          protocol,
+					Port:              port,
+					AppProtocol:       appProtocol,
+					Address:           address,
 				})
 			}
 		}
@@ -141,19 +138,19 @@ func (e *EndpointSlice) Obtain(k8s kmetav1.Object) {
 			kind.Valid = true
 		}
 		e.EndpointTargetRefs = append(e.EndpointTargetRefs, EndpointTargetRef{
-			EndpointSliceId: e.Id,
-			Kind:            kind,
-			Namespace:       targetRef.Namespace,
-			Name:            targetRef.Name,
-			Uid:             targetRef.UID,
-			ApiVersion:      targetRef.APIVersion,
-			ResourceVersion: targetRef.ResourceVersion,
+			EndpointSliceUuid: e.Uuid,
+			Kind:              kind,
+			Namespace:         targetRef.Namespace,
+			Name:              targetRef.Name,
+			Uid:               targetRef.UID,
+			ApiVersion:        targetRef.APIVersion,
+			ResourceVersion:   targetRef.ResourceVersion,
 		})
 	}
 }
 
 func (e *EndpointSlice) Relations() []database.Relation {
-	fk := database.WithForeignKey("endpoint_slice_id")
+	fk := database.WithForeignKey("endpoint_slice_uuid")
 
 	return []database.Relation{
 		database.HasMany(e.Endpoints, fk),

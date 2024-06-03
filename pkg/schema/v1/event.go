@@ -2,14 +2,12 @@ package v1
 
 import (
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-go-library/utils"
 	keventsv1 "k8s.io/api/events/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type Event struct {
 	Meta
-	Id                  types.Binary
 	ReportingController string
 	ReportingInstance   string
 	Action              string
@@ -33,7 +31,6 @@ func (e *Event) Obtain(k8s kmetav1.Object) {
 
 	event := k8s.(*keventsv1.Event)
 
-	e.Id = utils.Checksum(event.Namespace + "/" + event.Name)
 	e.ReportingController = event.ReportingController
 	e.ReportingInstance = event.ReportingInstance
 	e.Action = event.Action

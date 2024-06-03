@@ -3,7 +3,6 @@ package v1
 import (
 	b64 "encoding/base64"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -12,7 +11,6 @@ import (
 
 type Secret struct {
 	Meta
-	Id           types.Binary
 	Type         string
 	Immutable    types.Bool
 	Data         []Data        `db:"-"`
@@ -22,13 +20,13 @@ type Secret struct {
 }
 
 type SecretData struct {
-	SecretId types.Binary
-	DataId   types.Binary
+	SecretUuid types.UUID
+	DataUuid   types.UUID
 }
 
 type SecretLabel struct {
-	SecretId types.Binary
-	LabelId  types.Binary
+	SecretUuid types.UUID
+	LabelUuid  types.UUID
 }
 
 func NewSecret() Resource {
@@ -40,7 +38,6 @@ func (s *Secret) Obtain(k8s kmetav1.Object) {
 
 	secret := k8s.(*kcorev1.Secret)
 
-	s.Id = utils.Checksum(s.Namespace + "/" + s.Name)
 	s.Type = string(secret.Type)
 
 	var immutable bool
@@ -62,34 +59,34 @@ func (s *Secret) Obtain(k8s kmetav1.Object) {
 			value = string(dataValue[:n])
 		}
 
-		dataId := utils.Checksum(dataName + ":" + value)
+		dataUuid := NewUUID(s.Uuid, strings.ToLower(dataName+":"+value))
 		s.Data = append(s.Data, Data{
-			Id:    dataId,
+			Uuid:  dataUuid,
 			Name:  dataName,
 			Value: value,
 		})
 		s.SecretData = append(s.SecretData, SecretData{
-			SecretId: s.Id,
-			DataId:   dataId,
+			SecretUuid: s.Uuid,
+			DataUuid:   dataUuid,
 		})
 	}
 
 	for labelName, labelValue := range secret.Labels {
-		labelId := utils.Checksum(strings.ToLower(labelName + ":" + labelValue))
+		labelUuid := NewUUID(s.Uuid, strings.ToLower(labelName+":"+labelValue))
 		s.Labels = append(s.Labels, Label{
-			Id:    labelId,
+			Uuid:  labelUuid,
 			Name:  labelName,
 			Value: labelValue,
 		})
 		s.SecretLabels = append(s.SecretLabels, SecretLabel{
-			SecretId: s.Id,
-			LabelId:  labelId,
+			SecretUuid: s.Uuid,
+			LabelUuid:  labelUuid,
 		})
 	}
 }
 
 func (s *Secret) Relations() []database.Relation {
-	fk := database.WithForeignKey("secret_id")
+	fk := database.WithForeignKey("secret_uuid")
 
 	return []database.Relation{
 		database.HasMany(s.Labels, database.WithoutCascadeDelete()),
