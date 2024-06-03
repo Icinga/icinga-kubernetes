@@ -1,10 +1,12 @@
 package v1
 
 import (
+	"fmt"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
 	kappsv1 "k8s.io/api/apps/v1"
+	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kruntime "k8s.io/apimachinery/pkg/runtime"
 	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
@@ -25,6 +27,8 @@ type Deployment struct {
 	AvailableReplicas       int32
 	UnavailableReplicas     int32
 	Yaml                    string
+	IcingaState             IcingaState
+	IcingaStateReason       string
 	Conditions              []DeploymentCondition `db:"-"`
 	Labels                  []Label               `db:"-"`
 	DeploymentLabels        []DeploymentLabel     `db:"-"`
@@ -75,6 +79,7 @@ func (d *Deployment) Obtain(k8s kmetav1.Object) {
 	d.AvailableReplicas = deployment.Status.AvailableReplicas
 	d.ReadyReplicas = deployment.Status.ReadyReplicas
 	d.UnavailableReplicas = deployment.Status.UnavailableReplicas
+	d.IcingaState, d.IcingaStateReason = d.getIcingaState()
 
 	for _, condition := range deployment.Status.Conditions {
 		d.Conditions = append(d.Conditions, DeploymentCondition{
@@ -106,6 +111,40 @@ func (d *Deployment) Obtain(k8s kmetav1.Object) {
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kappsv1.SchemeGroupVersion)
 	output, _ := kruntime.Encode(codec, deployment)
 	d.Yaml = string(output)
+}
+
+func (d *Deployment) getIcingaState() (IcingaState, string) {
+	if gracePeriodReason := IsWithinGracePeriod(d); gracePeriodReason != nil {
+		return Ok, *gracePeriodReason
+	}
+
+	for _, condition := range d.Conditions {
+		if condition.Type == string(kappsv1.DeploymentAvailable) && condition.Status != string(kcorev1.ConditionTrue) {
+			reason := fmt.Sprintf("Deployment %s/%s is not available: %s", d.Namespace, d.Name, condition.Message)
+
+			return Critical, reason
+		}
+		if condition.Type == string(kappsv1.ReplicaSetReplicaFailure) && condition.Status != string(kcorev1.ConditionTrue) {
+			reason := fmt.Sprintf("Deployment %s/%s has replica failure: %s", d.Namespace, d.Name, condition.Message)
+
+			return Critical, reason
+		}
+	}
+
+	switch {
+	case d.UnavailableReplicas > 0:
+		reason := fmt.Sprintf("Deployment %s/%s has %d unavailable replicas", d.Namespace, d.Name, d.UnavailableReplicas)
+
+		return Critical, reason
+	case d.AvailableReplicas < d.DesiredReplicas:
+		reason := fmt.Sprintf("Deployment %s/%s only has %d out of %d desired replicas available", d.Namespace, d.Name, d.AvailableReplicas, d.DesiredReplicas)
+
+		return Warning, reason
+	default:
+		reason := fmt.Sprintf("Deployment %s/%s has all %d desired replicas available", d.Namespace, d.Name, d.DesiredReplicas)
+
+		return Ok, reason
+	}
 }
 
 func (d *Deployment) Relations() []database.Relation {
