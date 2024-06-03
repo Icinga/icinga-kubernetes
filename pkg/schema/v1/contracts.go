@@ -1,10 +1,13 @@
 package v1
 
 import (
+	"fmt"
 	"github.com/google/uuid"
 	"github.com/icinga/icinga-go-library/types"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ktypes "k8s.io/apimachinery/pkg/types"
+	kcache "k8s.io/client-go/tools/cache"
+	"time"
 )
 
 var NameSpaceKubernetes = uuid.MustParse("3f249403-2bb0-428f-8e91-504d1fd7ddb6")
@@ -73,6 +76,25 @@ func EnsureUUID(uid ktypes.UID) types.UUID {
 
 func NewUUID(space types.UUID, data string) types.UUID {
 	return types.UUID{UUID: uuid.NewSHA1(space.UUID, []byte(data))}
+}
+
+func IsWithinGracePeriod(k kmetav1.Object) *string {
+	const gracePeriod = 5 * time.Minute
+
+	deadline := k.GetCreationTimestamp().Add(gracePeriod)
+	now := time.Now()
+	if now.Before(deadline) {
+		key, _ := kcache.MetaNamespaceKeyFunc(k)
+		reason := fmt.Sprintf(
+			"%s %s is within grace period until %s, so its state is not yet evaluated.",
+			types.Name(k),
+			key,
+			deadline)
+
+		return &reason
+	}
+
+	return nil
 }
 
 // Assert interface compliance.

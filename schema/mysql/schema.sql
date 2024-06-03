@@ -360,6 +360,8 @@ CREATE TABLE replica_set (
   ready_replicas int unsigned NOT NULL,
   available_replicas int unsigned NOT NULL,
   yaml mediumblob DEFAULT NULL,
+  icinga_state enum('ok', 'warning', 'critical', 'unknown') COLLATE utf8mb4_unicode_ci NOT NULL,
+  icinga_state_reason text NOT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
