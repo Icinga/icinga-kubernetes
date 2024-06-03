@@ -106,12 +106,13 @@ CREATE TABLE pod_condition (
 
 CREATE TABLE pod_owner (
   pod_uuid binary(16) NOT NULL,
+  owner_uuid binary(16) NOT NULL,
   kind enum('daemon_set', 'node', 'replica_set', 'stateful_set', 'job') COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   controller enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
   block_owner_deletion enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
-  PRIMARY KEY (pod_uuid, uid)
+  PRIMARY KEY (pod_uuid, owner_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE pod_pvc (
@@ -391,12 +392,13 @@ CREATE TABLE replica_set_condition (
 
 CREATE TABLE replica_set_owner (
   replica_set_uuid binary(16) NOT NULL,
+  owner_uuid binary(16) NOT NULL,
   kind enum('deployment') COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   controller enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
   block_owner_deletion enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
-  PRIMARY KEY (replica_set_uuid, uid)
+  PRIMARY KEY (replica_set_uuid, owner_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE daemon_set (
