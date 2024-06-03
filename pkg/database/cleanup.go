@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-kubernetes/internal"
 	"github.com/icinga/icinga-kubernetes/pkg/com"
 	"time"
 )
@@ -48,7 +47,7 @@ func (db *Database) CleanupOlderThan(
 			Time: types.UnixMilli(olderThan),
 		})
 		if err != nil {
-			return 0, internal.CantPerformQuery(err, q)
+			return 0, CantPerformQuery(err, q)
 		}
 
 		n, err := rs.RowsAffected()

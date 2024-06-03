@@ -61,8 +61,7 @@ func main() {
 	factory := informers.NewSharedInformerFactory(clientset, 0)
 	log := klog.NewKlogr()
 
-	cfg := internal.Config{}
-
+	var cfg internal.Config
 	err = config.FromYAMLFile(configLocation, &cfg)
 	if err != nil {
 		klog.Fatal(errors.Wrap(err, "can't create configuration"))
@@ -211,7 +210,9 @@ func main() {
 	g.Go(func() error {
 		promMetricSync := metrics.NewPromMetricSync(promApiClient, db2)
 
-		return promMetricSync.Run(ctx)
+		return promMetricSync.Pods(ctx, factory.Core().V1().Pods().Informer())
+
+		//return promMetricSync.Run(ctx)
 	})
 
 	errs := make(chan error, 1)
