@@ -16,20 +16,31 @@ import (
 
 type Node struct {
 	Meta
-	PodCIDR           string
-	NumIps            int64
-	Unschedulable     types.Bool
-	Ready             types.Bool
-	CpuCapacity       int64
-	CpuAllocatable    int64
-	MemoryCapacity    int64
-	MemoryAllocatable int64
-	PodCapacity       int64
-	Yaml              string
-	Conditions        []NodeCondition `db:"-"`
-	Volumes           []NodeVolume    `db:"-"`
-	Labels            []Label         `db:"-"`
-	NodeLabels        []NodeLabel     `db:"-"`
+	PodCIDR                 string
+	NumIps                  int64
+	Unschedulable           types.Bool
+	Ready                   types.Bool
+	CpuCapacity             int64
+	CpuAllocatable          int64
+	MemoryCapacity          int64
+	MemoryAllocatable       int64
+	PodCapacity             int64
+	Yaml                    string
+	Roles                   string
+	MachineId               string
+	SystemUUID              string
+	BootId                  string
+	KernelVersion           string
+	OsImage                 string
+	OperatingSystem         string
+	Architecture            string
+	ContainerRuntimeVersion string
+	KubeletVersion          string
+	KubeProxyVersion        string
+	Conditions              []NodeCondition `db:"-"`
+	Volumes                 []NodeVolume    `db:"-"`
+	Labels                  []Label         `db:"-"`
+	NodeLabels              []NodeLabel     `db:"-"`
 }
 
 type NodeCondition struct {
@@ -84,6 +95,25 @@ func (n *Node) Obtain(k8s kmetav1.Object) {
 	n.MemoryCapacity = node.Status.Capacity.Memory().MilliValue()
 	n.MemoryAllocatable = node.Status.Allocatable.Memory().MilliValue()
 	n.PodCapacity = node.Status.Allocatable.Pods().Value()
+	n.MachineId = node.Status.NodeInfo.MachineID
+	n.SystemUUID = node.Status.NodeInfo.SystemUUID
+	n.BootId = node.Status.NodeInfo.BootID
+	n.KernelVersion = node.Status.NodeInfo.KernelVersion
+	n.OsImage = node.Status.NodeInfo.OSImage
+	n.OperatingSystem = node.Status.NodeInfo.OperatingSystem
+	n.Architecture = node.Status.NodeInfo.Architecture
+	n.ContainerRuntimeVersion = node.Status.NodeInfo.ContainerRuntimeVersion
+	n.KubeletVersion = node.Status.NodeInfo.KubeletVersion
+	n.KubeProxyVersion = node.Status.NodeInfo.KubeProxyVersion
+
+	var roles []string
+	for labelName := range node.Labels {
+		if strings.Contains(labelName, "node-role") {
+			role := strings.SplitAfter(labelName, "/")[1]
+			roles = append(roles, role)
+		}
+	}
+	n.Roles = strings.Join(roles, ", ")
 
 	for _, condition := range node.Status.Conditions {
 		n.Conditions = append(n.Conditions, NodeCondition{
