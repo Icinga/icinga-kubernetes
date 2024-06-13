@@ -47,7 +47,7 @@ CREATE TABLE node (
   container_runtime_version varchar(255) NOT NULL,
   kubelet_version varchar(255) NOT NULL,
   kube_proxy_version varchar(255) NOT NULL,
-  icinga_state enum('ok', 'warning', 'critical', 'unknown') COLLATE utf8mb4_unicode_ci NOT NULL,
+  icinga_state enum('unknown', 'ok', 'warning', 'critical') COLLATE utf8mb4_unicode_ci NOT NULL,
   icinga_state_reason text NOT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (uuid)
@@ -87,7 +87,7 @@ CREATE TABLE pod (
   memory_limits bigint unsigned NOT NULL,
   memory_requests bigint unsigned NOT NULL,
   phase enum('pending', 'running', 'succeeded', 'failed') COLLATE utf8mb4_unicode_ci NOT NULL,
-  icinga_state enum('ok', 'warning', 'critical', 'unknown') COLLATE utf8mb4_unicode_ci NOT NULL,
+  icinga_state enum('pending', 'ok', 'warning', 'critical', 'unknown') COLLATE utf8mb4_unicode_ci NOT NULL,
   icinga_state_reason text NULL DEFAULT NULL,
   reason varchar(255) NULL DEFAULT NULL,
   message varchar(255) NULL DEFAULT NULL,
@@ -140,15 +140,18 @@ CREATE TABLE container (
   pod_uuid binary(16) NOT NULL,
   name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   image varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  image_pull_policy enum('always', 'never', 'if_not_present') COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   cpu_limits bigint unsigned NOT NULL,
   cpu_requests bigint unsigned NOT NULL,
   memory_limits bigint unsigned NOT NULL,
   memory_requests bigint unsigned NOT NULL,
   state enum('waiting', 'running', 'terminated') COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
-  state_details longtext NOT NULL,
+  state_details longtext NULL DEFAULT NULL,
   ready enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
   started enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
   restart_count int unsigned NOT NULL,
+  icinga_state enum('unknown', 'pending', 'ok', 'warning', 'critical') COLLATE utf8mb4_unicode_ci NOT NULL,
+  icinga_state_reason text NULL DEFAULT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
@@ -196,7 +199,7 @@ CREATE TABLE deployment (
   available_replicas int unsigned NOT NULL,
   unavailable_replicas int unsigned NOT NULL,
   yaml mediumblob DEFAULT NULL,
-  icinga_state enum('ok', 'warning', 'critical', 'unknown') COLLATE utf8mb4_unicode_ci NOT NULL,
+  icinga_state enum('unknown', 'ok', 'warning', 'critical') COLLATE utf8mb4_unicode_ci NOT NULL,
   icinga_state_reason text NOT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (uuid)
@@ -378,7 +381,7 @@ CREATE TABLE replica_set (
   ready_replicas int unsigned NOT NULL,
   available_replicas int unsigned NOT NULL,
   yaml mediumblob DEFAULT NULL,
-  icinga_state enum('ok', 'warning', 'critical', 'unknown') COLLATE utf8mb4_unicode_ci NOT NULL,
+  icinga_state enum('unknown', 'ok', 'warning', 'critical') COLLATE utf8mb4_unicode_ci NOT NULL,
   icinga_state_reason text NOT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (uuid)
@@ -421,7 +424,7 @@ CREATE TABLE daemon_set (
   number_available int unsigned NOT NULL,
   number_unavailable int unsigned NOT NULL,
   yaml mediumblob DEFAULT NULL,
-  icinga_state enum('ok', 'warning', 'critical', 'unknown') COLLATE utf8mb4_unicode_ci NOT NULL,
+  icinga_state enum('unknown', 'ok', 'warning', 'critical') COLLATE utf8mb4_unicode_ci NOT NULL,
   icinga_state_reason text NOT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (uuid)
@@ -457,7 +460,7 @@ CREATE TABLE stateful_set (
   updated_replicas int unsigned NOT NULL,
   available_replicas int unsigned NOT NULL,
   yaml mediumblob DEFAULT NULL,
-  icinga_state enum('ok', 'warning', 'critical', 'unknown') COLLATE utf8mb4_unicode_ci NOT NULL,
+  icinga_state enum('unknown', 'ok', 'warning', 'critical') COLLATE utf8mb4_unicode_ci NOT NULL,
   icinga_state_reason text NOT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (uuid)

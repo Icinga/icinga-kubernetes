@@ -140,12 +140,12 @@ func (d *Deployment) getIcingaState() (IcingaState, string) {
 
 	for _, condition := range d.Conditions {
 		if condition.Type == string(kappsv1.DeploymentAvailable) && condition.Status != string(kcorev1.ConditionTrue) {
-			reason := fmt.Sprintf("Deployment %s/%s is not available: %s", d.Namespace, d.Name, condition.Message)
+			reason := fmt.Sprintf("Deployment %s/%s is not available: %s.", d.Namespace, d.Name, condition.Message)
 
 			return Critical, reason
 		}
 		if condition.Type == string(kappsv1.ReplicaSetReplicaFailure) && condition.Status != string(kcorev1.ConditionTrue) {
-			reason := fmt.Sprintf("Deployment %s/%s has replica failure: %s", d.Namespace, d.Name, condition.Message)
+			reason := fmt.Sprintf("Deployment %s/%s has replica failure: %s.", d.Namespace, d.Name, condition.Message)
 
 			return Critical, reason
 		}
@@ -153,15 +153,15 @@ func (d *Deployment) getIcingaState() (IcingaState, string) {
 
 	switch {
 	case d.UnavailableReplicas > 0:
-		reason := fmt.Sprintf("Deployment %s/%s has %d unavailable replicas", d.Namespace, d.Name, d.UnavailableReplicas)
+		reason := fmt.Sprintf("Deployment %s/%s has %d unavailable replicas.", d.Namespace, d.Name, d.UnavailableReplicas)
 
 		return Critical, reason
 	case d.AvailableReplicas < d.DesiredReplicas:
-		reason := fmt.Sprintf("Deployment %s/%s only has %d out of %d desired replicas available", d.Namespace, d.Name, d.AvailableReplicas, d.DesiredReplicas)
+		reason := fmt.Sprintf("Deployment %s/%s only has %d out of %d desired replicas available.", d.Namespace, d.Name, d.AvailableReplicas, d.DesiredReplicas)
 
 		return Warning, reason
 	default:
-		reason := fmt.Sprintf("Deployment %s/%s has all %d desired replicas available", d.Namespace, d.Name, d.DesiredReplicas)
+		reason := fmt.Sprintf("Deployment %s/%s has all %d desired replicas available.", d.Namespace, d.Name, d.DesiredReplicas)
 
 		return Ok, reason
 	}

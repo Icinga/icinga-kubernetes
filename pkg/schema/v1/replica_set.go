@@ -155,7 +155,7 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object) {
 
 func (r *ReplicaSet) getIcingaState() (IcingaState, string) {
 	if r.DesiredReplicas < 1 {
-		reason := fmt.Sprintf("ReplicaSet %s/%s has an invalid desired replica count: %d", r.Namespace, r.Name, r.DesiredReplicas)
+		reason := fmt.Sprintf("ReplicaSet %s/%s has an invalid desired replica count: %d.", r.Namespace, r.Name, r.DesiredReplicas)
 
 		return Unknown, reason
 	}
@@ -166,7 +166,7 @@ func (r *ReplicaSet) getIcingaState() (IcingaState, string) {
 
 	for _, condition := range r.Conditions {
 		if condition.Type == string(kappsv1.ReplicaSetReplicaFailure) && condition.Status == string(kcorev1.ConditionTrue) {
-			reason := fmt.Sprintf("ReplicaSet %s/%s has a failure condition: %s", r.Namespace, r.Name, condition.Message)
+			reason := fmt.Sprintf("ReplicaSet %s/%s has a failure condition: %s.", r.Namespace, r.Name, condition.Message)
 
 			return Critical, reason
 		}
@@ -174,15 +174,15 @@ func (r *ReplicaSet) getIcingaState() (IcingaState, string) {
 
 	switch {
 	case r.AvailableReplicas < 1:
-		reason := fmt.Sprintf("ReplicaSet %s/%s has no replica available from %d desired", r.Namespace, r.Name, r.DesiredReplicas)
+		reason := fmt.Sprintf("ReplicaSet %s/%s has no replica available from %d desired.", r.Namespace, r.Name, r.DesiredReplicas)
 
 		return Critical, reason
 	case r.AvailableReplicas < r.DesiredReplicas:
-		reason := fmt.Sprintf("ReplicaSet %s/%s only has %d out of %d desired replicas available", r.Namespace, r.Name, r.AvailableReplicas, r.DesiredReplicas)
+		reason := fmt.Sprintf("ReplicaSet %s/%s only has %d out of %d desired replicas available.", r.Namespace, r.Name, r.AvailableReplicas, r.DesiredReplicas)
 
 		return Warning, reason
 	default:
-		reason := fmt.Sprintf("ReplicaSet %s/%s has all %d desired replicas available", r.Namespace, r.Name, r.DesiredReplicas)
+		reason := fmt.Sprintf("ReplicaSet %s/%s has all %d desired replicas available.", r.Namespace, r.Name, r.DesiredReplicas)
 
 		return Ok, reason
 	}
