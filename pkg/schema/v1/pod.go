@@ -1,7 +1,7 @@
 package v1
 
 import (
-	"database/sql"
+	"fmt"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
@@ -25,6 +25,8 @@ type Pod struct {
 	NominatedNodeName string
 	Ip                string
 	Phase             string
+	IcingaState       IcingaState
+	IcingaStateReason string
 	CpuLimits         int64
 	CpuRequests       int64
 	MemoryLimits      int64
@@ -35,7 +37,7 @@ type Pod struct {
 	RestartPolicy     string
 	Yaml              string
 	Conditions        []PodCondition  `db:"-"`
-	Containers        []Container     `db:"-"`
+	Containers        []*Container    `db:"-"`
 	Owners            []PodOwner      `db:"-"`
 	Labels            []Label         `db:"-"`
 	PodLabels         []PodLabel      `db:"-"`
@@ -133,83 +135,25 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 		})
 	}
 
-	containerStatuses := make(map[string]kcorev1.ContainerStatus, len(pod.Spec.Containers))
-	for _, containerStatus := range pod.Status.ContainerStatuses {
-		containerStatuses[containerStatus.Name] = containerStatus
+	p.Containers = NewContainers[Container](p, pod.Spec.Containers, pod.Status.ContainerStatuses, NewContainer)
+
+	p.IcingaState, p.IcingaStateReason = p.getIcingaState(pod)
+
+	for _, container := range pod.Spec.Containers {
+		p.CpuLimits += container.Resources.Limits.Cpu().MilliValue()
+		p.CpuRequests += container.Resources.Requests.Cpu().MilliValue()
+		p.MemoryLimits += container.Resources.Limits.Memory().MilliValue()
+		p.MemoryRequests += container.Resources.Requests.Memory().MilliValue()
 	}
-	for _, k8sContainer := range pod.Spec.Containers {
-		var started bool
-		if containerStatuses[k8sContainer.Name].Started != nil {
-			started = *containerStatuses[k8sContainer.Name].Started
-		}
-		state, stateDetails, err := MarshalFirstNonNilStructFieldToJSON(containerStatuses[k8sContainer.Name].State)
-		if err != nil {
-			panic(err)
-		}
-		var containerState sql.NullString
-		if state != "" {
-			containerState.String = strcase.Snake(state)
-			containerState.Valid = true
-		}
 
-		container := Container{
-			ContainerMeta: ContainerMeta{
-				Uuid:    NewUUID(p.Uuid, k8sContainer.Name),
-				PodUuid: p.Uuid,
-			},
-			Name:           k8sContainer.Name,
-			Image:          k8sContainer.Image,
-			CpuLimits:      k8sContainer.Resources.Limits.Cpu().MilliValue(),
-			CpuRequests:    k8sContainer.Resources.Requests.Cpu().MilliValue(),
-			MemoryLimits:   k8sContainer.Resources.Limits.Memory().MilliValue(),
-			MemoryRequests: k8sContainer.Resources.Requests.Memory().MilliValue(),
-			Ready: types.Bool{
-				Bool:  containerStatuses[k8sContainer.Name].Ready,
-				Valid: true,
-			},
-			Started: types.Bool{
-				Bool:  started,
-				Valid: true,
-			},
-			RestartCount: containerStatuses[k8sContainer.Name].RestartCount,
-			State:        containerState,
-			StateDetails: stateDetails,
-		}
-
-		p.CpuLimits += k8sContainer.Resources.Limits.Cpu().MilliValue()
-		p.CpuRequests += k8sContainer.Resources.Requests.Cpu().MilliValue()
-		p.MemoryLimits += k8sContainer.Resources.Limits.Memory().MilliValue()
-		p.MemoryRequests += k8sContainer.Resources.Requests.Memory().MilliValue()
-
-		for _, device := range k8sContainer.VolumeDevices {
-			container.Devices = append(container.Devices, ContainerDevice{
-				ContainerUuid: container.Uuid,
-				PodUuid:       p.Uuid,
-				Name:          device.Name,
-				Path:          device.DevicePath,
-			})
-		}
-
-		for _, mount := range k8sContainer.VolumeMounts {
-			var subPath sql.NullString
-			if mount.SubPath != "" {
-				subPath.String = mount.SubPath
-				subPath.Valid = true
-			}
-			container.Mounts = append(container.Mounts, ContainerMount{
-				ContainerUuid: container.Uuid,
-				PodUuid:       p.Uuid,
-				VolumeName:    mount.Name,
-				Path:          mount.MountPath,
-				SubPath:       subPath,
-				ReadOnly: types.Bool{
-					Bool:  mount.ReadOnly,
-					Valid: true,
-				},
-			})
-		}
-
-		p.Containers = append(p.Containers, container)
+	// https://kubernetes.io/docs/concepts/workloads/pods/init-containers/#resources
+	for _, container := range pod.Spec.InitContainers {
+		// Init container must complete successfully before the next one starts,
+		// so we don't have to sum their resources.
+		p.CpuLimits = MaxInt(p.CpuLimits, container.Resources.Limits.Cpu().MilliValue())
+		p.CpuRequests = MaxInt(p.CpuRequests, container.Resources.Requests.Cpu().MilliValue())
+		p.MemoryLimits = MaxInt(p.MemoryLimits, container.Resources.Limits.Memory().MilliValue())
+		p.MemoryRequests = MaxInt(p.MemoryRequests, container.Resources.Requests.Memory().MilliValue())
 	}
 
 	for labelName, labelValue := range pod.Labels {
@@ -263,16 +207,6 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 		})
 	}
 
-	// https://kubernetes.io/docs/concepts/workloads/pods/init-containers/#resources
-	for _, container := range pod.Spec.InitContainers {
-		// Init container must complete successfully before the next one starts,
-		// so we don't have to sum their resources.
-		p.CpuLimits = MaxInt(p.CpuLimits, container.Resources.Limits.Cpu().MilliValue())
-		p.CpuRequests = MaxInt(p.CpuRequests, container.Resources.Requests.Cpu().MilliValue())
-		p.MemoryLimits = MaxInt(p.MemoryLimits, container.Resources.Limits.Memory().MilliValue())
-		p.MemoryRequests = MaxInt(p.MemoryRequests, container.Resources.Requests.Memory().MilliValue())
-	}
-
 	for _, volume := range pod.Spec.Volumes {
 		if volume.PersistentVolumeClaim != nil {
 			p.Pvcs = append(p.Pvcs, PodPvc{
@@ -304,6 +238,125 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kcorev1.SchemeGroupVersion)
 	output, _ := kruntime.Encode(codec, pod)
 	p.Yaml = string(output)
+}
+
+func (p *Pod) getIcingaState(pod *kcorev1.Pod) (IcingaState, string) {
+	// TODO(el): Account eviction.
+
+	if pod.DeletionTimestamp != nil {
+		if pod.Status.Reason == "NodeLost" {
+			return Unknown, ""
+		}
+		// TODO(el): Return Critical if pod.DeletionTimestamp + pod.DeletionGracePeriodSeconds > now.
+		return Ok, fmt.Sprintf("Pod %s/%s is being deleted.", pod.Namespace, pod.Name)
+	}
+
+	if pod.Status.Phase == kcorev1.PodSucceeded {
+		return Ok, fmt.Sprintf(
+			"Pod %s/%s is succeeded as all its containers have been terminated successfully and"+
+				" will not be restarted.",
+			pod.Namespace, pod.Name)
+	}
+
+	var initialized bool
+	for _, condition := range pod.Status.Conditions {
+		if condition.Type == kcorev1.PodScheduled && condition.Status == kcorev1.ConditionFalse {
+			return Critical, fmt.Sprintf(
+				"Pod %s/%s can't be scheduled: %s: %s.", pod.Namespace, pod.Name, condition.Reason, condition.Message)
+		}
+
+		if condition.Type == kcorev1.PodReadyToStartContainers && condition.Status == kcorev1.ConditionFalse {
+			return Critical, fmt.Sprintf(
+				"Pod %s/%s is not ready to start containers.", pod.Namespace, pod.Name)
+		}
+
+		if condition.Type == kcorev1.DisruptionTarget && condition.Status == kcorev1.ConditionTrue {
+			return Critical, fmt.Sprintf(
+				"Pod %s/%s is about to be terminated: %s: %s.", pod.Namespace, pod.Name, condition.Reason, condition.Message)
+		}
+
+		if condition.Type == kcorev1.PodInitialized && condition.Status == kcorev1.ConditionTrue {
+			initialized = true
+		}
+	}
+
+	if pod.Status.Phase == kcorev1.PodFailed {
+		// TODO(el): For each container, check its state to provide more context about the termination.
+		return Critical, fmt.Sprintf(
+			"Pod %s/%s has failed as all its containers have been terminated, but at least one container has failed.",
+			pod.Namespace, pod.Name)
+	}
+
+	if !initialized {
+		initContainers := NewContainers[InitContainer](p, pod.Spec.InitContainers, pod.Status.InitContainerStatuses, NewInitContainer)
+		state := Ok
+		reasons := make([]string, 0, len(initContainers))
+		for _, c := range initContainers {
+			state = max(state, c.IcingaState)
+			reasons = append(reasons, fmt.Sprintf(
+				"[%s] %s", strings.ToUpper(c.IcingaState.String()), c.IcingaStateReason))
+		}
+
+		if len(reasons) == 1 {
+			// Remove square brackets state information.
+			_, reason, _ := strings.Cut(reasons[0], " ")
+
+			return state, reason
+		}
+
+		return state, fmt.Sprintf("%s/%s is %s.\n%s", pod.Namespace, pod.Name, state, strings.Join(reasons, "\n"))
+	}
+
+	var notRunning int
+	state := Ok
+	reasons := make([]string, 0, len(p.Containers))
+	for _, c := range p.Containers {
+		if c.IcingaState != Ok {
+			state = max(state, c.IcingaState)
+			notRunning++
+		}
+		reasons = append(reasons, fmt.Sprintf(
+			"[%s] %s", strings.ToUpper(c.IcingaState.String()), c.IcingaStateReason))
+	}
+
+	if len(reasons) == 1 {
+		// Remove square brackets state information.
+		_, reason, _ := strings.Cut(reasons[0], " ")
+
+		return state, reason
+	}
+
+	return state, fmt.Sprintf(
+		"%s/%s is %s with %d out %d containers running.\n%s",
+		pod.Namespace,
+		pod.Name,
+		state,
+		len(p.Containers)-notRunning,
+		len(p.Containers),
+		strings.Join(reasons, "\n"))
+}
+
+func NewContainers[T any](
+	p *Pod,
+	containers []kcorev1.Container,
+	statuses []kcorev1.ContainerStatus,
+	factory func(ContainerMeta, kcorev1.Container, kcorev1.ContainerStatus) *T,
+) []*T {
+	obtained := make([]*T, 0, len(containers))
+
+	statusesIdx := make(map[string]kcorev1.ContainerStatus, len(containers))
+	for _, status := range statuses {
+		statusesIdx[status.Name] = status
+	}
+
+	for _, container := range containers {
+		obtained = append(obtained, factory(ContainerMeta{
+			Uuid:    NewUUID(p.Uuid, container.Name),
+			PodUuid: p.Uuid,
+		}, container, statusesIdx[container.Name]))
+	}
+
+	return obtained
 }
 
 func (p *Pod) Relations() []database.Relation {

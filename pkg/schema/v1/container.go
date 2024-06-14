@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"github.com/go-co-op/gocron"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/com"
@@ -29,6 +30,14 @@ var (
 const (
 	MaxConcurrentJobs int = 60
 	ScheduleInterval      = 5 * time.Minute
+
+	PodInitializing   = "PodInitializing" // https://github.com/kubernetes/kubernetes/blob/v1.30.1/pkg/kubelet/kubelet_pods.go#L80
+	ContainerCreating = "ContainerCreating"
+
+	ErrImagePull        = "ErrImagePull" // https://github.com/kubernetes/kubernetes/blob/v1.30.1/pkg/kubelet/images/types.go#L27
+	ErrImagePullBackOff = "ImagePullBackOff"
+
+	// https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/container/sync_result.go#L37
 )
 
 type ContainerMeta struct {
@@ -36,24 +45,66 @@ type ContainerMeta struct {
 	PodUuid types.UUID `db:"pod_uuid"`
 }
 
-type Container struct {
-	ContainerMeta
-	Name           string
-	Image          string
-	CpuLimits      int64
-	CpuRequests    int64
-	MemoryLimits   int64
-	MemoryRequests int64
-	State          sql.NullString
-	StateDetails   string
-	Ready          types.Bool
-	Started        types.Bool
-	RestartCount   int32
-	Devices        []ContainerDevice `db:"-"`
-	Mounts         []ContainerMount  `db:"-"`
+type ContainerCommon struct {
+	Name              string
+	Image             string
+	ImagePullPolicy   ImagePullPolicy
+	State             sql.NullString
+	StateDetails      sql.NullString
+	IcingaState       IcingaState
+	IcingaStateReason string
+	Devices           []ContainerDevice `db:"-"`
+	Mounts            []ContainerMount  `db:"-"`
 }
 
-func (c *Container) Relations() []database.Relation {
+func (c *ContainerCommon) Obtain(meta ContainerMeta, container kcorev1.Container, status kcorev1.ContainerStatus) {
+	c.Name = container.Name
+	c.Image = container.Image
+	c.ImagePullPolicy = ImagePullPolicy(container.ImagePullPolicy)
+
+	state, stateDetails, err := MarshalFirstNonNilStructFieldToJSON(status.State)
+	if err != nil {
+		panic(err)
+	}
+
+	if state != "" {
+		c.State.String = state
+		c.State.Valid = true
+		c.StateDetails.String = stateDetails
+		c.StateDetails.Valid = true
+	}
+
+	c.IcingaState, c.IcingaStateReason = GetContainerState(container, status)
+
+	for _, device := range container.VolumeDevices {
+		c.Devices = append(c.Devices, ContainerDevice{
+			ContainerMeta: meta,
+			Name:          device.Name,
+			Path:          device.DevicePath,
+		})
+	}
+
+	for _, mount := range container.VolumeMounts {
+		m := ContainerMount{
+			ContainerMeta: meta,
+			VolumeName:    mount.Name,
+			Path:          mount.MountPath,
+			ReadOnly: types.Bool{
+				Bool:  mount.ReadOnly,
+				Valid: true,
+			},
+		}
+
+		if mount.SubPath != "" {
+			m.SubPath.String = mount.SubPath
+			m.SubPath.Valid = true
+		}
+
+		c.Mounts = append(c.Mounts, m)
+	}
+}
+
+func (c *ContainerCommon) Relations() []database.Relation {
 	fk := database.WithForeignKey("container_id")
 
 	return []database.Relation{
@@ -67,20 +118,101 @@ func (c *Container) Relations() []database.Relation {
 	}
 }
 
+type ContainerResources struct {
+	CpuLimits      int64
+	CpuRequests    int64
+	MemoryLimits   int64
+	MemoryRequests int64
+}
+
+func (c *ContainerResources) Obtain(container kcorev1.Container) {
+	c.CpuLimits = container.Resources.Limits.Cpu().MilliValue()
+	c.CpuRequests = container.Resources.Requests.Cpu().MilliValue()
+	c.MemoryLimits = container.Resources.Limits.Memory().MilliValue()
+	c.MemoryRequests = container.Resources.Requests.Memory().MilliValue()
+}
+
+type ContainerRestartable struct {
+	Ready        types.Bool
+	Started      types.Bool
+	RestartCount int32
+}
+
+func (c *ContainerRestartable) Obtain(status kcorev1.ContainerStatus) {
+	var started bool
+	if status.Started != nil {
+		started = *status.Started
+	}
+
+	c.Ready = types.Bool{
+		Bool:  status.Ready,
+		Valid: true,
+	}
+	c.Started = types.Bool{
+		Bool:  started,
+		Valid: true,
+	}
+	c.RestartCount = status.RestartCount
+}
+
+type InitContainer struct {
+	ContainerMeta
+	ContainerCommon
+	ContainerResources
+}
+
+func NewInitContainer(meta ContainerMeta, container kcorev1.Container, status kcorev1.ContainerStatus) *InitContainer {
+	c := &InitContainer{ContainerMeta: meta}
+	c.ContainerCommon.Obtain(meta, container, status)
+	c.ContainerResources.Obtain(container)
+
+	return c
+}
+
+type SidecarContainer struct {
+	ContainerMeta
+	ContainerCommon
+	ContainerResources
+	ContainerRestartable
+}
+
+func NewSidecarContainer(meta ContainerMeta, container kcorev1.Container, status kcorev1.ContainerStatus) *SidecarContainer {
+	c := &SidecarContainer{ContainerMeta: meta}
+	c.ContainerCommon.Obtain(meta, container, status)
+	c.ContainerResources.Obtain(container)
+	c.ContainerRestartable.Obtain(status)
+
+	return c
+}
+
+type Container struct {
+	ContainerMeta
+	ContainerCommon
+	ContainerResources
+	ContainerRestartable
+}
+
+func NewContainer(meta ContainerMeta, container kcorev1.Container, status kcorev1.ContainerStatus) *Container {
+	c := &Container{ContainerMeta: meta}
+	c.ContainerCommon.Obtain(meta, container, status)
+	c.ContainerResources.Obtain(container)
+	c.ContainerRestartable.Obtain(status)
+
+	return c
+}
+
 type ContainerDevice struct {
-	ContainerUuid types.UUID
-	PodUuid       types.UUID
-	Name          string
-	Path          string
+	ContainerMeta
+	Name string
+	Path string
 }
 
 type ContainerMount struct {
-	ContainerUuid types.UUID
-	PodUuid       types.UUID
-	VolumeName    string
-	Path          string
-	SubPath       sql.NullString
-	ReadOnly      types.Bool
+	ContainerMeta
+	VolumeName string
+	Path       string
+	SubPath    sql.NullString
+	ReadOnly   types.Bool
 }
 
 type ContainerLogMeta struct {
@@ -130,6 +262,121 @@ func (cl *ContainerLog) syncContainerLogs(ctx context.Context, clientset *kubern
 	close(entities)
 
 	return db.UpsertStreamed(ctx, entities)
+}
+
+func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStatus) (IcingaState, string) {
+	if status.State.Terminated != nil {
+		if status.State.Terminated.ExitCode == 0 {
+			return Ok, fmt.Sprintf(
+				"Container %s terminated successfully at %s.", container.Name, status.State.Terminated.FinishedAt)
+		}
+
+		if status.State.Terminated.Signal != 0 {
+			return Critical, fmt.Sprintf(
+				"Container %s terminated with signal %d at %s: %s: %s.",
+				container.Name,
+				status.State.Terminated.Signal,
+				status.State.Terminated.FinishedAt,
+				status.State.Terminated.Reason,
+				status.State.Terminated.Message)
+		}
+
+		return Critical, fmt.Sprintf(
+			"Container %s terminated with non-zero exit code %d at %s: %s: %s.",
+			container.Name,
+			status.State.Terminated.ExitCode,
+			status.State.Terminated.FinishedAt,
+			status.State.Terminated.Reason,
+			status.State.Terminated.Message)
+	}
+
+	if status.State.Running != nil {
+		var probe string
+
+		if status.Started == nil || !*status.Started {
+			probe = "startup"
+		}
+
+		if !status.Ready {
+			probe = "liveness"
+		}
+
+		if probe != "" {
+			if status.LastTerminationState.Terminated != nil {
+				return Warning, fmt.Sprintf(
+					"Container %s is running since %s but not ready due to failing %s probes."+
+						" Last terminal with non-zero exit code %d and signal %d was at %s: %s: %s.",
+					container.Name,
+					status.State.Running.StartedAt,
+					probe,
+					status.LastTerminationState.Terminated.ExitCode,
+					status.LastTerminationState.Terminated.Signal,
+					status.LastTerminationState.Terminated.FinishedAt,
+					status.LastTerminationState.Terminated.Reason,
+					status.LastTerminationState.Terminated.Message)
+			}
+
+			return Warning, fmt.Sprintf(
+				"Container %s is running since %s but not ready due to failing probes.",
+				container.Name, status.State.Running.StartedAt)
+		}
+
+		return Ok, fmt.Sprintf(
+			"Container %s is running since %s.", container.Name, status.State.Running.StartedAt)
+	}
+
+	if status.State.Waiting != nil {
+		// TODO(el): Add Kubernetes code ref.
+		if status.State.Waiting.Reason == "" {
+			return Pending, fmt.Sprintf("Container %s is pending as it's waiting to be started.",
+				container.Name)
+		}
+
+		if status.State.Waiting.Reason == PodInitializing {
+			return Pending, fmt.Sprintf("Container %s is pending as the Pod it's running on is initializing.",
+				container.Name)
+		}
+
+		if status.State.Waiting.Reason == ContainerCreating {
+			return Pending, fmt.Sprintf("Container %s is pending as it's still being created.", container.Name)
+		}
+
+		if status.State.Waiting.Reason == ErrImagePull {
+			// Don't flap.
+			if status.LastTerminationState.Terminated != nil &&
+				status.LastTerminationState.Terminated.Reason == ErrImagePullBackOff {
+				return Critical, fmt.Sprintf(
+					"Container %s can't start: %s: %s",
+					container.Name,
+					status.LastTerminationState.Terminated.Reason,
+					status.LastTerminationState.Terminated.Message)
+			}
+
+			return Warning, fmt.Sprintf("Container %s is waiting to start as its image can't be pulled: %s.",
+				container.Name, status.State.Waiting.Message)
+		}
+
+		return Critical, fmt.Sprintf(
+			"Container %s can't start: %s: %s.",
+			container.Name,
+			status.State.Waiting.Reason,
+			status.State.Waiting.Message)
+	}
+
+	var reason string
+	field, _json, err := MarshalFirstNonNilStructFieldToJSON(status.State)
+	if err != nil {
+		reason = err.Error()
+	} else if field == "" {
+		reason = "No state provided"
+	} else {
+		reason = fmt.Sprintf("%s: %s", field, _json)
+
+	}
+
+	return Unknown, fmt.Sprintf(
+		"Container %s is unknown as its state could not be obtained: %s.",
+		container.Name, reason)
 }
 
 // SyncContainers consumes from the `upsertPods` and `deletePods` chans concurrently and schedules a job for

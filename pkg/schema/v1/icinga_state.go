@@ -9,10 +9,10 @@ type IcingaState uint8
 
 const (
 	Ok IcingaState = iota
+	Pending
+	Unknown
 	Warning
 	Critical
-	Unknown
-	Pending IcingaState = 99
 )
 
 func (s IcingaState) String() string {

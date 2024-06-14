@@ -192,11 +192,11 @@ func (n *Node) Obtain(k8s kmetav1.Object) {
 
 func (n *Node) getIcingaState(node *kcorev1.Node) (IcingaState, string) {
 	if node.Status.Phase == kcorev1.NodePending {
-		return Pending, fmt.Sprintf("Node %s is pending", node.Name)
+		return Pending, fmt.Sprintf("Node %s is pending.", node.Name)
 	}
 
 	if node.Status.Phase == kcorev1.NodeTerminated {
-		return Ok, fmt.Sprintf("Node %s is terminated", node.Name)
+		return Ok, fmt.Sprintf("Node %s is terminated.", node.Name)
 	}
 
 	var state IcingaState
@@ -224,11 +224,11 @@ func (n *Node) getIcingaState(node *kcorev1.Node) (IcingaState, string) {
 		}
 
 		if state != Ok {
-			return state, strings.Join(reason, ". ")
+			return state, strings.Join(reason, ". ") + "."
 		}
 	}
 
-	return Ok, fmt.Sprintf("Node %s is healthy", n.Name)
+	return Ok, fmt.Sprintf("Node %s is ok.", n.Name)
 }
 
 func (n *Node) Relations() []database.Relation {

@@ -148,15 +148,15 @@ func (s *StatefulSet) getIcingaState() (IcingaState, string) {
 
 	switch {
 	case s.AvailableReplicas == 0:
-		reason := fmt.Sprintf("StatefulSet %s/%s has no replica available from %d desired", s.Namespace, s.Name, s.DesiredReplicas)
+		reason := fmt.Sprintf("StatefulSet %s/%s has no replica available from %d desired.", s.Namespace, s.Name, s.DesiredReplicas)
 
 		return Critical, reason
 	case s.AvailableReplicas < s.DesiredReplicas:
-		reason := fmt.Sprintf("StatefulSet %s/%s only has %d out of %d desired replicas available", s.Namespace, s.Name, s.AvailableReplicas, s.DesiredReplicas)
+		reason := fmt.Sprintf("StatefulSet %s/%s only has %d out of %d desired replicas available.", s.Namespace, s.Name, s.AvailableReplicas, s.DesiredReplicas)
 
 		return Warning, reason
 	default:
-		reason := fmt.Sprintf("StatefulSet %s/%s has all %d desired replicas available", s.Namespace, s.Name, s.DesiredReplicas)
+		reason := fmt.Sprintf("StatefulSet %s/%s has all %d desired replicas available.", s.Namespace, s.Name, s.DesiredReplicas)
 
 		return Ok, reason
 	}
