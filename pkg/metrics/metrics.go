@@ -15,6 +15,7 @@ import (
 	kcache "k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"net"
+	"strings"
 	"sync"
 	"time"
 )
@@ -200,10 +201,14 @@ func (pms *PromMetricSync) Nodes(ctx context.Context, informer kcache.SharedInde
 
 					nodeName := string(res.Metric["node"])
 					if nodeName == "" {
-						if host, _, err := net.SplitHostPort(string(res.Metric["instance"])); err == nil {
-							nodeName = host
+						if strings.Contains(string(res.Metric["instance"]), ":") {
+							if host, _, err := net.SplitHostPort(string(res.Metric["instance"])); err == nil {
+								nodeName = host
+							} else {
+								continue
+							}
 						} else {
-							continue
+							nodeName = string(res.Metric["instance"])
 						}
 					}
 					uuid, exists := nodes.Load(nodeName)
