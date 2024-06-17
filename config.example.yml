@@ -23,5 +23,5 @@ database:
 
 # Configuration for Prometheus metrics API.
 prometheus:
-  # Prometheus server URL
-#  host: http://localhost:9090
+  # Prometheus server URL.
+#  url: http://localhost:9090
