@@ -218,6 +218,7 @@ type ContainerMount struct {
 type ContainerLogMeta struct {
 	Logs       string          `db:"logs"`
 	LastUpdate types.UnixMilli `db:"last_update"`
+	Period     types.UnixMilli
 }
 
 type ContainerLog struct {
@@ -256,7 +257,23 @@ func (cl *ContainerLog) syncContainerLogs(ctx context.Context, clientset *kubern
 	}
 
 	cl.LastUpdate = types.UnixMilli(time.Now())
-	cl.Logs += string(logs)
+	// Calculate period
+	currentTimeMillis := time.Now().UnixMilli()
+	periodStartMillis := currentTimeMillis - (currentTimeMillis % (3600 * 1000))
+	cl.Period = types.UnixMilli(time.UnixMilli(periodStartMillis))
+
+	// Check if logs for the current period already exist
+	existingLog := &ContainerLog{}
+	err = db.Get(existingLog, "SELECT * FROM container_log WHERE container_uuid = ? AND pod_uuid = ? AND period = ?", cl.ContainerUuid, cl.PodUuid, cl.Period)
+	if errors.Is(err, sql.ErrNoRows) {
+		// No existing logs for this period, insert new log
+		cl.Logs = string(logs)
+	} else if err != nil {
+		return err
+	} else {
+		// Existing logs found for this period, concatenate logs
+		cl.Logs += string(logs)
+	}
 	entities := make(chan interface{}, 1)
 	entities <- cl
 	close(entities)
@@ -519,9 +536,13 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 func warmup(ctx context.Context, db *database.Database) error {
 	g, ctx := errgroup.WithContext(ctx)
 
+	query := `SELECT cl.* FROM container_log cl INNER JOIN (SELECT container_uuid, pod_uuid, MAX(last_update) as last_update
+       FROM container_log GROUP BY container_uuid) max_cl ON cl.container_uuid = max_cl.container_uuid AND cl.pod_uuid = max_cl.pod_uuid 
+	   AND cl.last_update = max_cl.last_update`
+
 	entities, errs := db.YieldAll(ctx, func() (interface{}, error) {
 		return &ContainerLog{}, nil
-	}, db.BuildSelectStmt(ContainerLog{}, ContainerLog{}))
+	}, query)
 	com.ErrgroupReceive(ctx, g, errs)
 
 	g.Go(func() error {

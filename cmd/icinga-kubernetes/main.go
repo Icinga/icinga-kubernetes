@@ -198,6 +198,26 @@ func main() {
 			return
 		}
 	}, periodic.Immediate()).Stop()
+
+	defer periodic.Start(ctx, time.Hour, func(tick periodic.Tick) {
+		olderThan := tick.Time.AddDate(0, 0, -1)
+
+		_, err := db.CleanupOlderThan(
+			ctx, database.CleanupStmt{
+				Table:  "container_log",
+				PK:     "container_id, pod_id, period",
+				Column: "last_update",
+			}, 5000, olderThan,
+		)
+		if err != nil {
+			select {
+			case errs <- err:
+			case <-ctx.Done():
+			}
+
+			return
+		}
+	}, periodic.Immediate()).Stop()
 	com.ErrgroupReceive(ctx, g, errs)
 
 	if err := g.Wait(); err != nil {
