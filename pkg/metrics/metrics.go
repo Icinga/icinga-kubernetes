@@ -107,7 +107,7 @@ func (pms *PromMetricSync) Nodes(ctx context.Context, informer kcache.SharedInde
 	promQueriesNode := []PromQuery{
 		{
 			"cpu.usage",
-			`avg by (instance) (sum by (instance, cpu) (rate(node_cpu_seconds_total{mode!~"idle|iowait|steal"}[1m])))`,
+			`avg by (node) (sum by (node, cpu) (rate(node_cpu_seconds_total{mode!~"idle|iowait|steal"}[2m])))`,
 			"",
 		},
 		{
@@ -157,17 +157,17 @@ func (pms *PromMetricSync) Nodes(ctx context.Context, informer kcache.SharedInde
 		},
 		{
 			"network.received.bytes",
-			`sum by (instance) (rate(node_network_receive_bytes_total[2m]))`,
+			`sum by (node) (rate(node_network_receive_bytes_total[2m]))`,
 			"",
 		},
 		{
 			"network.transmitted.bytes",
-			`- sum by (instance) (rate(node_network_transmit_bytes_total[2m]))`,
+			`- sum by (node) (rate(node_network_transmit_bytes_total[2m]))`,
 			"",
 		},
 		{
 			"filesystem.usage",
-			`sum by (instance, mountpoint) (1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes))`,
+			`sum by (node, mountpoint) (1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes))`,
 			"mountpoint",
 		},
 	}
@@ -260,17 +260,17 @@ func (pms *PromMetricSync) Pods(ctx context.Context, informer kcache.SharedIndex
 	promQueriesPod := []PromQuery{
 		{
 			"cpu.usage",
-			`sum by (node, namespace, pod) (rate(container_cpu_usage_seconds_total[1m]))`,
+			`sum by (instance, namespace, pod) (rate(container_cpu_usage_seconds_total[2m]))`,
 			"",
 		},
 		{
 			"memory.usage",
-			`sum by (node, namespace, pod) (container_memory_usage_bytes) / on (node) group_left(instance) label_replace(node_memory_MemTotal_bytes, "node", "$1", "instance", "(.*)")`,
+			`sum by (instance, namespace, pod) (container_memory_usage_bytes) / on () group_left() label_replace(node_memory_MemTotal_bytes, "instance", "$1", "node", "(.*)")`,
 			"",
 		},
 		{
 			"cpu.usage.cores",
-			`sum by (namespace, pod) (rate(container_cpu_usage_seconds_total[1m]))`,
+			`sum by (namespace, pod) (rate(container_cpu_usage_seconds_total[2m]))`,
 			"",
 		},
 		{
