@@ -40,12 +40,9 @@ const (
 	// https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/container/sync_result.go#L37
 )
 
-type ContainerMeta struct {
-	Uuid    types.UUID `db:"uuid"`
-	PodUuid types.UUID `db:"pod_uuid"`
-}
-
 type ContainerCommon struct {
+	Uuid              types.UUID
+	PodUuid           types.UUID
 	Name              string
 	Image             string
 	ImagePullPolicy   ImagePullPolicy
@@ -57,7 +54,9 @@ type ContainerCommon struct {
 	Mounts            []ContainerMount  `db:"-"`
 }
 
-func (c *ContainerCommon) Obtain(meta ContainerMeta, container kcorev1.Container, status kcorev1.ContainerStatus) {
+func (c *ContainerCommon) Obtain(podUuid types.UUID, container kcorev1.Container, status kcorev1.ContainerStatus) {
+	c.Uuid = NewUUID(podUuid, container.Name)
+	c.PodUuid = podUuid
 	c.Name = container.Name
 	c.Image = container.Image
 	c.ImagePullPolicy = ImagePullPolicy(container.ImagePullPolicy)
@@ -78,7 +77,8 @@ func (c *ContainerCommon) Obtain(meta ContainerMeta, container kcorev1.Container
 
 	for _, device := range container.VolumeDevices {
 		c.Devices = append(c.Devices, ContainerDevice{
-			ContainerMeta: meta,
+			ContainerUuid: c.Uuid,
+			PodUuid:       c.PodUuid,
 			Name:          device.Name,
 			Path:          device.DevicePath,
 		})
@@ -86,7 +86,8 @@ func (c *ContainerCommon) Obtain(meta ContainerMeta, container kcorev1.Container
 
 	for _, mount := range container.VolumeMounts {
 		m := ContainerMount{
-			ContainerMeta: meta,
+			ContainerUuid: c.Uuid,
+			PodUuid:       c.PodUuid,
 			VolumeName:    mount.Name,
 			Path:          mount.MountPath,
 			ReadOnly: types.Bool{
@@ -156,29 +157,27 @@ func (c *ContainerRestartable) Obtain(status kcorev1.ContainerStatus) {
 }
 
 type InitContainer struct {
-	ContainerMeta
 	ContainerCommon
 	ContainerResources
 }
 
-func NewInitContainer(meta ContainerMeta, container kcorev1.Container, status kcorev1.ContainerStatus) *InitContainer {
-	c := &InitContainer{ContainerMeta: meta}
-	c.ContainerCommon.Obtain(meta, container, status)
+func NewInitContainer(podUuid types.UUID, container kcorev1.Container, status kcorev1.ContainerStatus) *InitContainer {
+	c := &InitContainer{}
+	c.ContainerCommon.Obtain(podUuid, container, status)
 	c.ContainerResources.Obtain(container)
 
 	return c
 }
 
 type SidecarContainer struct {
-	ContainerMeta
 	ContainerCommon
 	ContainerResources
 	ContainerRestartable
 }
 
-func NewSidecarContainer(meta ContainerMeta, container kcorev1.Container, status kcorev1.ContainerStatus) *SidecarContainer {
-	c := &SidecarContainer{ContainerMeta: meta}
-	c.ContainerCommon.Obtain(meta, container, status)
+func NewSidecarContainer(podUuid types.UUID, container kcorev1.Container, status kcorev1.ContainerStatus) *SidecarContainer {
+	c := &SidecarContainer{}
+	c.ContainerCommon.Obtain(podUuid, container, status)
 	c.ContainerResources.Obtain(container)
 	c.ContainerRestartable.Obtain(status)
 
@@ -186,15 +185,14 @@ func NewSidecarContainer(meta ContainerMeta, container kcorev1.Container, status
 }
 
 type Container struct {
-	ContainerMeta
 	ContainerCommon
 	ContainerResources
 	ContainerRestartable
 }
 
-func NewContainer(meta ContainerMeta, container kcorev1.Container, status kcorev1.ContainerStatus) *Container {
-	c := &Container{ContainerMeta: meta}
-	c.ContainerCommon.Obtain(meta, container, status)
+func NewContainer(podUuid types.UUID, container kcorev1.Container, status kcorev1.ContainerStatus) *Container {
+	c := &Container{}
+	c.ContainerCommon.Obtain(podUuid, container, status)
 	c.ContainerResources.Obtain(container)
 	c.ContainerRestartable.Obtain(status)
 
@@ -202,17 +200,19 @@ func NewContainer(meta ContainerMeta, container kcorev1.Container, status kcorev
 }
 
 type ContainerDevice struct {
-	ContainerMeta
-	Name string
-	Path string
+	ContainerUuid types.UUID
+	PodUuid       types.UUID
+	Name          string
+	Path          string
 }
 
 type ContainerMount struct {
-	ContainerMeta
-	VolumeName string
-	Path       string
-	SubPath    sql.NullString
-	ReadOnly   types.Bool
+	ContainerUuid types.UUID
+	PodUuid       types.UUID
+	VolumeName    string
+	Path          string
+	SubPath       sql.NullString
+	ReadOnly      types.Bool
 }
 
 type ContainerLogMeta struct {
@@ -385,6 +385,11 @@ func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStat
 // IDs matching the respective pod ID from the database and initiates a container deletion stream that cleans up all
 // container-related resources.
 func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Group, upsertPods <-chan interface{}, deletePods <-chan interface{}) {
+	type containerFingerprint struct {
+		Uuid    types.UUID
+		PodUuid types.UUID
+	}
+
 	// Fetch all container logs from the database
 	err := make(chan error, 1)
 	err <- warmup(ctx, db)
@@ -410,7 +415,7 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 		scheduler.StartAsync()
 		defer scheduler.Stop()
 
-		query := db.BuildSelectStmt(&Container{}, ContainerMeta{}) + ` WHERE pod_uuid=:pod_uuid`
+		query := db.BuildSelectStmt(&Container{}, containerFingerprint{}) + ` WHERE pod_uuid=:pod_uuid`
 
 		for {
 			select {
@@ -421,7 +426,7 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 					return nil
 				}
 
-				meta := &ContainerMeta{PodUuid: podUuid.(types.UUID)}
+				meta := &containerFingerprint{PodUuid: podUuid.(types.UUID)}
 				if _, ok := deletedPodIds[meta.PodUuid.String()]; ok {
 					// Due to the recursive relation resolution in the `DB#DeleteStreamed()` method, we may get the
 					// same pod ID multiple times since they all share the same `on success` handler.
@@ -550,5 +555,5 @@ func warmup(ctx context.Context, db *database.Database) error {
 
 // Assert that the Container type satisfies the interface compliance.
 var (
-	_ database.HasRelations = (*Container)(nil)
+	_ database.HasRelations = (*ContainerCommon)(nil)
 )

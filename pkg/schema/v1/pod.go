@@ -340,7 +340,7 @@ func NewContainers[T any](
 	p *Pod,
 	containers []kcorev1.Container,
 	statuses []kcorev1.ContainerStatus,
-	factory func(ContainerMeta, kcorev1.Container, kcorev1.ContainerStatus) *T,
+	factory func(types.UUID, kcorev1.Container, kcorev1.ContainerStatus) *T,
 ) []*T {
 	obtained := make([]*T, 0, len(containers))
 
@@ -350,10 +350,7 @@ func NewContainers[T any](
 	}
 
 	for _, container := range containers {
-		obtained = append(obtained, factory(ContainerMeta{
-			Uuid:    NewUUID(p.Uuid, container.Name),
-			PodUuid: p.Uuid,
-		}, container, statusesIdx[container.Name]))
+		obtained = append(obtained, factory(p.Uuid, container, statusesIdx[container.Name]))
 	}
 
 	return obtained

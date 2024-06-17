@@ -517,7 +517,7 @@ func (db *Database) UpsertStreamed(
 				defer runtime.HandleCrash()
 				defer close(ch)
 
-				return db.UpsertStreamed(ctx, ch)
+				return db.UpsertStreamed(ctx, ch, WithCascading())
 			})
 			streams[TableName(relation)] = ch
 		}

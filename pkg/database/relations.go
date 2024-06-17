@@ -31,7 +31,7 @@ func WithoutCascadeDelete() RelationOption {
 	}
 }
 
-type relation[T any] struct {
+type relation[T comparable] struct {
 	foreignKey           string
 	withoutCascadeDelete bool
 }
@@ -56,12 +56,12 @@ func (r *relation[T]) TableName() string {
 	return TableName(*new(T))
 }
 
-type hasMany[T any] struct {
+type hasMany[T comparable] struct {
 	relation[T]
 	entities []T
 }
 
-func HasMany[T any](entities []T, options ...RelationOption) Relation {
+func HasMany[T comparable](entities []T, options ...RelationOption) Relation {
 	r := &hasMany[T]{entities: entities}
 
 	for _, o := range options {
@@ -83,12 +83,12 @@ func (r *hasMany[T]) StreamInto(ctx context.Context, ch chan interface{}) error 
 	return nil
 }
 
-type hasOne[T any] struct {
+type hasOne[T comparable] struct {
 	relation[T]
 	entity T
 }
 
-func HasOne[T any](entity T, options ...RelationOption) Relation {
+func HasOne[T comparable](entity T, options ...RelationOption) Relation {
 	r := &hasOne[T]{entity: entity}
 
 	for _, o := range options {
@@ -99,11 +99,17 @@ func HasOne[T any](entity T, options ...RelationOption) Relation {
 }
 
 func (r *hasOne[T]) StreamInto(ctx context.Context, ch chan interface{}) error {
-	select {
-	case ch <- r.entity:
-	case <-ctx.Done():
-		return ctx.Err()
+	if r.entity != Zero[T]() {
+		select {
+		case ch <- r.entity:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 
 	return nil
+}
+
+func Zero[T any]() T {
+	return *new(T)
 }
