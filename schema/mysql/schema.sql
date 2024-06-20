@@ -176,10 +176,10 @@ CREATE TABLE container_mount (
 CREATE TABLE container_log (
   container_uuid binary(16) NOT NULL,
   pod_uuid binary(16) NOT NULL,
-  logs longtext NOT NULL,
+  logs text NOT NULL,
   last_update bigint NOT NULL,
 
-  PRIMARY KEY (container_uuid, pod_uuid)
+  PRIMARY KEY (container_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE deployment (

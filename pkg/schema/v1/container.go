@@ -14,8 +14,10 @@ import (
 	kcorev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
+	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 var (
@@ -30,6 +32,7 @@ var (
 const (
 	MaxConcurrentJobs int = 60
 	ScheduleInterval      = 5 * time.Minute
+	MaxLogLength          = 1<<16 - 1
 
 	PodInitializing   = "PodInitializing" // https://github.com/kubernetes/kubernetes/blob/v1.30.1/pkg/kubelet/kubelet_pods.go#L80
 	ContainerCreating = "ContainerCreating"
@@ -256,7 +259,7 @@ func (cl *ContainerLog) syncContainerLogs(ctx context.Context, clientset *kubern
 	}
 
 	cl.LastUpdate = types.UnixMilli(time.Now())
-	cl.Logs += string(logs)
+	cl.Logs = truncate(cl.Logs+string(logs), MaxLogLength)
 	entities := make(chan interface{}, 1)
 	entities <- cl
 	close(entities)
@@ -495,7 +498,7 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 
 						containerLogsMu.Lock()
 						if cl, ok := containerLogs[container.Uuid.String()]; ok {
-							containerLog.Logs = cl.Logs
+							containerLog.Logs = truncate(cl.Logs, MaxLogLength)
 						}
 						containerLogsMu.Unlock()
 
@@ -551,6 +554,29 @@ func warmup(ctx context.Context, db *database.Database) error {
 	})
 
 	return g.Wait()
+}
+
+// truncate truncates a UTF-8 string from the front to ensure it does not exceed the given byte length.
+// It also removes content before the first newline character if one is found in the truncated string.
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+
+	i := len(s) - n
+
+	// Avoid splitting a UTF-8 character.
+	for i < len(s) && !utf8.RuneStart(s[i]) {
+		i++
+	}
+
+	truncated := s[i:]
+	if newline := strings.IndexByte(truncated, '\n'); newline != -1 {
+		// Remove content before the newline and the newline character itself.
+		truncated = truncated[newline+1:]
+	}
+
+	return truncated
 }
 
 // Assert that the Container type satisfies the interface compliance.
