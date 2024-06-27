@@ -252,6 +252,7 @@ func (p *Pod) getIcingaState(pod *kcorev1.Pod) (IcingaState, string) {
 	}
 
 	if pod.Status.Phase == kcorev1.PodSucceeded {
+		// TODO(el): DisruptionTarget might be true.
 		return Ok, fmt.Sprintf(
 			"Pod %s/%s is succeeded as all its containers have been terminated successfully and"+
 				" will not be restarted.",
@@ -272,7 +273,7 @@ func (p *Pod) getIcingaState(pod *kcorev1.Pod) (IcingaState, string) {
 
 		if condition.Type == kcorev1.DisruptionTarget && condition.Status == kcorev1.ConditionTrue {
 			return Critical, fmt.Sprintf(
-				"Pod %s/%s is about to be terminated: %s: %s.", pod.Namespace, pod.Name, condition.Reason, condition.Message)
+				"Pod %s/%s is terminal: %s: %s.", pod.Namespace, pod.Name, condition.Reason, condition.Message)
 		}
 
 		if condition.Type == kcorev1.PodInitialized && condition.Status == kcorev1.ConditionTrue {
