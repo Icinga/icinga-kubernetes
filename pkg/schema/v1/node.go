@@ -191,44 +191,41 @@ func (n *Node) Obtain(k8s kmetav1.Object) {
 }
 
 func (n *Node) getIcingaState(node *kcorev1.Node) (IcingaState, string) {
-	if node.Status.Phase == kcorev1.NodePending {
-		return Pending, fmt.Sprintf("Node %s is pending.", node.Name)
-	}
-
-	if node.Status.Phase == kcorev1.NodeTerminated {
-		return Ok, fmt.Sprintf("Node %s is terminated.", node.Name)
-	}
+	//if node.Status.Phase == kcorev1.NodePending {
+	//	return Pending, fmt.Sprintf("Node %s is pending.", node.Name)
+	//}
+	//
+	//if node.Status.Phase == kcorev1.NodeTerminated {
+	//	return Ok, fmt.Sprintf("Node %s is terminated.", node.Name)
+	//}
 
 	var state IcingaState
+	var reason []string
 
-	if node.Status.Phase == kcorev1.NodeRunning {
-		var reason []string
-
-		for _, condition := range n.Conditions {
-			if condition.Status == string(kcorev1.ConditionTrue) {
-				switch condition.Type {
-				case string(kcorev1.NodeDiskPressure):
-					state = Critical
-					reason = append(reason, fmt.Sprintf("Node %s is running out of disk space", n.Name))
-				case string(kcorev1.NodeMemoryPressure):
-					state = Critical
-					reason = append(reason, fmt.Sprintf("Node %s is running out of available memory", n.Name))
-				case string(kcorev1.NodePIDPressure):
-					state = Critical
-					reason = append(reason, fmt.Sprintf("Node %s is running out of process IDs", n.Name))
-				case string(kcorev1.NodeNetworkUnavailable):
-					state = Critical
-					reason = append(reason, fmt.Sprintf("Node %s network is not correctly configured", n.Name))
-				}
+	for _, condition := range node.Status.Conditions {
+		if condition.Status == kcorev1.ConditionTrue {
+			switch condition.Type {
+			case kcorev1.NodeDiskPressure:
+				state = Critical
+				reason = append(reason, fmt.Sprintf("Node %s is running out of disk space", node.Name))
+			case kcorev1.NodeMemoryPressure:
+				state = Critical
+				reason = append(reason, fmt.Sprintf("Node %s is running out of available memory", node.Name))
+			case kcorev1.NodePIDPressure:
+				state = Critical
+				reason = append(reason, fmt.Sprintf("Node %s is running out of process IDs", node.Name))
+			case kcorev1.NodeNetworkUnavailable:
+				state = Critical
+				reason = append(reason, fmt.Sprintf("Node %s network is not correctly configured", node.Name))
 			}
-		}
-
-		if state != Ok {
-			return state, strings.Join(reason, ". ") + "."
 		}
 	}
 
-	return Ok, fmt.Sprintf("Node %s is ok.", n.Name)
+	if state != Ok {
+		return state, strings.Join(reason, ". ") + "."
+	}
+
+	return Ok, fmt.Sprintf("Node %s is ok.", node.Name)
 }
 
 func (n *Node) Relations() []database.Relation {
