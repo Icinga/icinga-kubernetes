@@ -7,7 +7,7 @@ import (
 
 type Item struct {
 	Key  string
-	Item kmetav1.Object
+	Item *kmetav1.Object
 }
 
 type Sink struct {
@@ -28,7 +28,7 @@ func NewSink(upsertFunc func(*Item) interface{}, deleteFunc func(interface{}) in
 	}
 }
 
-func (s *Sink) Delete(ctx context.Context, key string) error {
+func (s *Sink) Delete(ctx context.Context, key interface{}) error {
 	select {
 	case s.delete <- s.deleteFunc(key):
 		return nil

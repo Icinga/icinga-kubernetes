@@ -56,17 +56,20 @@ func (c *Controller) Stream(ctx context.Context, sink *Sink) error {
 }
 
 func (c *Controller) stream(ctx context.Context, sink *Sink) error {
-	var key interface{}
+	var eventHandlerItem interface{}
+	var key string
 	var shutdown bool
 	for {
 		c.queue.Done(key)
 
-		key, shutdown = c.queue.Get()
+		eventHandlerItem, shutdown = c.queue.Get()
 		if shutdown {
 			return ctx.Err()
 		}
 
-		item, exists, err := c.informer.GetStore().GetByKey(key.(string))
+		key = eventHandlerItem.(EventHandlerItem).KKey
+
+		item, exists, err := c.informer.GetStore().GetByKey(key)
 		if err != nil {
 			if c.queue.NumRequeues(key) < 5 {
 				c.log.Error(errors.WithStack(err), fmt.Sprintf("Fetching key %s failed. Retrying", key))
@@ -85,14 +88,15 @@ func (c *Controller) stream(ctx context.Context, sink *Sink) error {
 
 		c.queue.Forget(key)
 
-		if !exists {
-			if err := sink.Delete(ctx, key.(string)); err != nil {
+		if !exists || eventHandlerItem.(EventHandlerItem).Type == EventDelete {
+			if err := sink.Delete(ctx, eventHandlerItem.(EventHandlerItem).Id); err != nil {
 				return err
 			}
 		} else {
+			obj := item.(kmetav1.Object)
 			err := sink.Upsert(ctx, &Item{
-				Key:  key.(string),
-				Item: item.(kmetav1.Object),
+				Key:  key,
+				Item: &obj,
 			})
 			if err != nil {
 				return err

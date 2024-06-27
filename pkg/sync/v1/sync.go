@@ -3,7 +3,6 @@ package v1
 import (
 	"context"
 	"github.com/go-logr/logr"
-	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
@@ -82,11 +81,11 @@ func (s *Sync) warmup(ctx context.Context, c *sync.Controller) error {
 func (s *Sync) sync(ctx context.Context, c *sync.Controller, features ...sync.Feature) error {
 	sink := sync.NewSink(func(i *sync.Item) interface{} {
 		entity := s.factory()
-		entity.Obtain(i.Item)
+		entity.Obtain(*i.Item)
 
 		return entity
 	}, func(k interface{}) interface{} {
-		return utils.Checksum(k)
+		return k
 	})
 
 	with := sync.NewFeatures(features...)
