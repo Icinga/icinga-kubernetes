@@ -91,7 +91,7 @@ func (d *Deployment) Obtain(k8s kmetav1.Object) {
 	for _, condition := range deployment.Status.Conditions {
 		d.Conditions = append(d.Conditions, DeploymentCondition{
 			DeploymentUuid: d.Uuid,
-			Type:           strcase.Snake(string(condition.Type)),
+			Type:           string(condition.Type),
 			Status:         string(condition.Status),
 			LastUpdate:     types.UnixMilli(condition.LastUpdateTime.Time),
 			LastTransition: types.UnixMilli(condition.LastTransitionTime.Time),

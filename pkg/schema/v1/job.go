@@ -124,8 +124,8 @@ func (j *Job) Obtain(k8s kmetav1.Object) {
 	for _, condition := range job.Status.Conditions {
 		j.Conditions = append(j.Conditions, JobCondition{
 			JobUuid:        j.Uuid,
-			Type:           strcase.Snake(string(condition.Type)),
-			Status:         strcase.Snake(string(condition.Status)),
+			Type:           string(condition.Type),
+			Status:         string(condition.Status),
 			LastProbe:      types.UnixMilli(condition.LastProbeTime.Time),
 			LastTransition: types.UnixMilli(condition.LastTransitionTime.Time),
 			Reason:         condition.Reason,
