@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"database/sql"
 	"fmt"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
@@ -33,7 +34,7 @@ type Pod struct {
 	MemoryRequests    int64
 	Reason            string
 	Message           string
-	Qos               string
+	Qos               sql.NullString
 	RestartPolicy     string
 	Yaml              string
 	Conditions        []PodCondition  `db:"-"`
@@ -120,8 +121,12 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 	p.Phase = strcase.Snake(string(pod.Status.Phase))
 	p.Reason = pod.Status.Reason
 	p.Message = pod.Status.Message
-	p.Qos = strcase.Snake(string(pod.Status.QOSClass))
 	p.RestartPolicy = strcase.Snake(string(pod.Spec.RestartPolicy))
+
+	if pod.Status.QOSClass != "" {
+		p.Qos.Valid = true
+		p.Qos.String = strcase.Snake(string(pod.Status.QOSClass))
+	}
 
 	for _, condition := range pod.Status.Conditions {
 		p.Conditions = append(p.Conditions, PodCondition{

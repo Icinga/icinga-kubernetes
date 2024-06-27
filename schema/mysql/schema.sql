@@ -91,7 +91,7 @@ CREATE TABLE pod (
   icinga_state_reason text NULL DEFAULT NULL,
   reason varchar(255) NULL DEFAULT NULL,
   message varchar(255) NULL DEFAULT NULL,
-  qos enum('guaranteed', 'burstable', 'best_effort') COLLATE utf8mb4_unicode_ci NOT NULL,
+  qos enum('guaranteed', 'burstable', 'best_effort') COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (uuid)
