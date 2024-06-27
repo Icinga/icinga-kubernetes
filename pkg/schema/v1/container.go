@@ -109,7 +109,7 @@ func (c *ContainerCommon) Obtain(podUuid types.UUID, container kcorev1.Container
 }
 
 func (c *ContainerCommon) Relations() []database.Relation {
-	fk := database.WithForeignKey("container_id")
+	fk := database.WithForeignKey("container_uuid")
 
 	return []database.Relation{
 		database.HasMany(c.Devices, fk),
