@@ -140,7 +140,7 @@ func (db *Database) BuildDeleteStmt(from interface{}) string {
 	if relation, ok := from.(Relation); ok {
 		column = relation.ForeignKey()
 	} else {
-		column = "id"
+		column = "uuid"
 	}
 
 	return fmt.Sprintf(
