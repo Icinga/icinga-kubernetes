@@ -111,7 +111,7 @@ CREATE TABLE pod_condition (
 CREATE TABLE pod_owner (
   pod_uuid binary(16) NOT NULL,
   owner_uuid binary(16) NOT NULL,
-  kind enum('daemon_set', 'node', 'replica_set', 'stateful_set', 'job') COLLATE utf8mb4_unicode_ci NOT NULL,
+  kind varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   controller enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
