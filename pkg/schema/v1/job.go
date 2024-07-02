@@ -2,10 +2,12 @@ package v1
 
 import (
 	"database/sql"
+	"fmt"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/strcase"
 	kbatchv1 "k8s.io/api/batch/v1"
+	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kruntime "k8s.io/apimachinery/pkg/runtime"
 	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
@@ -28,6 +30,8 @@ type Job struct {
 	Succeeded               int32
 	Failed                  int32
 	Yaml                    string
+	IcingaState             IcingaState
+	IcingaStateReason       string
 	Conditions              []JobCondition  `db:"-"`
 	Labels                  []Label         `db:"-"`
 	JobLabels               []JobLabel      `db:"-"`
@@ -120,6 +124,7 @@ func (j *Job) Obtain(k8s kmetav1.Object) {
 	j.Active = job.Status.Active
 	j.Succeeded = job.Status.Succeeded
 	j.Failed = job.Status.Failed
+	j.IcingaState, j.IcingaStateReason = j.getIcingaState(job)
 
 	for _, condition := range job.Status.Conditions {
 		j.Conditions = append(j.Conditions, JobCondition{
@@ -164,6 +169,39 @@ func (j *Job) Obtain(k8s kmetav1.Object) {
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kbatchv1.SchemeGroupVersion)
 	output, _ := kruntime.Encode(codec, job)
 	j.Yaml = string(output)
+}
+
+func (j *Job) getIcingaState(job *kbatchv1.Job) (IcingaState, string) {
+	for _, condition := range job.Status.Conditions {
+		switch condition.Type {
+		case kbatchv1.JobComplete:
+			if condition.Status == kcorev1.ConditionTrue {
+				return Ok, fmt.Sprintf(
+					"Job %s/%s has completed its execution successfully with %d necessary pod completions.",
+					j.Namespace, j.Name, job.Spec.Completions)
+			}
+		case kbatchv1.JobFailed:
+			if condition.Status == kcorev1.ConditionTrue {
+				return Critical, fmt.Sprintf(
+					"Job %s/%s has failed its execution. %s: %s.",
+					j.Namespace, j.Name, condition.Reason, condition.Message)
+			}
+		default:
+			reason := fmt.Sprintf(
+				"Job %s/%s is running since %s with currently %d active, %d completed and %d failed pods. "+
+					"Successful termination requires %d pod completions. The back-off limit is %d.",
+				j.Namespace, j.Name, job.Status.StartTime, j.Active, j.Succeeded, j.Failed, job.Spec.Completions, job.Spec.BackoffLimit)
+
+			if job.Spec.ActiveDeadlineSeconds != nil {
+				reason += fmt.Sprintf("Deadline for completion is %d.", job.Spec.ActiveDeadlineSeconds)
+			}
+
+			return Pending, reason
+		}
+	}
+
+	return Unknown, fmt.Sprintf(
+		"Job %s/%s is in an unknown state. No condition met.", j.Namespace, j.Name)
 }
 
 func (j *Job) Relations() []database.Relation {
