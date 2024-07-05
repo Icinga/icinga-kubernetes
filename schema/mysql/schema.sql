@@ -840,6 +840,23 @@ CREATE TABLE cron_job_label (
   PRIMARY KEY (cron_job_uuid, label_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+CREATE TABLE test (
+  uuid binary(16) NOT NULL,
+  uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
+  namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  deployment_name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (uuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE test_test (
+   test_uuid binary(16) NOT NULL,
+   test_kind varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
+   good_replicas int unsigned NOT NULL,
+   bad_replicas int unsigned NOT NULL,
+   PRIMARY KEY (test_uuid, test_kind)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
 CREATE TABLE kubernetes_schema (
   id int unsigned NOT NULL AUTO_INCREMENT,
   version varchar(64) NOT NULL,
