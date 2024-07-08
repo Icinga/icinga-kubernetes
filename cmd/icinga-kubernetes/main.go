@@ -21,6 +21,9 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	icingav1client "github.com/icinga/icinga-kubernetes-testing/pkg/generated/clientset/versioned"
+	icingainformers "github.com/icinga/icinga-kubernetes-testing/pkg/generated/informers/externalversions"
 )
 
 func main() {
@@ -52,6 +55,13 @@ func main() {
 
 	factory := informers.NewSharedInformerFactory(clientset, 0)
 	log := klog.NewKlogr()
+
+	icingaClientset, err := icingav1client.NewForConfig(kconfig)
+	if err != nil {
+		klog.Fatal(err)
+	}
+
+	icingaFactory := icingainformers.NewSharedInformerFactory(icingaClientset, 0)
 
 	d, err := database.FromYAMLFile(config)
 	if err != nil {
@@ -173,6 +183,11 @@ func main() {
 	})
 	g.Go(func() error {
 		s := syncv1.NewSync(db, factory.Networking().V1().Ingresses().Informer(), log.WithName("ingresses"), schemav1.NewIngress)
+
+		return s.Run(ctx)
+	})
+	g.Go(func() error {
+		s := syncv1.NewSync(db, icingaFactory.Icinga().V1().Tests().Informer(), log.WithName("tests"), schemav1.NewTest)
 
 		return s.Run(ctx)
 	})
