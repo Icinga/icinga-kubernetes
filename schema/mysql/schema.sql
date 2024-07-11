@@ -13,7 +13,7 @@ CREATE TABLE namespace (
 CREATE TABLE namespace_condition (
   namespace_uuid binary(16) NOT NULL,
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  status varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  status enum('true', 'false', 'unknown') COLLATE utf8mb4_unicode_ci NOT NULL,
   last_transition bigint unsigned NOT NULL,
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   message text,
@@ -56,7 +56,7 @@ CREATE TABLE node (
 CREATE TABLE node_condition (
   node_uuid binary(16) NOT NULL,
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  status varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  status enum('true', 'false', 'unknown') COLLATE utf8mb4_unicode_ci NOT NULL,
   last_heartbeat bigint unsigned NOT NULL,
   last_transition bigint unsigned NOT NULL,
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -100,7 +100,7 @@ CREATE TABLE pod (
 CREATE TABLE pod_condition (
   pod_uuid binary(16) NOT NULL,
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  status varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  status enum('true', 'false', 'unknown') COLLATE utf8mb4_unicode_ci NOT NULL,
   last_probe bigint unsigned NULL DEFAULT NULL,
   last_transition bigint unsigned NOT NULL,
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -218,8 +218,8 @@ CREATE TABLE deployment_owner(
 
 CREATE TABLE deployment_condition (
   deployment_uuid binary(16) NOT NULL,
-  type enum('available', 'progressing', 'replica_failure') COLLATE utf8mb4_unicode_ci NOT NULL,
-  status varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  status enum('true', 'false', 'unknown') COLLATE utf8mb4_unicode_ci NOT NULL,
   last_update bigint unsigned NOT NULL,
   last_transition bigint unsigned NOT NULL,
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -400,8 +400,8 @@ CREATE TABLE replica_set (
 
 CREATE TABLE replica_set_condition (
   replica_set_uuid binary(16) NOT NULL,
-  type enum('replica_failure') COLLATE utf8mb4_unicode_ci NOT NULL,
-  status varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  status enum('true', 'false', 'unknown') COLLATE utf8mb4_unicode_ci NOT NULL,
   last_transition bigint unsigned NOT NULL,
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   message text,
@@ -444,7 +444,7 @@ CREATE TABLE daemon_set (
 CREATE TABLE daemon_set_condition (
   daemon_set_uuid binary(16) NOT NULL,
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  status varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  status enum('true', 'false', 'unknown') COLLATE utf8mb4_unicode_ci NOT NULL,
   last_transition bigint unsigned NOT NULL,
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   message text,
@@ -480,7 +480,7 @@ CREATE TABLE stateful_set (
 CREATE TABLE stateful_set_condition (
   stateful_set_uuid binary(16) NOT NULL,
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  status varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  status enum('true', 'false', 'unknown') COLLATE utf8mb4_unicode_ci NOT NULL,
   last_transition bigint unsigned NOT NULL,
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   message text,
@@ -747,7 +747,7 @@ CREATE TABLE pvc (
 CREATE TABLE pvc_condition (
   pvc_uuid binary(16) NOT NULL,
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  status varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  status enum('true', 'false', 'unknown') COLLATE utf8mb4_unicode_ci NOT NULL,
   last_probe bigint unsigned NULL DEFAULT NULL,
   last_transition bigint unsigned NOT NULL,
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -809,7 +809,7 @@ CREATE TABLE job (
 
 CREATE TABLE job_condition (
   job_uuid binary(16) NOT NULL,
-  type enum('suspended', 'complete', 'failed', 'failure_target') COLLATE utf8mb4_unicode_ci NOT NULL,
+  type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   status enum('true', 'false', 'unknown') COLLATE utf8mb4_unicode_ci NOT NULL,
   last_probe bigint unsigned NULL DEFAULT NULL,
   last_transition bigint unsigned NOT NULL,

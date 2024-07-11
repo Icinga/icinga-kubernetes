@@ -87,7 +87,7 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object) {
 	for _, condition := range replicaSet.Status.Conditions {
 		r.Conditions = append(r.Conditions, ReplicaSetCondition{
 			ReplicaSetUuid: r.Uuid,
-			Type:           strcase.Snake(string(condition.Type)),
+			Type:           string(condition.Type),
 			Status:         string(condition.Status),
 			LastTransition: types.UnixMilli(condition.LastTransitionTime.Time),
 			Reason:         condition.Reason,
