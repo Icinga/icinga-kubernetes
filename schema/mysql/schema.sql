@@ -205,6 +205,17 @@ CREATE TABLE deployment (
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+CREATE TABLE deployment_owner(
+  deployment_uuid binary(16) NOT NULL,
+  owner_uuid binary(16) NOT NULL,
+  kind varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
+  uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  controller enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
+  block_owner_deletion enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (deployment_uuid, owner_uuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
 CREATE TABLE deployment_condition (
   deployment_uuid binary(16) NOT NULL,
   type enum('available', 'progressing', 'replica_failure') COLLATE utf8mb4_unicode_ci NOT NULL,

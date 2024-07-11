@@ -11,6 +11,7 @@ import (
 	kruntime "k8s.io/apimachinery/pkg/runtime"
 	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
+	ktypes "k8s.io/apimachinery/pkg/types"
 	"strings"
 )
 
@@ -30,6 +31,7 @@ type Deployment struct {
 	IcingaState             IcingaState
 	IcingaStateReason       string
 	Conditions              []DeploymentCondition  `db:"-"`
+	Owners                  []DeploymentOwner      `db:"-"`
 	Labels                  []Label                `db:"-"`
 	DeploymentLabels        []DeploymentLabel      `db:"-"`
 	Annotations             []Annotation           `db:"-"`
@@ -44,6 +46,16 @@ type DeploymentCondition struct {
 	LastTransition types.UnixMilli
 	Reason         string
 	Message        string
+}
+
+type DeploymentOwner struct {
+	DeploymentUuid     types.UUID
+	OwnerUuid          types.UUID
+	Kind               string
+	Name               string
+	Uid                ktypes.UID
+	Controller         types.Bool
+	BlockOwnerDeletion types.Bool
 }
 
 type DeploymentLabel struct {
@@ -97,6 +109,31 @@ func (d *Deployment) Obtain(k8s kmetav1.Object) {
 			LastTransition: types.UnixMilli(condition.LastTransitionTime.Time),
 			Reason:         condition.Reason,
 			Message:        condition.Message,
+		})
+	}
+
+	for _, ownerReference := range deployment.OwnerReferences {
+		var blockOwnerDeletion, controller bool
+		if ownerReference.BlockOwnerDeletion != nil {
+			blockOwnerDeletion = *ownerReference.BlockOwnerDeletion
+		}
+		if ownerReference.Controller != nil {
+			controller = *ownerReference.Controller
+		}
+		d.Owners = append(d.Owners, DeploymentOwner{
+			DeploymentUuid: d.Uuid,
+			OwnerUuid:      EnsureUUID(ownerReference.UID),
+			Kind:           strcase.Snake(ownerReference.Kind),
+			Name:           ownerReference.Name,
+			Uid:            ownerReference.UID,
+			BlockOwnerDeletion: types.Bool{
+				Bool:  blockOwnerDeletion,
+				Valid: true,
+			},
+			Controller: types.Bool{
+				Bool:  controller,
+				Valid: true,
+			},
 		})
 	}
 
@@ -172,6 +209,7 @@ func (d *Deployment) Relations() []database.Relation {
 
 	return []database.Relation{
 		database.HasMany(d.Conditions, fk),
+		database.HasMany(d.Owners, fk),
 		database.HasMany(d.DeploymentLabels, fk),
 		database.HasMany(d.Labels, database.WithoutCascadeDelete()),
 		database.HasMany(d.DeploymentAnnotations, fk),
