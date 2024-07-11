@@ -197,7 +197,7 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 		}
 		p.Owners = append(p.Owners, PodOwner{
 			PodUuid:   p.Uuid,
-			OwnerUuid: EnsureUUID(p.Uid),
+			OwnerUuid: EnsureUUID(ownerReference.UID),
 			Kind:      strcase.Snake(ownerReference.Kind),
 			Name:      ownerReference.Name,
 			Uid:       ownerReference.UID,

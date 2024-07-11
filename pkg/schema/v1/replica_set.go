@@ -105,7 +105,7 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object) {
 		}
 		r.Owners = append(r.Owners, ReplicaSetOwner{
 			ReplicaSetUuid: r.Uuid,
-			OwnerUuid:      EnsureUUID(r.Uid),
+			OwnerUuid:      EnsureUUID(ownerReference.UID),
 			Kind:           strcase.Snake(ownerReference.Kind),
 			Name:           ownerReference.Name,
 			Uid:            ownerReference.UID,
