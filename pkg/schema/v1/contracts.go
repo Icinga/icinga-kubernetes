@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"database/sql"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/icinga/icinga-go-library/types"
@@ -76,6 +77,10 @@ func EnsureUUID(uid ktypes.UID) types.UUID {
 
 func NewUUID(space types.UUID, data string) types.UUID {
 	return types.UUID{UUID: uuid.NewSHA1(space.UUID, []byte(data))}
+}
+
+func NewNullableString(s string) sql.NullString {
+	return sql.NullString{String: s, Valid: s != ""}
 }
 
 func IsWithinGracePeriod(k kmetav1.Object) *string {

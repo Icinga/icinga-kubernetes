@@ -32,8 +32,8 @@ type Pod struct {
 	CpuRequests       int64
 	MemoryLimits      int64
 	MemoryRequests    int64
-	Reason            string
-	Message           string
+	Reason            sql.NullString
+	Message           sql.NullString
 	Qos               sql.NullString
 	RestartPolicy     string
 	Yaml              string
@@ -119,8 +119,8 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 	p.NominatedNodeName = pod.Status.NominatedNodeName
 	p.Ip = pod.Status.PodIP
 	p.Phase = strcase.Snake(string(pod.Status.Phase))
-	p.Reason = pod.Status.Reason
-	p.Message = pod.Status.Message
+	p.Reason = NewNullableString(pod.Status.Reason)
+	p.Message = NewNullableString(pod.Status.Message)
 	p.RestartPolicy = strcase.Snake(string(pod.Spec.RestartPolicy))
 
 	if pod.Status.QOSClass != "" {
@@ -246,8 +246,6 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 }
 
 func (p *Pod) getIcingaState(pod *kcorev1.Pod) (IcingaState, string) {
-	// TODO(el): Account eviction.
-
 	if pod.DeletionTimestamp != nil {
 		if pod.Status.Reason == "NodeLost" {
 			return Unknown, ""
@@ -256,34 +254,40 @@ func (p *Pod) getIcingaState(pod *kcorev1.Pod) (IcingaState, string) {
 		return Ok, fmt.Sprintf("Pod %s/%s is being deleted.", pod.Namespace, pod.Name)
 	}
 
+	if PodIsEvicted(pod) {
+		return Critical, fmt.Sprintf(
+			"Pod %s/%s is terminal: %s: %s.", pod.Namespace, pod.Name, pod.Status.Reason, removeTrailingWhitespaceAndFullStop(pod.Status.Message))
+	}
+
+	podConditions := make(map[kcorev1.PodConditionType]kcorev1.PodCondition)
+	for _, condition := range pod.Status.Conditions {
+		podConditions[condition.Type] = condition
+	}
+
+	if evicted, ok := podConditions[kcorev1.DisruptionTarget]; ok {
+		return Critical, fmt.Sprintf(
+			"Pod %s/%s is terminal: %s: %s.", pod.Namespace, pod.Name, evicted.Reason, removeTrailingWhitespaceAndFullStop(evicted.Message))
+	}
+
 	if pod.Status.Phase == kcorev1.PodSucceeded {
-		// TODO(el): DisruptionTarget might be true.
 		return Ok, fmt.Sprintf(
 			"Pod %s/%s is succeeded as all its containers have been terminated successfully and"+
 				" will not be restarted.",
 			pod.Namespace, pod.Name)
 	}
 
-	var initialized bool
-	for _, condition := range pod.Status.Conditions {
-		if condition.Type == kcorev1.PodScheduled && condition.Status == kcorev1.ConditionFalse {
-			return Critical, fmt.Sprintf(
-				"Pod %s/%s can't be scheduled: %s: %s.", pod.Namespace, pod.Name, condition.Reason, condition.Message)
-		}
+	if podConditions[kcorev1.PodScheduled].Status == kcorev1.ConditionFalse {
+		return Critical, fmt.Sprintf(
+			"Pod %s/%s can't be scheduled: %s: %s.",
+			pod.Namespace,
+			pod.Name,
+			podConditions[kcorev1.PodScheduled].Reason,
+			podConditions[kcorev1.PodScheduled].Message)
+	}
 
-		if condition.Type == kcorev1.PodReadyToStartContainers && condition.Status == kcorev1.ConditionFalse {
-			return Critical, fmt.Sprintf(
-				"Pod %s/%s is not ready to start containers.", pod.Namespace, pod.Name)
-		}
-
-		if condition.Type == kcorev1.DisruptionTarget && condition.Status == kcorev1.ConditionTrue {
-			return Critical, fmt.Sprintf(
-				"Pod %s/%s is terminal: %s: %s.", pod.Namespace, pod.Name, condition.Reason, condition.Message)
-		}
-
-		if condition.Type == kcorev1.PodInitialized && condition.Status == kcorev1.ConditionTrue {
-			initialized = true
-		}
+	if podConditions[kcorev1.PodReadyToStartContainers].Status == kcorev1.ConditionFalse {
+		return Critical, fmt.Sprintf(
+			"Pod %s/%s is not ready to start containers.", pod.Namespace, pod.Name)
 	}
 
 	if pod.Status.Phase == kcorev1.PodFailed {
@@ -293,8 +297,9 @@ func (p *Pod) getIcingaState(pod *kcorev1.Pod) (IcingaState, string) {
 			pod.Namespace, pod.Name)
 	}
 
-	if !initialized {
-		initContainers := NewContainers[InitContainer](p, pod.Spec.InitContainers, pod.Status.InitContainerStatuses, NewInitContainer)
+	if podConditions[kcorev1.PodInitialized].Status == kcorev1.ConditionFalse {
+		initContainers := NewContainers[InitContainer](
+			p, pod.Spec.InitContainers, pod.Status.InitContainerStatuses, NewInitContainer)
 		state := Ok
 		reasons := make([]string, 0, len(initContainers))
 		for _, c := range initContainers {
@@ -376,4 +381,22 @@ func (p *Pod) Relations() []database.Relation {
 		database.HasMany(p.Pvcs, fk),
 		database.HasMany(p.Volumes, fk),
 	}
+}
+
+// PodIsEvicted returns true if the reported pod status is due to an eviction.
+func PodIsEvicted(pod *kcorev1.Pod) bool {
+	// Reason is the reason reported back in status.
+	const Reason = "Evicted"
+
+	return pod.Status.Phase == kcorev1.PodFailed && pod.Status.Reason == Reason
+}
+
+func removeTrailingWhitespaceAndFullStop(input string) string {
+	trimmed := strings.TrimSpace(input)
+
+	if strings.HasSuffix(trimmed, ".") {
+		return trimmed[:len(trimmed)-1]
+	}
+
+	return trimmed
 }
