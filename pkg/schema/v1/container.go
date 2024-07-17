@@ -233,6 +233,18 @@ type ContainerLog struct {
 	ContainerName string `db:"-"`
 }
 
+type ContainerStateReasonAndMassage [2]string
+
+func (c ContainerStateReasonAndMassage) String() string {
+	msg := removeTrailingWhitespaceAndFullStop(c[1])
+
+	if msg != "" {
+		return c[0] + ": " + msg
+	}
+
+	return c[0]
+}
+
 // Upsert implements the database.Upserter interface.
 func (cl *ContainerLog) Upsert() interface{} {
 	return cl.ContainerLogMeta
@@ -276,21 +288,25 @@ func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStat
 
 		if status.State.Terminated.Signal != 0 {
 			return Critical, fmt.Sprintf(
-				"Container %s terminated with signal %d at %s: %s: %s.",
+				"Container %s terminated with signal %d at %s. %s.",
 				container.Name,
 				status.State.Terminated.Signal,
 				status.State.Terminated.FinishedAt,
-				status.State.Terminated.Reason,
-				status.State.Terminated.Message)
+				ContainerStateReasonAndMassage{
+					status.State.Terminated.Reason,
+					removeTrailingWhitespaceAndFullStop(status.State.Terminated.Message),
+				})
 		}
 
 		return Critical, fmt.Sprintf(
-			"Container %s terminated with non-zero exit code %d at %s: %s: %s.",
+			"Container %s terminated with non-zero exit code %d at %s. %s.",
 			container.Name,
 			status.State.Terminated.ExitCode,
 			status.State.Terminated.FinishedAt,
-			status.State.Terminated.Reason,
-			status.State.Terminated.Message)
+			ContainerStateReasonAndMassage{
+				status.State.Terminated.Reason,
+				removeTrailingWhitespaceAndFullStop(status.State.Terminated.Message),
+			})
 	}
 
 	if status.State.Running != nil {
@@ -308,15 +324,17 @@ func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStat
 			if status.LastTerminationState.Terminated != nil {
 				return Warning, fmt.Sprintf(
 					"Container %s is running since %s but not ready due to failing %s probes."+
-						" Last terminal with non-zero exit code %d and signal %d was at %s: %s: %s.",
+						" Last terminal with non-zero exit code %d and signal %d was at %s. %s.",
 					container.Name,
 					status.State.Running.StartedAt,
 					probe,
 					status.LastTerminationState.Terminated.ExitCode,
 					status.LastTerminationState.Terminated.Signal,
 					status.LastTerminationState.Terminated.FinishedAt,
-					status.LastTerminationState.Terminated.Reason,
-					status.LastTerminationState.Terminated.Message)
+					ContainerStateReasonAndMassage{
+						status.LastTerminationState.Terminated.Reason,
+						removeTrailingWhitespaceAndFullStop(status.LastTerminationState.Terminated.Message),
+					})
 			}
 
 			return Warning, fmt.Sprintf(
@@ -349,10 +367,12 @@ func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStat
 			if status.LastTerminationState.Terminated != nil &&
 				status.LastTerminationState.Terminated.Reason == ErrImagePullBackOff {
 				return Critical, fmt.Sprintf(
-					"Container %s can't start: %s: %s",
+					"Container %s can't start. %s.",
 					container.Name,
-					status.LastTerminationState.Terminated.Reason,
-					status.LastTerminationState.Terminated.Message)
+					ContainerStateReasonAndMassage{
+						status.LastTerminationState.Terminated.Reason,
+						removeTrailingWhitespaceAndFullStop(status.LastTerminationState.Terminated.Message),
+					})
 			}
 
 			return Warning, fmt.Sprintf("Container %s is waiting to start as its image can't be pulled: %s.",
@@ -360,10 +380,12 @@ func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStat
 		}
 
 		return Critical, fmt.Sprintf(
-			"Container %s can't start: %s: %s.",
+			"Container %s can't start. %s.",
 			container.Name,
-			status.State.Waiting.Reason,
-			status.State.Waiting.Message)
+			ContainerStateReasonAndMassage{
+				status.State.Waiting.Reason,
+				removeTrailingWhitespaceAndFullStop(status.State.Waiting.Message),
+			})
 	}
 
 	var reason string
