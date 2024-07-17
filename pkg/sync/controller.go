@@ -60,7 +60,7 @@ func (c *Controller) stream(ctx context.Context, sink *Sink) error {
 	var key string
 	var shutdown bool
 	for {
-		c.queue.Done(key)
+		c.queue.Done(eventHandlerItem)
 
 		eventHandlerItem, shutdown = c.queue.Get()
 		if shutdown {
@@ -71,12 +71,12 @@ func (c *Controller) stream(ctx context.Context, sink *Sink) error {
 
 		item, exists, err := c.informer.GetStore().GetByKey(key)
 		if err != nil {
-			if c.queue.NumRequeues(key) < 5 {
+			if c.queue.NumRequeues(eventHandlerItem) < 5 {
 				c.log.Error(errors.WithStack(err), fmt.Sprintf("Fetching key %s failed. Retrying", key))
 
-				c.queue.AddRateLimited(key)
+				c.queue.AddRateLimited(eventHandlerItem)
 			} else {
-				c.queue.Forget(key)
+				c.queue.Forget(eventHandlerItem)
 
 				if err := sink.Error(ctx, errors.Wrapf(err, "fetching key %s failed", key)); err != nil {
 					return err
@@ -86,7 +86,7 @@ func (c *Controller) stream(ctx context.Context, sink *Sink) error {
 			continue
 		}
 
-		c.queue.Forget(key)
+		c.queue.Forget(eventHandlerItem)
 
 		if !exists || eventHandlerItem.(EventHandlerItem).Type == EventDelete {
 			if err := sink.Delete(ctx, eventHandlerItem.(EventHandlerItem).Id); err != nil {
