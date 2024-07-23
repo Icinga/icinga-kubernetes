@@ -9,6 +9,15 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /icinga-kubernetes cmd/icinga-kubernete
 
 FROM scratch
 
+COPY <<EOF /etc/group
+icinga-kubernetes:x:101:
+EOF
+
+COPY <<EOF /etc/passwd
+icinga-kubernetes:*:101:101::/nonexistent:/usr/sbin/nologin
+EOF
+
 COPY --from=build /icinga-kubernetes /icinga-kubernetes
 
+USER icinga-kubernetes
 CMD ["/icinga-kubernetes"]
