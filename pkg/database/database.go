@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/go-logr/logr"
 	"github.com/go-sql-driver/mysql"
+	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-kubernetes/pkg/backoff"
 	"github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/icinga/icinga-kubernetes/pkg/periodic"
@@ -36,7 +37,7 @@ type Database struct {
 
 	log logr.Logger
 
-	columnMap *ColumnMap
+	columnMap database.ColumnMap
 
 	tableSemaphores   map[string]*semaphore.Weighted
 	tableSemaphoresMu sync.Mutex
@@ -116,7 +117,7 @@ func NewFromConfig(c *Config, log logr.Logger) (*Database, error) {
 	return &Database{
 		DB:              db,
 		log:             log,
-		columnMap:       NewColumnMap(db.Mapper),
+		columnMap:       database.NewColumnMap(db.Mapper),
 		Options:         c.Options,
 		tableSemaphores: make(map[string]*semaphore.Weighted),
 		quoter:          NewQuoter(db),
