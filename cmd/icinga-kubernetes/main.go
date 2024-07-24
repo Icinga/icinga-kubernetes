@@ -66,12 +66,8 @@ func main() {
 		klog.Fatal(errors.Wrap(err, "can't create configuration"))
 	}
 
-	d, err := database.FromYAMLFile(configLocation)
-	if err != nil {
-		klog.Fatal(err)
-	}
 	dbLog := log.WithName("database")
-	db, err := database.NewFromConfig(d, dbLog)
+	db, err := database.NewFromConfig(&cfg.Database, dbLog)
 	if err != nil {
 		klog.Fatal(err)
 	}
@@ -79,7 +75,7 @@ func main() {
 		return
 	}
 
-	hasSchema, err := dbHasSchema(db, d.Database)
+	hasSchema, err := dbHasSchema(db, cfg.Database.Database)
 	if err != nil {
 		klog.Fatal(err)
 	}

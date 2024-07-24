@@ -33,7 +33,7 @@ var registerDriversOnce sync.Once
 type Database struct {
 	*sqlx.DB
 
-	Options Options
+	Options database.Options
 
 	log logr.Logger
 
@@ -46,7 +46,7 @@ type Database struct {
 }
 
 // NewFromConfig returns a new Database connection from the given Config.
-func NewFromConfig(c *Config, log logr.Logger) (*Database, error) {
+func NewFromConfig(c *database.Config, log logr.Logger) (*Database, error) {
 	registerDriversOnce.Do(func() {
 		RegisterDrivers(log)
 	})
@@ -99,7 +99,7 @@ func NewFromConfig(c *Config, log logr.Logger) (*Database, error) {
 		uri.RawQuery = query.Encode()
 		dsn = uri.String()
 	default:
-		return nil, unknownDbType(c.Type)
+		return nil, errors.Errorf(`unknown database type %q, must be one of: "mysql", "pgsql"`, c.Type)
 	}
 
 	db, err := sqlx.Open("icinga-"+c.Type, dsn)
