@@ -4,14 +4,21 @@ import (
 	"context"
 	"flag"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/icinga/icinga-go-library/config"
+	igldatabase "github.com/icinga/icinga-go-library/database"
+	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-kubernetes/internal"
 	"github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
+	"github.com/icinga/icinga-kubernetes/pkg/metrics"
 	"github.com/icinga/icinga-kubernetes/pkg/periodic"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
 	"github.com/icinga/icinga-kubernetes/pkg/sync"
 	syncv1 "github.com/icinga/icinga-kubernetes/pkg/sync/v1"
 	k8sMysql "github.com/icinga/icinga-kubernetes/schema/mysql"
+	"github.com/pkg/errors"
+	promapi "github.com/prometheus/client_golang/api"
+	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/informers"
@@ -32,7 +39,7 @@ func main() {
 		klog.Fatal(err)
 	}
 
-	var config string
+	var configLocation string
 
 	klog.InitFlags(nil)
 
@@ -42,7 +49,7 @@ func main() {
 
 		return nil
 	})
-	flag.StringVar(&config, "config", "./config.yml", "path to the config file")
+	flag.StringVar(&configLocation, "config", "./config.yml", "path to the config file")
 	flag.Parse()
 
 	clientset, err := kubernetes.NewForConfig(kconfig)
@@ -53,7 +60,13 @@ func main() {
 	factory := informers.NewSharedInformerFactory(clientset, 0)
 	log := klog.NewKlogr()
 
-	d, err := database.FromYAMLFile(config)
+	var cfg internal.Config
+	err = config.FromYAMLFile(configLocation, &cfg)
+	if err != nil {
+		klog.Fatal(errors.Wrap(err, "can't create configuration"))
+	}
+
+	d, err := database.FromYAMLFile(configLocation)
 	if err != nil {
 		klog.Fatal(err)
 	}
@@ -84,6 +97,37 @@ func main() {
 	}
 
 	g, ctx := errgroup.WithContext(context.Background())
+
+	if cfg.Prometheus.Url != "" {
+		logs, err := logging.NewLoggingFromConfig("Icinga Kubernetes", cfg.Logging)
+		if err != nil {
+			klog.Fatal(errors.Wrap(err, "can't configure logging"))
+		}
+
+		db2, err := igldatabase.NewDbFromConfig(&cfg.Database, logs.GetChildLogger("database"), igldatabase.RetryConnectorCallbacks{})
+		if err != nil {
+			klog.Fatal("IGL_DATABASE: ", err)
+		}
+
+		promClient, err := promapi.NewClient(promapi.Config{Address: cfg.Prometheus.Url})
+		if err != nil {
+			klog.Fatal(errors.Wrap(err, "error creating promClient"))
+		}
+
+		promApiClient := promv1.NewAPI(promClient)
+		promMetricSync := metrics.NewPromMetricSync(promApiClient, db2)
+
+		g.Go(func() error {
+			return promMetricSync.Nodes(ctx, factory.Core().V1().Nodes().Informer())
+		})
+
+		g.Go(func() error {
+			return promMetricSync.Pods(ctx, factory.Core().V1().Pods().Informer())
+
+			//return promMetricSync.Run(ctx)
+		})
+	}
+
 	g.Go(func() error {
 		s := syncv1.NewSync(db, factory.Core().V1().Namespaces().Informer(), log.WithName("namespaces"), schemav1.NewNamespace)
 

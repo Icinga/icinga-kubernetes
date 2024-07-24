@@ -607,7 +607,7 @@ CREATE TABLE service_label (
 CREATE TABLE annotation (
   uuid binary(16) NOT NULL,
   name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
-  value blob COLLATE utf8mb4_unicode_ci NOT NULL,
+  value mediumblob COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
@@ -863,3 +863,39 @@ CREATE TABLE kubernetes_schema (
 
 INSERT INTO kubernetes_schema (version, timestamp, success, reason)
 VALUES ('0.1.0', UNIX_TIMESTAMP() * 1000, 'y', 'Initial import');
+
+CREATE TABLE prometheus_cluster_metric (
+    cluster_uuid binary(16) NOT NULL,
+    timestamp bigint NOT NULL,
+    category varchar(255) NOT NULL,
+    name varchar(255) NOT NULL,
+    value double NOT NULL,
+    PRIMARY KEY (cluster_uuid, timestamp, category, name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE prometheus_node_metric (
+    node_uuid binary(16) NOT NULL,
+    timestamp bigint NOT NULL,
+    category varchar(255) NOT NULL,
+    name varchar(255) NOT NULL,
+    value double NOT NULL,
+    PRIMARY KEY (node_uuid, timestamp, category, name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE prometheus_pod_metric (
+    pod_uuid binary(16) NOT NULL,
+    timestamp bigint NOT NULL,
+    category varchar(255) NOT NULL,
+    name varchar(255) NOT NULL,
+    value double NOT NULL,
+    PRIMARY KEY (pod_uuid, timestamp, category, name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE prometheus_container_metric (
+    container_uuid binary(16) NOT NULL,
+    timestamp bigint NOT NULL,
+    category varchar(255) NOT NULL,
+    name varchar(255) NOT NULL,
+    value double NOT NULL,
+    PRIMARY KEY (container_uuid, timestamp, category, name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;

@@ -20,3 +20,8 @@ database:
 
   # Database password.
   password: CHANGEME
+
+# Configuration for Prometheus metrics API.
+prometheus:
+  # Prometheus server URL.
+#  url: http://localhost:9090
