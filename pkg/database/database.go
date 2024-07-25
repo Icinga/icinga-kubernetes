@@ -32,6 +32,7 @@ var registerDriversOnce sync.Once
 // statement building, streaming and logging capabilities.
 type Database struct {
 	*sqlx.DB
+	*Quoter
 
 	Options database.Options
 
@@ -41,8 +42,6 @@ type Database struct {
 
 	tableSemaphores   map[string]*semaphore.Weighted
 	tableSemaphoresMu sync.Mutex
-
-	quoter *Quoter
 }
 
 // NewFromConfig returns a new Database connection from the given Config.
@@ -120,7 +119,7 @@ func NewFromConfig(c *database.Config, log logr.Logger) (*Database, error) {
 		columnMap:       database.NewColumnMap(db.Mapper),
 		Options:         c.Options,
 		tableSemaphores: make(map[string]*semaphore.Weighted),
-		quoter:          NewQuoter(db),
+		Quoter:          NewQuoter(db),
 	}, nil
 }
 
@@ -146,7 +145,7 @@ func (db *Database) BuildDeleteStmt(from interface{}) string {
 
 	return fmt.Sprintf(
 		`DELETE FROM %s WHERE %s IN (?)`,
-		db.quoter.QuoteIdentifier(TableName(from)),
+		db.QuoteIdentifier(TableName(from)),
 		column,
 	)
 }
@@ -156,8 +155,8 @@ func (db *Database) BuildDeleteStmt(from interface{}) string {
 func (db *Database) BuildSelectStmt(table interface{}, columns interface{}) string {
 	q := fmt.Sprintf(
 		"SELECT %s FROM %s",
-		db.quoter.QuoteColumns(db.columnMap.Columns(columns)),
-		db.quoter.QuoteIdentifier(TableName(table)),
+		db.QuoteColumns(db.columnMap.Columns(columns)),
+		db.QuoteIdentifier(TableName(table)),
 	)
 
 	return q
@@ -183,7 +182,7 @@ func (db *Database) BuildUpsertStmt(subject interface{}) (stmt string, placehold
 	}
 
 	var clause, setFormat string
-	quoted := db.quoter.QuoteIdentifier("%[1]s")
+	quoted := db.QuoteIdentifier("%[1]s")
 	switch db.DriverName() {
 	case MySQL:
 		clause = "ON DUPLICATE KEY UPDATE"
@@ -201,8 +200,8 @@ func (db *Database) BuildUpsertStmt(subject interface{}) (stmt string, placehold
 
 	return fmt.Sprintf(
 		`INSERT INTO %s (%s) VALUES (%s) %s %s`,
-		db.quoter.QuoteIdentifier(table),
-		db.quoter.QuoteColumns(insertColumns),
+		db.QuoteIdentifier(table),
+		db.QuoteColumns(insertColumns),
 		fmt.Sprintf(":%s", strings.Join(insertColumns, ", :")),
 		clause,
 		strings.Join(set, ", "),
