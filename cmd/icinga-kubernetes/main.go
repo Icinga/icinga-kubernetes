@@ -15,6 +15,7 @@ import (
 	"github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/metrics"
+	"github.com/icinga/icinga-kubernetes/pkg/notifications"
 	"github.com/icinga/icinga-kubernetes/pkg/retry"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
 	"github.com/icinga/icinga-kubernetes/pkg/sync"
@@ -184,6 +185,10 @@ func main() {
 				}
 			}
 		}
+	}
+
+	if err := notifications.SyncSourceConfig(context.Background(), db, &cfg.Notifications); err != nil {
+		klog.Fatal(err)
 	}
 
 	if _, err := db.ExecContext(ctx, "DELETE FROM kubernetes_instance"); err != nil {

@@ -948,6 +948,13 @@ CREATE TABLE kubernetes_instance (
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin ROW_FORMAT=DYNAMIC;
 
+CREATE TABLE config (
+    `key` enum('notifications.username', 'notifications.password', 'notifications.source_id') COLLATE utf8mb4_unicode_ci NOT NULL,
+    value varchar(255) NOT NULL,
+
+    PRIMARY KEY (`key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
 CREATE TABLE kubernetes_schema (
   id int unsigned NOT NULL AUTO_INCREMENT,
   version varchar(255) NOT NULL,
