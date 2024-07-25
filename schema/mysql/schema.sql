@@ -887,19 +887,6 @@ CREATE TABLE cron_job_label (
   PRIMARY KEY (cron_job_uuid, label_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
-CREATE TABLE kubernetes_schema (
-  id int unsigned NOT NULL AUTO_INCREMENT,
-  version varchar(64) NOT NULL,
-  timestamp bigint unsigned NOT NULL,
-  success enum('n', 'y') DEFAULT NULL,
-  reason text DEFAULT NULL,
-  PRIMARY KEY (id),
-  CONSTRAINT idx_kubernetes_schema_version UNIQUE (version)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
-INSERT INTO kubernetes_schema (version, timestamp, success, reason)
-VALUES ('0.1.0', UNIX_TIMESTAMP() * 1000, 'y', 'Initial import');
-
 CREATE TABLE prometheus_cluster_metric (
     cluster_uuid binary(16) NOT NULL,
     timestamp bigint NOT NULL,
@@ -935,3 +922,23 @@ CREATE TABLE prometheus_container_metric (
     value double NOT NULL,
     PRIMARY KEY (container_uuid, timestamp, category, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE config (
+    `key` enum('notifications.username', 'notifications.password', 'notifications.source_id') COLLATE utf8mb4_unicode_ci NOT NULL,
+    value varchar(255) NOT NULL,
+
+    PRIMARY KEY (`key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE kubernetes_schema (
+    id int unsigned NOT NULL AUTO_INCREMENT,
+    version varchar(64) NOT NULL,
+    timestamp bigint unsigned NOT NULL,
+    success enum('n', 'y') DEFAULT NULL,
+    reason text DEFAULT NULL,
+    PRIMARY KEY (id),
+    CONSTRAINT idx_kubernetes_schema_version UNIQUE (version)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+INSERT INTO kubernetes_schema (version, timestamp, success, reason)
+VALUES ('0.1.0', UNIX_TIMESTAMP() * 1000, 'y', 'Initial import');
