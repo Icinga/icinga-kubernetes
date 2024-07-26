@@ -13,6 +13,7 @@ import (
 	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	ktypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
+	"net/url"
 	"strings"
 )
 
@@ -269,6 +270,25 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kcorev1.SchemeGroupVersion)
 	output, _ := kruntime.Encode(codec, pod)
 	p.Yaml = string(output)
+}
+
+// GetNotificationsEvent implements the notifications.Notifiable interface.
+func (p *Pod) GetNotificationsEvent(baseUrl *url.URL) map[string]any {
+	podUrl := baseUrl.JoinPath("/pod")
+	podUrl.RawQuery = fmt.Sprintf("id=%s", p.Uuid)
+
+	return map[string]any{
+		"name":     p.Namespace + "/" + p.Name,
+		"severity": p.IcingaState.ToSeverity(),
+		"message":  p.IcingaStateReason,
+		"url":      podUrl.String(),
+		"tags": map[string]any{
+			"name":      p.Name,
+			"namespace": p.Namespace,
+			"uuid":      p.Uuid.String(),
+			"resource":  "pod",
+		},
+	}
 }
 
 func (p *Pod) getIcingaState(pod *kcorev1.Pod) (IcingaState, string) {

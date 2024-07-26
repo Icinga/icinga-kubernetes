@@ -12,6 +12,7 @@ import (
 	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	knet "k8s.io/utils/net"
 	"net"
+	"net/url"
 	"strings"
 )
 
@@ -187,6 +188,25 @@ func (n *Node) Obtain(k8s kmetav1.Object) {
 			NodeUuid:       n.Uuid,
 			AnnotationUuid: annotationUuid,
 		})
+	}
+}
+
+// GetNotificationsEvent implements the notifications.Notifiable interface.
+func (n *Node) GetNotificationsEvent(baseUrl *url.URL) map[string]any {
+	nodeUrl := baseUrl.JoinPath("/node")
+	nodeUrl.RawQuery = fmt.Sprintf("id=%s", n.Uuid)
+
+	return map[string]any{
+		"name":     n.Name,
+		"severity": n.IcingaState.ToSeverity(),
+		"message":  n.IcingaStateReason,
+		"url":      nodeUrl.String(),
+		"tags": map[string]any{
+			"name":      n.Name,
+			"namespace": n.Namespace,
+			"uuid":      n.Uuid.String(),
+			"resource":  "node",
+		},
 	}
 }
 

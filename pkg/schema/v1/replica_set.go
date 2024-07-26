@@ -12,6 +12,7 @@ import (
 	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	ktypes "k8s.io/apimachinery/pkg/types"
+	"net/url"
 	"strings"
 )
 
@@ -151,6 +152,25 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object) {
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kappsv1.SchemeGroupVersion)
 	output, _ := kruntime.Encode(codec, replicaSet)
 	r.Yaml = string(output)
+}
+
+// GetNotificationsEvent implements the notifications.Notifiable interface.
+func (r *ReplicaSet) GetNotificationsEvent(baseUrl *url.URL) map[string]any {
+	replicaSetUrl := baseUrl.JoinPath("/replicaset")
+	replicaSetUrl.RawQuery = fmt.Sprintf("id=%s", r.Uuid)
+
+	return map[string]any{
+		"name":     r.Namespace + "/" + r.Name,
+		"severity": r.IcingaState.ToSeverity(),
+		"message":  r.IcingaStateReason,
+		"url":      replicaSetUrl.String(),
+		"tags": map[string]any{
+			"name":      r.Name,
+			"namespace": r.Namespace,
+			"uuid":      r.Uuid.String(),
+			"resource":  "replica_set",
+		},
+	}
 }
 
 func (r *ReplicaSet) getIcingaState() (IcingaState, string) {
