@@ -11,6 +11,7 @@ import (
 	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	ktypes "k8s.io/apimachinery/pkg/types"
+	"net/url"
 	"strings"
 )
 
@@ -152,6 +153,25 @@ func (d *DaemonSet) Obtain(k8s kmetav1.Object) {
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kappsv1.SchemeGroupVersion)
 	output, _ := kruntime.Encode(codec, daemonSet)
 	d.Yaml = string(output)
+}
+
+// GetNotificationsEvent implements the notifications.Notifiable interface.
+func (d *DaemonSet) GetNotificationsEvent(baseUrl *url.URL) map[string]any {
+	daemonSetUrl := baseUrl.JoinPath("/daemonset")
+	daemonSetUrl.RawQuery = fmt.Sprintf("id=%s", d.Uuid)
+
+	return map[string]any{
+		"name":     d.Namespace + "/" + d.Name,
+		"severity": d.IcingaState.ToSeverity(),
+		"message":  d.IcingaStateReason,
+		"url":      daemonSetUrl.String(),
+		"tags": map[string]any{
+			"name":      d.Name,
+			"namespace": d.Namespace,
+			"uuid":      d.Uuid.String(),
+			"resource":  "daemon_set",
+		},
+	}
 }
 
 func (d *DaemonSet) getIcingaState() (IcingaState, string) {
