@@ -1,4 +1,4 @@
-package internal
+package daemon
 
 import (
 	"github.com/icinga/icinga-go-library/database"

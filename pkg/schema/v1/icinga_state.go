@@ -37,6 +37,23 @@ func (s IcingaState) Value() (driver.Value, error) {
 	return s.String(), nil
 }
 
+func (s IcingaState) ToSeverity() string {
+	switch s {
+	case Ok:
+		return "ok"
+	case Pending:
+		return "info"
+	case Unknown:
+		return "err"
+	case Warning:
+		return "warning"
+	case Critical:
+		return "crit"
+	default:
+		panic(fmt.Sprintf("invalid Icinga state %d", s))
+	}
+}
+
 // Assert interface compliance.
 var (
 	_ fmt.Stringer  = (*IcingaState)(nil)
