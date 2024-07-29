@@ -42,7 +42,7 @@ type Pvc struct {
 	ActualCapacity     int64
 	Phase              string
 	VolumeName         string
-	VolumeMode         sql.NullString
+	VolumeMode         string
 	StorageClass       sql.NullString
 	Yaml               string
 	Conditions         []PvcCondition  `db:"-"`
@@ -90,20 +90,16 @@ func (p *Pvc) Obtain(k8s kmetav1.Object) {
 		}
 	}
 	p.ActualCapacity = pvc.Status.Capacity.Storage().MilliValue()
-	p.Phase = strcase.Snake(string(pvc.Status.Phase))
+	p.Phase = string(pvc.Status.Phase)
 	p.VolumeName = pvc.Spec.VolumeName
+	var volumeMode string
 	if pvc.Spec.VolumeMode != nil {
-		p.VolumeMode = sql.NullString{
-			String: string(*pvc.Spec.VolumeMode),
-			Valid:  true,
-		}
+		volumeMode = string(*pvc.Spec.VolumeMode)
+	} else {
+		volumeMode = string(kcorev1.PersistentVolumeFilesystem)
 	}
-	if pvc.Spec.StorageClassName != nil {
-		p.StorageClass = sql.NullString{
-			String: *pvc.Spec.StorageClassName,
-			Valid:  true,
-		}
-	}
+	p.VolumeMode = volumeMode
+	p.StorageClass = NewNullableString(pvc.Spec.StorageClassName)
 
 	for _, condition := range pvc.Status.Conditions {
 		p.Conditions = append(p.Conditions, PvcCondition{

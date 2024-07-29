@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
-	"github.com/icinga/icinga-kubernetes/pkg/strcase"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kruntime "k8s.io/apimachinery/pkg/runtime"
@@ -18,13 +17,13 @@ type PersistentVolume struct {
 	AccessModes      Bitmask[kpersistentVolumeAccessModesSize]
 	Capacity         int64
 	ReclaimPolicy    string
-	StorageClass     string
-	VolumeMode       sql.NullString
+	StorageClass     sql.NullString
+	VolumeMode       string
 	VolumeSourceType string
 	VolumeSource     string
 	Phase            string
-	Reason           string
-	Message          string
+	Reason           sql.NullString
+	Message          sql.NullString
 	Yaml             string
 	Claim            *PersistentVolumeClaimRef `db:"-"`
 }
@@ -47,17 +46,19 @@ func (p *PersistentVolume) Obtain(k8s kmetav1.Object) {
 
 	p.AccessModes = persistentVolumeAccessModes.Bitmask(persistentVolume.Spec.AccessModes...)
 	p.Capacity = persistentVolume.Spec.Capacity.Storage().MilliValue()
-	p.ReclaimPolicy = strcase.Snake(string(persistentVolume.Spec.PersistentVolumeReclaimPolicy))
-	p.StorageClass = persistentVolume.Spec.StorageClassName
-	p.Phase = strcase.Snake(string(persistentVolume.Status.Phase))
-	p.Reason = persistentVolume.Status.Reason
-	p.Message = persistentVolume.Status.Message
+	p.ReclaimPolicy = string(persistentVolume.Spec.PersistentVolumeReclaimPolicy)
+	p.StorageClass = NewNullableString(persistentVolume.Spec.StorageClassName)
+	p.Phase = string(persistentVolume.Status.Phase)
+	p.Reason = NewNullableString(persistentVolume.Status.Reason)
+	p.Message = NewNullableString(persistentVolume.Status.Message)
+	var volumeMode string
 	if persistentVolume.Spec.VolumeMode != nil {
-		p.VolumeMode = sql.NullString{
-			String: string(*persistentVolume.Spec.VolumeMode),
-			Valid:  true,
-		}
+		volumeMode = string(*persistentVolume.Spec.VolumeMode)
+	} else {
+		volumeMode = string(kcorev1.PersistentVolumeFilesystem)
 	}
+	p.VolumeMode = volumeMode
+
 	var err error
 	p.VolumeSourceType, p.VolumeSource, err = MarshalFirstNonNilStructFieldToJSON(persistentVolume.Spec.PersistentVolumeSource)
 	if err != nil {

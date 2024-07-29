@@ -48,7 +48,7 @@ type ContainerCommon struct {
 	PodUuid           types.UUID
 	Name              string
 	Image             string
-	ImagePullPolicy   ImagePullPolicy
+	ImagePullPolicy   string
 	State             sql.NullString
 	StateDetails      sql.NullString
 	IcingaState       IcingaState
@@ -62,7 +62,7 @@ func (c *ContainerCommon) Obtain(podUuid types.UUID, container kcorev1.Container
 	c.PodUuid = podUuid
 	c.Name = container.Name
 	c.Image = container.Image
-	c.ImagePullPolicy = ImagePullPolicy(container.ImagePullPolicy)
+	c.ImagePullPolicy = string(container.ImagePullPolicy)
 
 	state, stateDetails, err := MarshalFirstNonNilStructFieldToJSON(status.State)
 	if err != nil {
@@ -123,17 +123,32 @@ func (c *ContainerCommon) Relations() []database.Relation {
 }
 
 type ContainerResources struct {
-	CpuLimits      int64
-	CpuRequests    int64
-	MemoryLimits   int64
-	MemoryRequests int64
+	CpuLimits      sql.NullInt64
+	CpuRequests    sql.NullInt64
+	MemoryLimits   sql.NullInt64
+	MemoryRequests sql.NullInt64
 }
 
 func (c *ContainerResources) Obtain(container kcorev1.Container) {
-	c.CpuLimits = container.Resources.Limits.Cpu().MilliValue()
-	c.CpuRequests = container.Resources.Requests.Cpu().MilliValue()
-	c.MemoryLimits = container.Resources.Limits.Memory().MilliValue()
-	c.MemoryRequests = container.Resources.Requests.Memory().MilliValue()
+	if !container.Resources.Limits.Cpu().IsZero() {
+		c.CpuLimits.Int64 = container.Resources.Limits.Cpu().MilliValue()
+		c.CpuLimits.Valid = true
+	}
+
+	if !container.Resources.Requests.Cpu().IsZero() {
+		c.CpuRequests.Int64 = container.Resources.Requests.Cpu().MilliValue()
+		c.CpuRequests.Valid = true
+	}
+
+	if !container.Resources.Limits.Memory().IsZero() {
+		c.MemoryLimits.Int64 = container.Resources.Limits.Memory().MilliValue()
+		c.MemoryLimits.Valid = true
+	}
+
+	if !container.Resources.Requests.Memory().IsZero() {
+		c.MemoryRequests.Int64 = container.Resources.Requests.Memory().MilliValue()
+		c.MemoryRequests.Valid = true
+	}
 }
 
 type ContainerRestartable struct {

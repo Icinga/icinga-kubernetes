@@ -86,7 +86,7 @@ func (d *Deployment) Obtain(k8s kmetav1.Object) {
 	}
 
 	d.DesiredReplicas = replicas
-	d.Strategy = strcase.Snake(string(deployment.Spec.Strategy.Type))
+	d.Strategy = string(deployment.Spec.Strategy.Type)
 	d.MinReadySeconds = deployment.Spec.MinReadySeconds
 	d.ProgressDeadlineSeconds = progressDeadlineSeconds
 	d.Paused = types.Bool{

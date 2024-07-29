@@ -22,16 +22,16 @@ type PodFactory struct {
 
 type Pod struct {
 	Meta
-	NodeName          string
-	NominatedNodeName string
-	Ip                string
+	NodeName          sql.NullString
+	NominatedNodeName sql.NullString
+	Ip                sql.NullString
 	Phase             string
 	IcingaState       IcingaState
 	IcingaStateReason string
-	CpuLimits         int64
-	CpuRequests       int64
-	MemoryLimits      int64
-	MemoryRequests    int64
+	CpuLimits         sql.NullInt64
+	CpuRequests       sql.NullInt64
+	MemoryLimits      sql.NullInt64
+	MemoryRequests    sql.NullInt64
 	Reason            sql.NullString
 	Message           sql.NullString
 	Qos               sql.NullString
@@ -115,18 +115,14 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 
 	pod := k8s.(*kcorev1.Pod)
 
-	p.NodeName = pod.Spec.NodeName
-	p.NominatedNodeName = pod.Status.NominatedNodeName
-	p.Ip = pod.Status.PodIP
-	p.Phase = strcase.Snake(string(pod.Status.Phase))
+	p.NodeName = NewNullableString(pod.Spec.NodeName)
+	p.NominatedNodeName = NewNullableString(pod.Status.NominatedNodeName)
+	p.Ip = NewNullableString(pod.Status.PodIP)
+	p.Phase = string(pod.Status.Phase)
 	p.Reason = NewNullableString(pod.Status.Reason)
 	p.Message = NewNullableString(pod.Status.Message)
-	p.RestartPolicy = strcase.Snake(string(pod.Spec.RestartPolicy))
-
-	if pod.Status.QOSClass != "" {
-		p.Qos.Valid = true
-		p.Qos.String = strcase.Snake(string(pod.Status.QOSClass))
-	}
+	p.RestartPolicy = string(pod.Spec.RestartPolicy)
+	p.Qos = NewNullableString(string(pod.Status.QOSClass))
 
 	for _, condition := range pod.Status.Conditions {
 		p.Conditions = append(p.Conditions, PodCondition{
@@ -145,20 +141,50 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 	p.IcingaState, p.IcingaStateReason = p.getIcingaState(pod)
 
 	for _, container := range pod.Spec.Containers {
-		p.CpuLimits += container.Resources.Limits.Cpu().MilliValue()
-		p.CpuRequests += container.Resources.Requests.Cpu().MilliValue()
-		p.MemoryLimits += container.Resources.Limits.Memory().MilliValue()
-		p.MemoryRequests += container.Resources.Requests.Memory().MilliValue()
+		if !container.Resources.Limits.Cpu().IsZero() {
+			p.CpuLimits.Int64 += container.Resources.Limits.Cpu().MilliValue()
+			p.CpuLimits.Valid = true
+		}
+
+		if !container.Resources.Requests.Cpu().IsZero() {
+			p.CpuRequests.Int64 += container.Resources.Requests.Cpu().MilliValue()
+			p.CpuRequests.Valid = true
+		}
+
+		if !container.Resources.Limits.Memory().IsZero() {
+			p.MemoryLimits.Int64 += container.Resources.Limits.Memory().MilliValue()
+			p.MemoryLimits.Valid = true
+		}
+
+		if !container.Resources.Requests.Memory().IsZero() {
+			p.MemoryRequests.Int64 += container.Resources.Requests.Memory().MilliValue()
+			p.MemoryRequests.Valid = true
+		}
 	}
 
 	// https://kubernetes.io/docs/concepts/workloads/pods/init-containers/#resources
 	for _, container := range pod.Spec.InitContainers {
 		// Init container must complete successfully before the next one starts,
 		// so we don't have to sum their resources.
-		p.CpuLimits = MaxInt(p.CpuLimits, container.Resources.Limits.Cpu().MilliValue())
-		p.CpuRequests = MaxInt(p.CpuRequests, container.Resources.Requests.Cpu().MilliValue())
-		p.MemoryLimits = MaxInt(p.MemoryLimits, container.Resources.Limits.Memory().MilliValue())
-		p.MemoryRequests = MaxInt(p.MemoryRequests, container.Resources.Requests.Memory().MilliValue())
+		if !container.Resources.Limits.Cpu().IsZero() {
+			p.CpuLimits.Int64 = MaxInt(p.CpuLimits.Int64, container.Resources.Limits.Cpu().MilliValue())
+			p.CpuLimits.Valid = true
+		}
+
+		if !container.Resources.Requests.Cpu().IsZero() {
+			p.CpuRequests.Int64 = MaxInt(p.CpuRequests.Int64, container.Resources.Requests.Cpu().MilliValue())
+			p.CpuRequests.Valid = true
+		}
+
+		if !container.Resources.Limits.Memory().IsZero() {
+			p.MemoryLimits.Int64 = MaxInt(p.MemoryLimits.Int64, container.Resources.Limits.Memory().MilliValue())
+			p.MemoryLimits.Valid = true
+		}
+
+		if !container.Resources.Requests.Memory().IsZero() {
+			p.MemoryRequests.Int64 = MaxInt(p.MemoryRequests.Int64, container.Resources.Requests.Memory().MilliValue())
+			p.MemoryRequests.Valid = true
+		}
 	}
 
 	for labelName, labelValue := range pod.Labels {
@@ -251,7 +277,7 @@ func (p *Pod) getIcingaState(pod *kcorev1.Pod) (IcingaState, string) {
 			return Unknown, ""
 		}
 		// TODO(el): Return Critical if pod.DeletionTimestamp + pod.DeletionGracePeriodSeconds > now.
-		return Ok, fmt.Sprintf("Pod %s/%s is being deleted.", pod.Namespace, pod.Name)
+		return Ok, fmt.Sprintf("Pod %s/%s is being deleted at %s.", pod.Namespace, pod.Name, pod.DeletionTimestamp)
 	}
 
 	if PodIsEvicted(pod) {
