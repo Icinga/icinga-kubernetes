@@ -173,35 +173,59 @@ func (j *Job) Obtain(k8s kmetav1.Object) {
 
 func (j *Job) getIcingaState(job *kbatchv1.Job) (IcingaState, string) {
 	for _, condition := range job.Status.Conditions {
+		if condition.Status != kcorev1.ConditionTrue {
+			continue
+		}
+
 		switch condition.Type {
+		case kbatchv1.JobSuccessCriteriaMet:
+			return Ok, fmt.Sprintf(
+				"Job %s/%s met its sucess criteria.",
+				j.Namespace, j.Name)
 		case kbatchv1.JobComplete:
-			if condition.Status == kcorev1.ConditionTrue {
-				return Ok, fmt.Sprintf(
-					"Job %s/%s has completed its execution successfully with %d necessary pod completions.",
-					j.Namespace, j.Name, job.Spec.Completions)
-			}
-		case kbatchv1.JobFailed:
-			if condition.Status == kcorev1.ConditionTrue {
-				return Critical, fmt.Sprintf(
-					"Job %s/%s has failed its execution. %s: %s.",
-					j.Namespace, j.Name, condition.Reason, condition.Message)
-			}
-		default:
 			reason := fmt.Sprintf(
-				"Job %s/%s is running since %s with currently %d active, %d completed and %d failed pods. "+
-					"Successful termination requires %d pod completions. The back-off limit is %d.",
-				j.Namespace, j.Name, job.Status.StartTime, j.Active, j.Succeeded, j.Failed, job.Spec.Completions, job.Spec.BackoffLimit)
+				"Job %s/%s has completed its execution successfully with",
+				j.Namespace, j.Name)
 
-			if job.Spec.ActiveDeadlineSeconds != nil {
-				reason += fmt.Sprintf("Deadline for completion is %d.", job.Spec.ActiveDeadlineSeconds)
+			if j.Completions.Valid {
+				reason += fmt.Sprintf(" %d necessary pod completions.", j.Completions.Int32)
+			} else {
+				reason += " any pod completion."
 			}
 
-			return Pending, reason
+			return Ok, reason
+		case kbatchv1.JobFailed:
+			return Critical, fmt.Sprintf(
+				"Job %s/%s has failed its execution. %s: %s.",
+				j.Namespace, j.Name, condition.Reason, condition.Message)
+		case kbatchv1.JobFailureTarget:
+			return Warning, fmt.Sprintf(
+				"Job %s/%s is about to fail its execution. %s: %s.",
+				j.Namespace, j.Name, condition.Reason, condition.Message)
+		case kbatchv1.JobSuspended:
+			return Ok, fmt.Sprintf(
+				"Job %s/%s is suspended.",
+				j.Namespace, j.Name)
 		}
 	}
 
-	return Unknown, fmt.Sprintf(
-		"Job %s/%s is in an unknown state. No condition met.", j.Namespace, j.Name)
+	var completions string
+	if j.Completions.Valid {
+		completions = fmt.Sprintf("%d pod completions", j.Completions.Int32)
+	} else {
+		completions = "any pod completion"
+	}
+
+	reason := fmt.Sprintf(
+		"Job %s/%s is running since %s with currently %d active, %d completed and %d failed pods. "+
+			"Successful termination requires %s. The back-off limit is %d.",
+		j.Namespace, j.Name, job.Status.StartTime, j.Active, j.Succeeded, j.Failed, completions, job.Spec.BackoffLimit)
+
+	if job.Spec.ActiveDeadlineSeconds != nil {
+		reason += fmt.Sprintf(" Deadline for completion is %d.", job.Spec.ActiveDeadlineSeconds)
+	}
+
+	return Pending, reason
 }
 
 func (j *Job) Relations() []database.Relation {
