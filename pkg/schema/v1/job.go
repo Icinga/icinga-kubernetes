@@ -100,7 +100,7 @@ func (j *Job) Obtain(k8s kmetav1.Object) {
 	}
 	var completionMode sql.NullString
 	if job.Spec.CompletionMode != nil {
-		completionMode.String = strcase.Snake(string(*job.Spec.CompletionMode))
+		completionMode.String = string(*job.Spec.CompletionMode)
 		completionMode.Valid = true
 	}
 	var startTime kmetav1.Time

@@ -795,7 +795,7 @@ CREATE TABLE job (
   active_deadline_seconds bigint unsigned NULL DEFAULT NULL,
   backoff_limit int unsigned NULL DEFAULT NULL,
   ttl_seconds_after_finished int unsigned NULL DEFAULT NULL,
-  completion_mode enum('non_indexed', 'indexed') COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  completion_mode enum('NonIndexed', 'Indexed') COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   suspend enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
   start_time bigint unsigned NULL DEFAULT NULL,
   completion_time bigint unsigned NULL DEFAULT NULL,
