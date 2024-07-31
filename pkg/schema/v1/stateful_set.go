@@ -10,6 +10,7 @@ import (
 	kruntime "k8s.io/apimachinery/pkg/runtime"
 	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
+	"net/url"
 	"strings"
 )
 
@@ -139,6 +140,25 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object) {
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kappsv1.SchemeGroupVersion)
 	output, _ := kruntime.Encode(codec, statefulSet)
 	s.Yaml = string(output)
+}
+
+// GetNotificationsEvent implements the notifications.Notifiable interface.
+func (s *StatefulSet) GetNotificationsEvent(baseUrl *url.URL) map[string]any {
+	statefulSetUrl := baseUrl.JoinPath("/statefulset")
+	statefulSetUrl.RawQuery = fmt.Sprintf("id=%s", s.Uuid)
+
+	return map[string]any{
+		"name":     s.Namespace + "/" + s.Name,
+		"severity": s.IcingaState.ToSeverity(),
+		"message":  s.IcingaStateReason,
+		"url":      statefulSetUrl.String(),
+		"tags": map[string]any{
+			"name":      s.Name,
+			"namespace": s.Namespace,
+			"uuid":      s.Uuid.String(),
+			"resource":  "stateful_set",
+		},
+	}
 }
 
 func (s *StatefulSet) getIcingaState() (IcingaState, string) {
