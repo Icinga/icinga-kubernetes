@@ -24,19 +24,10 @@ or install [from source](02-Installation.md.d/From-Source.md).
 
 ## Setting up the Database
 
-A MySQL (≥5.5) or MariaDB (≥10.1) database is required to run Icinga for Kubernetes.
-Please follow the steps listed for your target database,
-which guide you through setting up the database and user, and importing the schema.
+A MySQL (≥8.0) or MariaDB (≥10.4) database is required to run Icinga for Kubernetes.
+Please follow the steps, which guide you through setting up the database and user, and importing the schema.
 
 ### Setting up a MySQL or MariaDB Database
-
-If you use a version of MySQL < 5.7 or MariaDB < 10.2, the following server options must be set:
-
-```
-innodb_file_format=barracuda
-innodb_file_per_table=1
-innodb_large_prefix=1
-```
 
 Set up a MySQL database for Icinga for Kubernetes:
 
@@ -49,7 +40,7 @@ GRANT ALL ON kubernetes.* TO 'kubernetes'@'localhost';
 Icinga for Kubernetes automatically imports the schema on first start and also applies schema migrations if required.
 <!-- {% if not from_source %} -->
 You can also import the schema file manually, which is located at
-`/usr/share/kubernetes/schema/mysql/schema.sql`.
+`/usr/share/icinga-kubernetes/schema/mysql/schema.sql`.
 <!-- {% endif %} -->
 
 <!-- {% if not from_source %} -->
@@ -79,7 +70,7 @@ All available settings can be found under [Configuration](03-Configuration.md).
 
 ## Running Icinga for Kubernetes
 
-With locally accessible kubeconfig and `config.yml` files, `icinga-kubernetes` can be executed by running:
+With locally accessible [kubeconfig](04-Kubeconfig.md) and `config.yml` files, `icinga-kubernetes` can be executed by running:
 
 ```bash
 icinga-kubernetes -config /path/to/config.yml
@@ -87,7 +78,7 @@ icinga-kubernetes -config /path/to/config.yml
 
 ## Using a Container
 
-With locally accessible kubeconfig and `config.yml` files,
+With locally accessible [kubeconfig](04-Kubeconfig.md) and `config.yml` files,
 run the `icinga/icinga-kubernetes` image using a container runtime of you choice, e.g. Docker:
 
 ```bash
