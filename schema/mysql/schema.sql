@@ -451,6 +451,17 @@ CREATE TABLE daemon_set_condition (
   PRIMARY KEY (daemon_set_uuid, type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+CREATE TABLE daemon_set_owner(
+  daemon_set_uuid binary(16) NOT NULL,
+  owner_uuid binary(16) NOT NULL,
+  kind varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
+  uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  controller enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
+  block_owner_deletion enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (daemon_set_uuid, owner_uuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
 CREATE TABLE stateful_set (
   uuid binary(16) NOT NULL,
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -485,6 +496,17 @@ CREATE TABLE stateful_set_condition (
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   message text,
   PRIMARY KEY (stateful_set_uuid, type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE stateful_set_owner(
+  stateful_set_uuid binary(16) NOT NULL,
+  owner_uuid binary(16) NOT NULL,
+  kind varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
+  uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  controller enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
+  block_owner_deletion enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (stateful_set_uuid, owner_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE secret (
