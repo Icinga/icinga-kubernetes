@@ -17,11 +17,11 @@ import (
 
 type Deployment struct {
 	Meta
-	DesiredReplicas         int32
 	Strategy                string
 	MinReadySeconds         int32
 	ProgressDeadlineSeconds int32
 	Paused                  types.Bool
+	DesiredReplicas         int32
 	ActualReplicas          int32
 	UpdatedReplicas         int32
 	ReadyReplicas           int32
@@ -77,22 +77,18 @@ func (d *Deployment) Obtain(k8s kmetav1.Object) {
 
 	deployment := k8s.(*kappsv1.Deployment)
 
-	var replicas, progressDeadlineSeconds int32
-	if deployment.Spec.Replicas != nil {
-		replicas = *deployment.Spec.Replicas
-	}
-	if deployment.Spec.ProgressDeadlineSeconds != nil {
-		progressDeadlineSeconds = *deployment.Spec.ProgressDeadlineSeconds
-	}
-
-	d.DesiredReplicas = replicas
 	d.Strategy = string(deployment.Spec.Strategy.Type)
 	d.MinReadySeconds = deployment.Spec.MinReadySeconds
-	d.ProgressDeadlineSeconds = progressDeadlineSeconds
+	// It is safe to use the pointer directly here,
+	// as Kubernetes sets it to 600s if no deadline is configured.
+	d.ProgressDeadlineSeconds = *deployment.Spec.ProgressDeadlineSeconds
 	d.Paused = types.Bool{
 		Bool:  deployment.Spec.Paused,
 		Valid: true,
 	}
+	// It is safe to use the pointer directly here,
+	// as Kubernetes sets it to 1 if no replicas are configured.
+	d.DesiredReplicas = *deployment.Spec.Replicas
 	d.ActualReplicas = deployment.Status.Replicas
 	d.UpdatedReplicas = deployment.Status.UpdatedReplicas
 	d.AvailableReplicas = deployment.Status.AvailableReplicas

@@ -11,6 +11,7 @@ import (
 
 type Event struct {
 	Meta
+	ReferentUuid        types.UUID
 	ReportingController string
 	ReportingInstance   string
 	Action              string
@@ -35,6 +36,7 @@ func (e *Event) Obtain(k8s kmetav1.Object) {
 
 	event := k8s.(*keventsv1.Event)
 
+	e.ReferentUuid = EnsureUUID(event.Regarding.UID)
 	e.ReportingController = event.ReportingController
 	e.ReportingInstance = event.ReportingInstance
 	e.Action = event.Action

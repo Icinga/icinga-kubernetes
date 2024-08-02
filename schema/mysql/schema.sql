@@ -188,11 +188,11 @@ CREATE TABLE deployment (
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
-  desired_replicas int unsigned NOT NULL,
   strategy enum('Recreate', 'RollingUpdate') COLLATE utf8mb4_unicode_ci NOT NULL,
   min_ready_seconds int unsigned NOT NULL,
   progress_deadline_seconds int unsigned NOT NULL,
   paused enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
+  desired_replicas int unsigned NOT NULL,
   actual_replicas int unsigned NOT NULL,
   updated_replicas int unsigned NOT NULL,
   ready_replicas int unsigned NOT NULL,
@@ -691,6 +691,7 @@ CREATE TABLE pvc_annotation (
 
 CREATE TABLE event (
   uuid binary(16) NOT NULL,
+  referent_uuid binary(16) NOT NULL,
   namespace varchar(63) NOT NULL,
   name varchar(270) NOT NULL,
   uid varchar(255) NOT NULL,
