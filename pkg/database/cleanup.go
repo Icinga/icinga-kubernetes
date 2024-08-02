@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/com"
+	"github.com/icinga/icinga-kubernetes/pkg/periodic"
+	"golang.org/x/sync/errgroup"
 	"time"
 )
 
@@ -73,4 +75,32 @@ func (db *Database) CleanupOlderThan(
 
 type cleanupWhere struct {
 	Time types.UnixMilli
+}
+
+func (db *Database) PeriodicCleanup(ctx context.Context, stmt CleanupStmt) error {
+	g, ctxCleanup := errgroup.WithContext(ctx)
+
+	errs := make(chan error, 1)
+	defer close(errs)
+
+	periodic.Start(ctx, time.Hour, func(tick periodic.Tick) {
+		olderThan := tick.Time.AddDate(0, -1, 0)
+
+		_, err := db.CleanupOlderThan(
+			ctx, stmt, 5000, olderThan,
+		)
+
+		if err != nil {
+			select {
+			case errs <- err:
+			case <-ctx.Done():
+			}
+
+			return
+		}
+	}, periodic.Immediate()).Stop()
+
+	com.ErrgroupReceive(ctxCleanup, g, errs)
+
+	return g.Wait()
 }
