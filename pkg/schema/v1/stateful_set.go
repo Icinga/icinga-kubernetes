@@ -10,6 +10,7 @@ import (
 	kruntime "k8s.io/apimachinery/pkg/runtime"
 	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
+	ktypes "k8s.io/apimachinery/pkg/types"
 	"strings"
 )
 
@@ -32,6 +33,7 @@ type StatefulSet struct {
 	IcingaState                                     IcingaState
 	IcingaStateReason                               string
 	Conditions                                      []StatefulSetCondition  `db:"-"`
+	Owners                                          []StatefulSetOwner      `db:"-"`
 	Labels                                          []Label                 `db:"-"`
 	StatefulSetLabels                               []StatefulSetLabel      `db:"-"`
 	Annotations                                     []Annotation            `db:"-"`
@@ -45,6 +47,16 @@ type StatefulSetCondition struct {
 	LastTransition  types.UnixMilli
 	Reason          string
 	Message         string
+}
+
+type StatefulSetOwner struct {
+	StatefulSetUuid    types.UUID
+	OwnerUuid          types.UUID
+	Kind               string
+	Name               string
+	Uid                ktypes.UID
+	Controller         types.Bool
+	BlockOwnerDeletion types.Bool
 }
 
 type StatefulSetLabel struct {
@@ -108,6 +120,31 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object) {
 		})
 	}
 
+	for _, ownerReference := range statefulSet.OwnerReferences {
+		var blockOwnerDeletion, controller bool
+		if ownerReference.BlockOwnerDeletion != nil {
+			blockOwnerDeletion = *ownerReference.BlockOwnerDeletion
+		}
+		if ownerReference.Controller != nil {
+			controller = *ownerReference.Controller
+		}
+		s.Owners = append(s.Owners, StatefulSetOwner{
+			StatefulSetUuid: s.Uuid,
+			OwnerUuid:       EnsureUUID(ownerReference.UID),
+			Kind:            strcase.Snake(ownerReference.Kind),
+			Name:            ownerReference.Name,
+			Uid:             ownerReference.UID,
+			BlockOwnerDeletion: types.Bool{
+				Bool:  blockOwnerDeletion,
+				Valid: true,
+			},
+			Controller: types.Bool{
+				Bool:  controller,
+				Valid: true,
+			},
+		})
+	}
+
 	for labelName, labelValue := range statefulSet.Labels {
 		labelUuid := NewUUID(s.Uuid, strings.ToLower(labelName+":"+labelValue))
 		s.Labels = append(s.Labels, Label{
@@ -167,6 +204,7 @@ func (s *StatefulSet) Relations() []database.Relation {
 
 	return []database.Relation{
 		database.HasMany(s.Conditions, fk),
+		database.HasMany(s.Owners, fk),
 		database.HasMany(s.StatefulSetLabels, fk),
 		database.HasMany(s.Labels, database.WithoutCascadeDelete()),
 		database.HasMany(s.StatefulSetAnnotations, fk),
