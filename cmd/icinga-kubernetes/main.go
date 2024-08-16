@@ -57,6 +57,9 @@ func main() {
 	ctx := context.Background()
 
 	db, err := database.NewDbFromConfig(&cfg.Database, logs.GetChildLogger("Database"))
+	if err != nil {
+		logger.Fatalf("%+v", errors.Wrap(err, "can't create database"))
+	}
 	defer db.Close()
 	{
 		logger.Info("Connecting to database")
