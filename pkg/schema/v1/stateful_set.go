@@ -2,6 +2,7 @@ package v1
 
 import (
 	"fmt"
+	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	kappsv1 "k8s.io/api/apps/v1"
