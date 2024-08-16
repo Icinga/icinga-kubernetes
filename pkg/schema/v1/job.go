@@ -12,6 +12,7 @@ import (
 	kruntime "k8s.io/apimachinery/pkg/runtime"
 	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
+	ktypes "k8s.io/apimachinery/pkg/types"
 	"strings"
 )
 
@@ -37,6 +38,7 @@ type Job struct {
 	JobLabels               []JobLabel      `db:"-"`
 	Annotations             []Annotation    `db:"-"`
 	JobAnnotations          []JobAnnotation `db:"-"`
+	Owners                  []JobOwner      `db:"-"`
 }
 
 type JobCondition struct {
@@ -57,6 +59,16 @@ type JobLabel struct {
 type JobAnnotation struct {
 	JobUuid        types.UUID
 	AnnotationUuid types.UUID
+}
+
+type JobOwner struct {
+	JobUuid            types.UUID
+	OwnerUuid          types.UUID
+	Kind               string
+	Name               string
+	Uid                ktypes.UID
+	Controller         types.Bool
+	BlockOwnerDeletion types.Bool
 }
 
 func NewJob() Resource {
@@ -164,6 +176,31 @@ func (j *Job) Obtain(k8s kmetav1.Object) {
 		})
 	}
 
+	for _, ownerReference := range job.OwnerReferences {
+		var blockOwnerDeletion, controller bool
+		if ownerReference.BlockOwnerDeletion != nil {
+			blockOwnerDeletion = *ownerReference.BlockOwnerDeletion
+		}
+		if ownerReference.Controller != nil {
+			controller = *ownerReference.Controller
+		}
+		j.Owners = append(j.Owners, JobOwner{
+			JobUuid:   j.Uuid,
+			OwnerUuid: EnsureUUID(ownerReference.UID),
+			Kind:      strcase.Snake(ownerReference.Kind),
+			Name:      ownerReference.Name,
+			Uid:       ownerReference.UID,
+			BlockOwnerDeletion: types.Bool{
+				Bool:  blockOwnerDeletion,
+				Valid: true,
+			},
+			Controller: types.Bool{
+				Bool:  controller,
+				Valid: true,
+			},
+		})
+	}
+
 	scheme := kruntime.NewScheme()
 	_ = kbatchv1.AddToScheme(scheme)
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kbatchv1.SchemeGroupVersion)
@@ -237,5 +274,6 @@ func (j *Job) Relations() []database.Relation {
 		database.HasMany(j.JobLabels, fk),
 		database.HasMany(j.JobAnnotations, fk),
 		database.HasMany(j.Annotations, database.WithoutCascadeDelete()),
+		database.HasMany(j.Owners, fk),
 	}
 }

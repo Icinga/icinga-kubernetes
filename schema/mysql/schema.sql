@@ -849,6 +849,17 @@ CREATE TABLE job_label (
   PRIMARY KEY (job_uuid, label_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+CREATE TABLE job_owner (
+  job_uuid binary(16) NOT NULL,
+  owner_uuid binary(16) NOT NULL,
+  kind varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
+  uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  controller enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
+  block_owner_deletion enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (job_uuid, owner_uuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
 CREATE TABLE cron_job (
   uuid binary(16) NOT NULL,
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
