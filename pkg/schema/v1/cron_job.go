@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"database/sql"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	kbatchv1 "k8s.io/api/batch/v1"
@@ -14,8 +15,8 @@ import (
 type CronJob struct {
 	Meta
 	Schedule                   string
-	Timezone                   string
-	StartingDeadlineSeconds    int64
+	Timezone                   sql.NullString
+	StartingDeadlineSeconds    sql.NullInt64
 	ConcurrencyPolicy          string
 	Suspend                    types.Bool
 	SuccessfulJobsHistoryLimit int32
@@ -49,42 +50,31 @@ func (c *CronJob) Obtain(k8s kmetav1.Object) {
 
 	cronJob := k8s.(*kbatchv1.CronJob)
 
-	var timeZone string
-	if cronJob.Spec.TimeZone != nil {
-		timeZone = *cronJob.Spec.TimeZone
-	}
-	var startingDeadlineSeconds int64
+	c.Schedule = cronJob.Spec.Schedule
+	c.Timezone = NewNullableString(cronJob.Spec.TimeZone)
 	if cronJob.Spec.StartingDeadlineSeconds != nil {
-		startingDeadlineSeconds = *cronJob.Spec.StartingDeadlineSeconds
+		c.StartingDeadlineSeconds.Int64 = *cronJob.Spec.StartingDeadlineSeconds
+		c.StartingDeadlineSeconds.Valid = true
 	}
-	var suspend types.Bool
-	if cronJob.Spec.Suspend != nil {
-		suspend.Bool = *cronJob.Spec.Suspend
-		suspend.Valid = true
-	}
-	var successfulJobsHistoryLimit int32
-	if cronJob.Spec.SuccessfulJobsHistoryLimit != nil {
-		successfulJobsHistoryLimit = *cronJob.Spec.SuccessfulJobsHistoryLimit
-	}
-	var failedJobsHistoryLimit int32
-	if cronJob.Spec.FailedJobsHistoryLimit != nil {
-		failedJobsHistoryLimit = *cronJob.Spec.FailedJobsHistoryLimit
-	}
+	c.ConcurrencyPolicy = string(cronJob.Spec.ConcurrencyPolicy)
+	// It is safe to use the pointer directly here,
+	// as Kubernetes sets it to false by default.
+	c.Suspend.Bool = *cronJob.Spec.Suspend
+	c.Suspend.Valid = true
+	// It is safe to use the pointer directly here,
+	// as Kubernetes sets it to 3 if not configured.
+	c.SuccessfulJobsHistoryLimit = *cronJob.Spec.SuccessfulJobsHistoryLimit
+	// It is safe to use the pointer directly here,
+	// as Kubernetes sets it to 1 if not configured.
+	c.FailedJobsHistoryLimit = *cronJob.Spec.FailedJobsHistoryLimit
+
+	c.Active = int32(len(cronJob.Status.Active))
 	if cronJob.Status.LastScheduleTime != nil {
 		c.LastScheduleTime = types.UnixMilli(cronJob.Status.LastScheduleTime.Time)
 	}
 	if cronJob.Status.LastSuccessfulTime != nil {
 		c.LastSuccessfulTime = types.UnixMilli(cronJob.Status.LastSuccessfulTime.Time)
 	}
-
-	c.Schedule = cronJob.Spec.Schedule
-	c.Timezone = timeZone
-	c.StartingDeadlineSeconds = startingDeadlineSeconds
-	c.ConcurrencyPolicy = string(cronJob.Spec.ConcurrencyPolicy)
-	c.Suspend = suspend
-	c.SuccessfulJobsHistoryLimit = successfulJobsHistoryLimit
-	c.FailedJobsHistoryLimit = failedJobsHistoryLimit
-	c.Active = int32(len(cronJob.Status.Active))
 
 	for labelName, labelValue := range cronJob.Labels {
 		labelUuid := NewUUID(c.Uuid, strings.ToLower(labelName+":"+labelValue))

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
-	"github.com/icinga/icinga-kubernetes/pkg/strcase"
 	kappsv1 "k8s.io/api/apps/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kruntime "k8s.io/apimachinery/pkg/runtime"
@@ -95,11 +94,11 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object) {
 
 	s.DesiredReplicas = replicas
 	s.ServiceName = statefulSet.Spec.ServiceName
-	s.PodManagementPolicy = strcase.Snake(string(statefulSet.Spec.PodManagementPolicy))
-	s.UpdateStrategy = strcase.Snake(string(statefulSet.Spec.UpdateStrategy.Type))
+	s.PodManagementPolicy = string(statefulSet.Spec.PodManagementPolicy)
+	s.UpdateStrategy = string(statefulSet.Spec.UpdateStrategy.Type)
 	s.MinReadySeconds = statefulSet.Spec.MinReadySeconds
-	s.PersistentVolumeClaimRetentionPolicyWhenDeleted = strcase.Snake(string(pvcRetentionPolicyDeleted))
-	s.PersistentVolumeClaimRetentionPolicyWhenScaled = strcase.Snake(string(pvcRetentionPolicyScaled))
+	s.PersistentVolumeClaimRetentionPolicyWhenDeleted = string(pvcRetentionPolicyDeleted)
+	s.PersistentVolumeClaimRetentionPolicyWhenScaled = string(pvcRetentionPolicyScaled)
 	s.Ordinals = ordinals
 	s.ActualReplicas = statefulSet.Status.Replicas
 

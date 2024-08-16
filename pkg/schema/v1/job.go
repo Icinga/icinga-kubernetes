@@ -3,9 +3,9 @@ package v1
 import (
 	"database/sql"
 	"fmt"
+	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
-	"github.com/icinga/icinga-kubernetes/pkg/strcase"
 	kbatchv1 "k8s.io/api/batch/v1"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -100,7 +100,7 @@ func (j *Job) Obtain(k8s kmetav1.Object) {
 	}
 	var completionMode sql.NullString
 	if job.Spec.CompletionMode != nil {
-		completionMode.String = strcase.Snake(string(*job.Spec.CompletionMode))
+		completionMode.String = string(*job.Spec.CompletionMode)
 		completionMode.Valid = true
 	}
 	var startTime kmetav1.Time

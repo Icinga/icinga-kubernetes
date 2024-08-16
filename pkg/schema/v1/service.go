@@ -15,19 +15,19 @@ import (
 
 type Service struct {
 	Meta
-	Type                          string
 	ClusterIP                     string
 	ClusterIPs                    string
-	ExternalIPs                   string
+	Type                          string
+	ExternalIPs                   sql.NullString
 	SessionAffinity               string
-	ExternalName                  string
+	ExternalName                  sql.NullString
 	ExternalTrafficPolicy         sql.NullString
-	HealthCheckNodePort           int32
+	HealthCheckNodePort           sql.NullInt32
 	PublishNotReadyAddresses      types.Bool
-	IpFamilies                    string
-	IpFamilyPolicy                string
+	IpFamilies                    sql.NullString
+	IpFamilyPolicy                sql.NullString
 	AllocateLoadBalancerNodePorts types.Bool
-	LoadBalancerClass             string
+	LoadBalancerClass             sql.NullString
 	InternalTrafficPolicy         string
 	Yaml                          string
 	Selectors                     []Selector          `db:"-"`
@@ -84,86 +84,6 @@ func (s *Service) Obtain(k8s kmetav1.Object) {
 
 	service := k8s.(*kcorev1.Service)
 
-	var externalTrafficPolicy sql.NullString
-	if service.Spec.ExternalTrafficPolicy != "" {
-		externalTrafficPolicy.String = strcase.Snake(string(service.Spec.ExternalTrafficPolicy))
-		externalTrafficPolicy.Valid = true
-	}
-	var ipFamilyPolicy string
-	if service.Spec.IPFamilyPolicy != nil {
-		ipFamilyPolicy = strcase.Snake(string(*service.Spec.IPFamilyPolicy))
-	}
-	var allocateLoadBalancerNodePorts bool
-	if service.Spec.AllocateLoadBalancerNodePorts != nil {
-		allocateLoadBalancerNodePorts = *service.Spec.AllocateLoadBalancerNodePorts
-	}
-	var loadBalancerClass string
-	if service.Spec.LoadBalancerClass != nil {
-		loadBalancerClass = *service.Spec.LoadBalancerClass
-	}
-	var internalTrafficPolicy string
-	if service.Spec.InternalTrafficPolicy == nil {
-		internalTrafficPolicy = "cluster"
-	} else {
-		internalTrafficPolicy = strcase.Snake(string(*service.Spec.InternalTrafficPolicy))
-	}
-
-	s.Type = strcase.Snake(string(service.Spec.Type))
-	s.ClusterIP = service.Spec.ClusterIP
-	for _, clusterIP := range service.Spec.ClusterIPs {
-		s.ClusterIPs = clusterIP
-	}
-	for _, externalIPs := range service.Spec.ExternalIPs {
-		s.ExternalIPs = externalIPs
-	}
-	s.SessionAffinity = strcase.Snake(string(service.Spec.SessionAffinity))
-	s.ExternalName = service.Spec.ExternalName
-	s.ExternalTrafficPolicy = externalTrafficPolicy
-	s.HealthCheckNodePort = service.Spec.HealthCheckNodePort
-	s.PublishNotReadyAddresses = types.Bool{
-		Bool:  service.Spec.PublishNotReadyAddresses,
-		Valid: true,
-	}
-	for _, ipFamily := range service.Spec.IPFamilies {
-		s.IpFamilies = string(ipFamily)
-	}
-	s.IpFamilyPolicy = ipFamilyPolicy
-	s.AllocateLoadBalancerNodePorts = types.Bool{
-		Bool:  allocateLoadBalancerNodePorts,
-		Valid: true,
-	}
-	s.LoadBalancerClass = loadBalancerClass
-	s.InternalTrafficPolicy = internalTrafficPolicy
-
-	for selectorName, selectorValue := range service.Spec.Selector {
-		selectorUuid := NewUUID(s.Uuid, strings.ToLower(selectorName+":"+selectorValue))
-		s.Selectors = append(s.Selectors, Selector{
-			Uuid:  selectorUuid,
-			Name:  selectorName,
-			Value: selectorValue,
-		})
-		s.ServiceSelectors = append(s.ServiceSelectors, ServiceSelector{
-			ServiceUuid:  s.Uuid,
-			SelectorUuid: selectorUuid,
-		})
-	}
-
-	for _, port := range service.Spec.Ports {
-		var appProtocol string
-		if port.AppProtocol != nil {
-			appProtocol = *port.AppProtocol
-		}
-		s.Ports = append(s.Ports, ServicePort{
-			ServiceUuid: s.Uuid,
-			Name:        port.Name,
-			Protocol:    string(port.Protocol),
-			AppProtocol: appProtocol,
-			Port:        port.Port,
-			TargetPort:  port.TargetPort.String(),
-			NodePort:    port.NodePort,
-		})
-	}
-
 	for _, condition := range service.Status.Conditions {
 		s.Conditions = append(s.Conditions, ServiceCondition{
 			ServiceUuid:        s.Uuid,
@@ -201,6 +121,91 @@ func (s *Service) Obtain(k8s kmetav1.Object) {
 			AnnotationUuid: annotationUuid,
 		})
 	}
+
+	for _, port := range service.Spec.Ports {
+		var appProtocol string
+		if port.AppProtocol != nil {
+			appProtocol = *port.AppProtocol
+		}
+		s.Ports = append(s.Ports, ServicePort{
+			ServiceUuid: s.Uuid,
+			Name:        port.Name,
+			Protocol:    string(port.Protocol),
+			AppProtocol: appProtocol,
+			Port:        port.Port,
+			TargetPort:  port.TargetPort.String(),
+			NodePort:    port.NodePort,
+		})
+	}
+
+	for selectorName, selectorValue := range service.Spec.Selector {
+		selectorUuid := NewUUID(s.Uuid, strings.ToLower(selectorName+":"+selectorValue))
+		s.Selectors = append(s.Selectors, Selector{
+			Uuid:  selectorUuid,
+			Name:  selectorName,
+			Value: selectorValue,
+		})
+		s.ServiceSelectors = append(s.ServiceSelectors, ServiceSelector{
+			ServiceUuid:  s.Uuid,
+			SelectorUuid: selectorUuid,
+		})
+	}
+
+	s.ClusterIP = service.Spec.ClusterIP
+	s.ClusterIPs = strings.Join(service.Spec.ClusterIPs, ", ")
+	s.Type = string(service.Spec.Type)
+	s.ExternalIPs = NewNullableString(strings.Join(service.Spec.ExternalIPs, ", "))
+	s.SessionAffinity = string(service.Spec.SessionAffinity)
+	// TODO(el): Support LoadBalancerSourceRanges?
+	s.ExternalName = NewNullableString(service.Spec.ExternalName)
+	s.ExternalTrafficPolicy = NewNullableString(string(service.Spec.ExternalTrafficPolicy))
+	s.HealthCheckNodePort = sql.NullInt32{
+		Int32: service.Spec.HealthCheckNodePort,
+		Valid: service.Spec.HealthCheckNodePort != 0,
+	}
+	s.PublishNotReadyAddresses = types.Bool{
+		Bool:  service.Spec.PublishNotReadyAddresses,
+		Valid: true,
+	}
+	// TODO(el): Support SessionAffinityConfig?
+	var ipv4 bool
+	var ipv6 bool
+	for _, ipFamily := range service.Spec.IPFamilies {
+		s.IpFamilies.Valid = true
+
+		if ipFamily == kcorev1.IPv4Protocol {
+			ipv4 = true
+		} else if ipFamily == kcorev1.IPv6Protocol {
+			ipv6 = true
+		}
+	}
+	switch {
+	case ipv4 && ipv6:
+		s.IpFamilies.String = "DualStack"
+	case ipv4:
+		s.IpFamilies.String = "IPv4"
+	case ipv6:
+		s.IpFamilies.String = "IPv6"
+	default:
+		s.IpFamilies.String = "Unknown"
+	}
+	s.IpFamilyPolicy = NewNullableString(service.Spec.IPFamilyPolicy)
+	allocateLoadBalancerNodePorts := true
+	if service.Spec.AllocateLoadBalancerNodePorts != nil {
+		allocateLoadBalancerNodePorts = *service.Spec.AllocateLoadBalancerNodePorts
+	}
+	s.AllocateLoadBalancerNodePorts = types.Bool{
+		Bool:  allocateLoadBalancerNodePorts,
+		Valid: true,
+	}
+	s.LoadBalancerClass = NewNullableString(service.Spec.LoadBalancerClass)
+	var internalTrafficPolicy string
+	if service.Spec.InternalTrafficPolicy == nil {
+		internalTrafficPolicy = string(kcorev1.ServiceInternalTrafficPolicyCluster)
+	} else {
+		internalTrafficPolicy = string(*service.Spec.InternalTrafficPolicy)
+	}
+	s.InternalTrafficPolicy = internalTrafficPolicy
 
 	scheme := kruntime.NewScheme()
 	_ = kcorev1.AddToScheme(scheme)

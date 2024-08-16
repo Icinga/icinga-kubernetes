@@ -50,7 +50,7 @@ func (n *Namespace) Obtain(k8s kmetav1.Object) {
 
 	namespace := k8s.(*kcorev1.Namespace)
 
-	n.Phase = strings.ToLower(string(namespace.Status.Phase))
+	n.Phase = string(namespace.Status.Phase)
 
 	for _, condition := range namespace.Status.Conditions {
 		n.Conditions = append(n.Conditions, NamespaceCondition{

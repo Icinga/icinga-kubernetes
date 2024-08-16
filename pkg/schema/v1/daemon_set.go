@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
-	"github.com/icinga/icinga-kubernetes/pkg/strcase"
 	kappsv1 "k8s.io/api/apps/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kruntime "k8s.io/apimachinery/pkg/runtime"
@@ -74,7 +73,7 @@ func (d *DaemonSet) Obtain(k8s kmetav1.Object) {
 
 	daemonSet := k8s.(*kappsv1.DaemonSet)
 
-	d.UpdateStrategy = strcase.Snake(string(daemonSet.Spec.UpdateStrategy.Type))
+	d.UpdateStrategy = string(daemonSet.Spec.UpdateStrategy.Type)
 	d.MinReadySeconds = daemonSet.Spec.MinReadySeconds
 	d.DesiredNumberScheduled = daemonSet.Status.DesiredNumberScheduled
 	d.CurrentNumberScheduled = daemonSet.Status.CurrentNumberScheduled
