@@ -108,6 +108,8 @@ func (pms *PromMetricSync) Nodes(ctx context.Context, informer kcache.SharedInde
 		{
 			"cpu.usage",
 			`avg by (node) (sum by (node, cpu) (rate(node_cpu_seconds_total{mode!~"idle|iowait|steal"}[2m])))`,
+			// TODO(el): Check this alternative.
+			//`avg without (mode,cpu) (1 - rate(node_cpu_seconds_total{mode="idle"}[1m]))`,
 			"",
 		},
 		{
