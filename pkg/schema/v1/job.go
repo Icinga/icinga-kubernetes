@@ -256,7 +256,7 @@ func (j *Job) getIcingaState(job *kbatchv1.Job) (IcingaState, string) {
 	reason := fmt.Sprintf(
 		"Job %s/%s is running since %s with currently %d active, %d completed and %d failed pods. "+
 			"Successful termination requires %s. The back-off limit is %d.",
-		j.Namespace, j.Name, job.Status.StartTime, j.Active, j.Succeeded, j.Failed, completions, job.Spec.BackoffLimit)
+		j.Namespace, j.Name, job.Status.StartTime, j.Active, j.Succeeded, j.Failed, completions, *job.Spec.BackoffLimit)
 
 	if job.Spec.ActiveDeadlineSeconds != nil {
 		reason += fmt.Sprintf(" Deadline for completion is %d.", job.Spec.ActiveDeadlineSeconds)
