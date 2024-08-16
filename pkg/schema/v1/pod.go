@@ -277,7 +277,7 @@ func (p *Pod) getIcingaState(pod *kcorev1.Pod) (IcingaState, string) {
 			return Unknown, ""
 		}
 		// TODO(el): Return Critical if pod.DeletionTimestamp + pod.DeletionGracePeriodSeconds > now.
-		return Ok, fmt.Sprintf("Pod %s/%s is being deleted.", pod.Namespace, pod.Name)
+		return Ok, fmt.Sprintf("Pod %s/%s is being deleted at %s.", pod.Namespace, pod.Name, pod.DeletionTimestamp)
 	}
 
 	if PodIsEvicted(pod) {
