@@ -12,6 +12,7 @@ import (
 	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	ktypes "k8s.io/apimachinery/pkg/types"
+	"net/url"
 	"strings"
 )
 
@@ -164,6 +165,25 @@ func (d *Deployment) Obtain(k8s kmetav1.Object) {
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kappsv1.SchemeGroupVersion)
 	output, _ := kruntime.Encode(codec, deployment)
 	d.Yaml = string(output)
+}
+
+// GetNotificationsEvent implements the notifications.Notifiable interface.
+func (d *Deployment) GetNotificationsEvent(baseUrl *url.URL) map[string]any {
+	deploymentUrl := baseUrl.JoinPath("/deployment")
+	deploymentUrl.RawQuery = fmt.Sprintf("id=%s", d.Uuid)
+
+	return map[string]any{
+		"name":     d.Namespace + "/" + d.Name,
+		"severity": d.IcingaState.ToSeverity(),
+		"message":  d.IcingaStateReason,
+		"url":      deploymentUrl.String(),
+		"tags": map[string]any{
+			"name":      d.Name,
+			"namespace": d.Namespace,
+			"uuid":      d.Uuid.String(),
+			"resource":  "deployment",
+		},
+	}
 }
 
 func (d *Deployment) getIcingaState() (IcingaState, string) {
