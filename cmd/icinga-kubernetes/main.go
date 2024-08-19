@@ -111,7 +111,7 @@ func main() {
 		}
 
 		promApiClient := promv1.NewAPI(promClient)
-		promMetricSync := metrics.NewPromMetricSync(promApiClient, db2)
+		promMetricSync := metrics.NewPromMetricSync(promApiClient, db2, logs.GetChildLogger("prom-metric-sync"))
 
 		g.Go(func() error {
 			return promMetricSync.Nodes(ctx, factory.Core().V1().Nodes().Informer())
@@ -119,8 +119,6 @@ func main() {
 
 		g.Go(func() error {
 			return promMetricSync.Pods(ctx, factory.Core().V1().Pods().Informer())
-
-			//return promMetricSync.Run(ctx)
 		})
 	}
 
