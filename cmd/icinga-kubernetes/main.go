@@ -104,17 +104,30 @@ func main() {
 
 	g, ctx := errgroup.WithContext(context.Background())
 
+	logs, err := logging.NewLoggingFromConfig("Icinga Kubernetes", cfg.Logging)
+	if err != nil {
+		klog.Fatal(errors.Wrap(err, "can't configure logging"))
+	}
+
+	db2, err := igldatabase.NewDbFromConfig(&cfg.Database, logs.GetChildLogger("database"), igldatabase.RetryConnectorCallbacks{})
+	if err != nil {
+		klog.Fatal("IGL_DATABASE: ", err)
+	}
+
+	err = metrics.SyncPrometheusConfig(ctx, db2, &cfg.Prometheus)
+	if err != nil {
+		klog.Error(errors.Wrap(err, "cannot sync prometheus config"))
+	}
+
+	if cfg.Prometheus.Url == "" {
+		err = metrics.RetrievePrometheusConfig(ctx, db2, &cfg.Prometheus)
+		if err != nil {
+			klog.Error(errors.Wrap(err, "cannot retrieve prometheus config"))
+
+		}
+	}
+
 	if cfg.Prometheus.Url != "" {
-		logs, err := logging.NewLoggingFromConfig("Icinga Kubernetes", cfg.Logging)
-		if err != nil {
-			klog.Fatal(errors.Wrap(err, "can't configure logging"))
-		}
-
-		db2, err := igldatabase.NewDbFromConfig(&cfg.Database, logs.GetChildLogger("database"), igldatabase.RetryConnectorCallbacks{})
-		if err != nil {
-			klog.Fatal("IGL_DATABASE: ", err)
-		}
-
 		promClient, err := promapi.NewClient(promapi.Config{Address: cfg.Prometheus.Url})
 		if err != nil {
 			klog.Fatal(errors.Wrap(err, "error creating promClient"))
