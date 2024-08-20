@@ -543,134 +543,95 @@ func (pms *PromMetricSync) Pods(ctx context.Context, informer kcache.SharedIndex
 	return g.Wait()
 }
 
-// Run starts syncing the prometheus metrics to the database.
-// Therefore, it gets a list of the metric queries.
-func (pms *PromMetricSync) Run(ctx context.Context) error {
+func (pms *PromMetricSync) Containers(ctx context.Context, informer kcache.SharedIndexInformer) error {
+	if !kcache.WaitForCacheSync(ctx.Done(), informer.HasSynced) {
+		pms.logger.Fatal("timed out waiting for caches to sync")
+	}
+
+	upsertMetrics := make(chan database.Entity)
+
 	g, ctx := errgroup.WithContext(ctx)
 
-	upsertClusterMetrics := make(chan database.Entity)
-	upsertContainerMetrics := make(chan database.Entity)
-
-	for _, promQuery := range promQueriesCluster {
-		promQuery := promQuery
-
-		g.Go(func() error {
-			for {
-				result, warnings, err := pms.promApiClient.Query(
-					ctx,
-					promQuery.query,
-					time.Time{},
-				)
-				if err != nil {
-					return errors.Wrap(err, "error querying Prometheus")
-				}
-				if len(warnings) > 0 {
-					fmt.Printf("Warnings: %v\n", warnings)
-				}
-				if result == nil {
-					fmt.Println("No results found")
-					continue
-				}
-
-				for _, res := range result.(model.Vector) {
-					if res.Value.String() == "NaN" {
-						continue
-					}
-
-					//clusterId := sha1.Sum([]byte(""))
-
-					name := ""
-
-					if promQuery.nameLabel != "" {
-						name = string(res.Metric[promQuery.nameLabel])
-					}
-
-					newClusterMetric := &schemav1.PrometheusClusterMetric{
-						Timestamp: (res.Timestamp.UnixNano() - res.Timestamp.UnixNano()%(60*1000000000)) / 1000000,
-						Category:  promQuery.metricCategory,
-						Name:      name,
-						Value:     float64(res.Value),
-					}
-
-					select {
-					case upsertClusterMetrics <- newClusterMetric:
-					case <-ctx.Done():
-						return ctx.Err()
-					}
-				}
-
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case <-time.After(time.Second * 55):
-				}
-			}
-		})
-	}
-
-	for _, promQuery := range promQueriesContainer {
-		promQuery := promQuery
-
-		g.Go(func() error {
-			for {
-				result, warnings, err := pms.promApiClient.Query(
-					ctx,
-					promQuery.query,
-					time.Time{},
-				)
-				if err != nil {
-					return errors.Wrap(err, "error querying Prometheus")
-				}
-				if len(warnings) > 0 {
-					fmt.Printf("Warnings: %v\n", warnings)
-				}
-				if result == nil {
-					fmt.Println("No results found")
-					continue
-				}
-
-				for _, res := range result.(model.Vector) {
-					if res.Value.String() == "NaN" {
-						continue
-					}
-
-					//containerId := sha1.Sum([]byte(res.Metric["namespace"] + "/" + res.Metric["pod"] + "/" + res.Metric["container"]))
-
-					name := ""
-
-					if promQuery.nameLabel != "" {
-						name = string(res.Metric[promQuery.nameLabel])
-					}
-
-					newContainerMetric := &schemav1.PrometheusContainerMetric{
-						Timestamp: (res.Timestamp.UnixNano() - res.Timestamp.UnixNano()%(60*1000000000)) / 1000000,
-						Category:  promQuery.metricCategory,
-						Name:      name,
-						Value:     float64(res.Value),
-					}
-
-					select {
-					case upsertContainerMetrics <- newContainerMetric:
-					case <-ctx.Done():
-						return ctx.Err()
-					}
-				}
-
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case <-time.After(time.Second * 55):
-				}
-			}
-		})
-	}
-
 	g.Go(func() error {
-		return database.NewUpsert(pms.db, database.WithStatement(pms.promMetricClusterUpsertStmt(), 5)).Stream(ctx, upsertClusterMetrics)
+		return pms.run(
+			ctx,
+			promQueriesContainer,
+			upsertMetrics,
+			func(query PromQuery, res *model.Sample) database.Entity {
+				if res.Value.String() == "NaN" {
+					return nil
+				}
+
+				//containerId := sha1.Sum([]byte(res.Metric["namespace"] + "/" + res.Metric["pod"] + "/" + res.Metric["container"]))
+
+				name := ""
+
+				if query.nameLabel != "" {
+					name = string(res.Metric[query.nameLabel])
+				}
+
+				newContainerMetric := &schemav1.PrometheusContainerMetric{
+					// TODO uuid
+					Timestamp: (res.Timestamp.UnixNano() - res.Timestamp.UnixNano()%(60*1000000000)) / 1000000,
+					Category:  query.metricCategory,
+					Name:      name,
+					Value:     float64(res.Value),
+				}
+
+				return newContainerMetric
+			},
+		)
 	})
 
 	g.Go(func() error {
-		return database.NewUpsert(pms.db, database.WithStatement(pms.promMetricContainerUpsertStmt(), 5)).Stream(ctx, upsertContainerMetrics)
+		return database.NewUpsert(pms.db, database.WithStatement(pms.promMetricContainerUpsertStmt(), 5)).Stream(ctx, upsertMetrics)
+	})
+
+	return g.Wait()
+}
+
+func (pms *PromMetricSync) Clusters(ctx context.Context, informer kcache.SharedIndexInformer) error {
+	if !kcache.WaitForCacheSync(ctx.Done(), informer.HasSynced) {
+		pms.logger.Fatal("timed out waiting for caches to sync")
+	}
+
+	upsertMetrics := make(chan database.Entity)
+
+	g, ctx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		return pms.run(
+			ctx,
+			promQueriesCluster,
+			upsertMetrics,
+			func(query PromQuery, res *model.Sample) database.Entity {
+				if res.Value.String() == "NaN" {
+					return nil
+				}
+
+				//clusterId := sha1.Sum([]byte(""))
+
+				name := ""
+
+				if query.nameLabel != "" {
+					name = string(res.Metric[query.nameLabel])
+				}
+
+				newClusterMetric := &schemav1.PrometheusClusterMetric{
+					// TODO uuid
+					Timestamp: (res.Timestamp.UnixNano() - res.Timestamp.UnixNano()%(60*1000000000)) / 1000000,
+					Category:  query.metricCategory,
+					Name:      name,
+					Value:     float64(res.Value),
+				}
+
+				return newClusterMetric
+			},
+		)
+	})
+
+	g.Go(func() error {
+		return database.NewUpsert(pms.db, database.WithStatement(pms.promMetricClusterUpsertStmt(), 5)).Stream(ctx, upsertMetrics)
 	})
 
 	return g.Wait()
