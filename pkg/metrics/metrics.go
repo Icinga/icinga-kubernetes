@@ -3,14 +3,17 @@ package metrics
 import (
 	"context"
 	"fmt"
+	"github.com/icinga/icinga-go-library/backoff"
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-go-library/periodic"
+	"github.com/icinga/icinga-go-library/retry"
 	"github.com/icinga/icinga-go-library/types"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
 	"github.com/pkg/errors"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
+	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	kcorev1 "k8s.io/api/core/v1"
 	kcache "k8s.io/client-go/tools/cache"
@@ -340,11 +343,40 @@ func (pms *PromMetricSync) run(
 		promQuery := promQuery
 
 		g.Go(func() error {
+			var result model.Value
+			var warnings v1.Warnings
+			var err error
+
 			for {
-				result, warnings, err := pms.promApiClient.Query(
+				err := retry.WithBackoff(
 					ctx,
-					promQuery.query,
-					time.Time{},
+					func(ctx context.Context) error {
+						result, warnings, err = pms.promApiClient.Query(
+							ctx,
+							promQuery.query,
+							time.Time{},
+						)
+
+						return err
+					},
+					retry.Retryable,
+					backoff.NewExponentialWithJitter(1*time.Millisecond, 1*time.Second),
+					retry.Settings{
+						Timeout: retry.DefaultTimeout,
+						OnRetryableError: func(_ time.Duration, _ uint64, err, lastErr error) {
+							if lastErr == nil || err.Error() != lastErr.Error() {
+								pms.logger.Warnw("Can't execute prometheus query. Retrying", zap.Error(err))
+							}
+						},
+						OnSuccess: func(elapsed time.Duration, attempt uint64, lastErr error) {
+							if attempt > 1 {
+								pms.logger.Infow("Query retried successfully after error",
+									zap.Duration("after", elapsed),
+									zap.Uint64("attempts", attempt),
+									zap.NamedError("recovered_error", lastErr))
+							}
+						},
+					},
 				)
 				if err != nil {
 					return errors.Wrap(err, "error querying Prometheus")
