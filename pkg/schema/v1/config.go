@@ -13,4 +13,5 @@ const (
 	ConfigKeyNotificationsSourceID ConfigKey = "notifications.source_id"
 	ConfigKeyNotificationsUsername ConfigKey = "notifications.username"
 	ConfigKeyNotificationsPassword ConfigKey = "notifications.password"
+	ConfigKeyPrometheusUrl         ConfigKey = "prometheus.url"
 )
