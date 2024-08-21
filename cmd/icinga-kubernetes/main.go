@@ -126,6 +126,13 @@ func main() {
 			klog.Error(errors.Wrap(err, "cannot retrieve prometheus config"))
 
 		}
+
+		if cfg.Prometheus.Url == "" {
+			err = metrics.AutoDetectPrometheus(ctx, clientset, &cfg.Prometheus)
+			if err != nil {
+				klog.Error(errors.Wrap(err, "cannot auto-detect prometheus"))
+			}
+		}
 	}
 
 	if cfg.Prometheus.Url != "" {

@@ -2,9 +2,12 @@ package metrics
 
 import (
 	"context"
+	"fmt"
 	"github.com/icinga/icinga-go-library/database"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
 	"github.com/pkg/errors"
+	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 )
 
 // PrometheusConfig defines Prometheus configuration.
@@ -49,6 +52,31 @@ func RetrievePrometheusConfig(ctx context.Context, db *database.DB, config *Prom
 			config.Url = c.Value
 		}
 	}
+
+	return nil
+}
+
+func AutoDetectPrometheus(ctx context.Context, clientset *kubernetes.Clientset, config *PrometheusConfig) error {
+	services, err := clientset.CoreV1().Services("monitoring").List(ctx, kmetav1.ListOptions{
+		LabelSelector: "app.kubernetes.io/component=server",
+	})
+	if err != nil {
+		return errors.Wrap(err, "cannot list Prometheus services")
+	}
+
+	if len(services.Items) == 0 {
+		return errors.New("no Prometheus service found")
+	}
+
+	if len(services.Items) > 1 {
+		return errors.New("multiple Prometheus services found")
+	}
+
+	config.Url = fmt.Sprintf(
+		"http://%s:%d",
+		services.Items[0].Spec.ClusterIP,
+		services.Items[0].Spec.Ports[0].Port,
+	)
 
 	return nil
 }
