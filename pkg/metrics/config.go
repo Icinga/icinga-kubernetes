@@ -9,7 +9,9 @@ import (
 
 // PrometheusConfig defines Prometheus configuration.
 type PrometheusConfig struct {
-	Url string `yaml:"url"`
+	Url      string `yaml:"url"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
 }
 
 // Validate checks constraints in the supplied Prometheus configuration and returns an error if they are violated.

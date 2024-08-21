@@ -27,6 +27,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	kclientcmd "k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -128,9 +129,21 @@ func main() {
 	}
 
 	if cfg.Prometheus.Url != "" {
-		promClient, err := promapi.NewClient(promapi.Config{Address: cfg.Prometheus.Url})
+		var basicAuthTransport http.RoundTripper
+
+		if cfg.Prometheus.Username != "" && cfg.Prometheus.Password != "" {
+			basicAuthTransport = &internal.BasicAuthTransport{
+				Username: cfg.Prometheus.Username,
+				Password: cfg.Prometheus.Password,
+			}
+		}
+
+		promClient, err := promapi.NewClient(promapi.Config{
+			Address:      cfg.Prometheus.Url,
+			RoundTripper: basicAuthTransport,
+		})
 		if err != nil {
-			klog.Fatal(errors.Wrap(err, "error creating promClient"))
+			klog.Fatal(errors.Wrap(err, "error creating Prometheus client"))
 		}
 
 		promApiClient := promv1.NewAPI(promClient)
