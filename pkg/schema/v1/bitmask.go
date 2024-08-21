@@ -31,6 +31,10 @@ func (b *Bitmask[T]) Scan(src interface{}) error {
 
 // Value implements the driver.Valuer interface.
 func (b Bitmask[T]) Value() (driver.Value, error) {
+	if b.bitmask == 0 {
+		return nil, nil
+	}
+
 	return int64(b.bitmask), nil
 }
 

@@ -39,9 +39,9 @@ type Pvc struct {
 	DesiredAccessModes Bitmask[kpersistentVolumeAccessModesSize]
 	ActualAccessModes  Bitmask[kpersistentVolumeAccessModesSize]
 	MinimumCapacity    sql.NullInt64
-	ActualCapacity     int64
+	ActualCapacity     sql.NullInt64
 	Phase              string
-	VolumeName         string
+	VolumeName         sql.NullString
 	VolumeMode         string
 	StorageClass       sql.NullString
 	Yaml               string
@@ -83,15 +83,20 @@ func (p *Pvc) Obtain(k8s kmetav1.Object) {
 
 	p.DesiredAccessModes = persistentVolumeAccessModes.Bitmask(pvc.Spec.AccessModes...)
 	p.ActualAccessModes = persistentVolumeAccessModes.Bitmask(pvc.Status.AccessModes...)
-	if requestsStorage, ok := pvc.Spec.Resources.Requests[kcorev1.ResourceStorage]; ok {
+	if storageRequest, ok := pvc.Spec.Resources.Requests[kcorev1.ResourceStorage]; ok {
 		p.MinimumCapacity = sql.NullInt64{
-			Int64: requestsStorage.MilliValue(),
+			Int64: storageRequest.MilliValue(),
 			Valid: true,
 		}
 	}
-	p.ActualCapacity = pvc.Status.Capacity.Storage().MilliValue()
+	if actualStorage, ok := pvc.Status.Capacity[kcorev1.ResourceStorage]; ok {
+		p.ActualCapacity = sql.NullInt64{
+			Int64: actualStorage.MilliValue(),
+			Valid: true,
+		}
+	}
 	p.Phase = string(pvc.Status.Phase)
-	p.VolumeName = pvc.Spec.VolumeName
+	p.VolumeName = NewNullableString(pvc.Spec.VolumeName)
 	var volumeMode string
 	if pvc.Spec.VolumeMode != nil {
 		volumeMode = string(*pvc.Spec.VolumeMode)
