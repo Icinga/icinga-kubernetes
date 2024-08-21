@@ -767,7 +767,6 @@ CREATE TABLE secret (
   resource_version varchar(255) NOT NULL,
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   immutable enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
-  yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
@@ -776,12 +775,6 @@ CREATE TABLE secret_annotation (
   secret_uuid binary(16) NOT NULL,
   annotation_uuid binary(16) NOT NULL,
   PRIMARY KEY (secret_uuid, annotation_uuid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
-CREATE TABLE secret_data (
-  secret_uuid binary(16) NOT NULL,
-  data_uuid binary(16) NOT NULL,
-  PRIMARY KEY (secret_uuid, data_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE secret_label (
