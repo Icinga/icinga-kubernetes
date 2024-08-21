@@ -5,27 +5,16 @@ import (
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	kruntime "k8s.io/apimachinery/pkg/runtime"
-	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
-	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"strings"
 )
 
 type ConfigMap struct {
 	Meta
 	Immutable            types.Bool
-	Yaml                 string
-	Data                 []Data                `db:"-"`
-	ConfigMapsData       []ConfigMapData       `db:"-"`
 	Labels               []Label               `db:"-"`
 	ConfigMapLabels      []ConfigMapLabel      `db:"-"`
 	Annotations          []Annotation          `db:"-"`
 	ConfigMapAnnotations []ConfigMapAnnotation `db:"-"`
-}
-
-type ConfigMapData struct {
-	ConfigMapUuid types.UUID
-	DataUuid      types.UUID
 }
 
 type ConfigMapLabel struct {
@@ -56,19 +45,6 @@ func (c *ConfigMap) Obtain(k8s kmetav1.Object) {
 		Valid: true,
 	}
 
-	for dataName, dataValue := range configMap.Data {
-		dataUuid := NewUUID(c.Uuid, strings.ToLower(dataName+":"+dataValue))
-		c.Data = append(c.Data, Data{
-			Uuid:  dataUuid,
-			Name:  dataName,
-			Value: dataValue,
-		})
-		c.ConfigMapsData = append(c.ConfigMapsData, ConfigMapData{
-			ConfigMapUuid: c.Uuid,
-			DataUuid:      dataUuid,
-		})
-	}
-
 	for labelName, labelValue := range configMap.Labels {
 		labelUuid := NewUUID(c.Uuid, strings.ToLower(labelName+":"+labelValue))
 		c.Labels = append(c.Labels, Label{
@@ -94,12 +70,6 @@ func (c *ConfigMap) Obtain(k8s kmetav1.Object) {
 			AnnotationUuid: annotationUuid,
 		})
 	}
-
-	scheme := kruntime.NewScheme()
-	_ = kcorev1.AddToScheme(scheme)
-	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kcorev1.SchemeGroupVersion)
-	output, _ := kruntime.Encode(codec, configMap)
-	c.Yaml = string(output)
 }
 
 func (c *ConfigMap) Relations() []database.Relation {
@@ -108,8 +78,6 @@ func (c *ConfigMap) Relations() []database.Relation {
 	return []database.Relation{
 		database.HasMany(c.Labels, database.WithoutCascadeDelete()),
 		database.HasMany(c.ConfigMapLabels, fk),
-		database.HasMany(c.Data, database.WithoutCascadeDelete()),
-		database.HasMany(c.ConfigMapsData, fk),
 		database.HasMany(c.ConfigMapAnnotations, fk),
 		database.HasMany(c.Annotations, database.WithoutCascadeDelete()),
 	}

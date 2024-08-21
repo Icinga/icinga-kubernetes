@@ -26,7 +26,6 @@ CREATE TABLE config_map (
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
   immutable enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
-  yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
@@ -35,12 +34,6 @@ CREATE TABLE config_map_annotation (
   config_map_uuid binary(16) NOT NULL,
   annotation_uuid binary(16) NOT NULL,
   PRIMARY KEY (config_map_uuid, annotation_uuid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
-CREATE TABLE config_map_data (
-  config_map_uuid binary(16) NOT NULL,
-  data_uuid binary(16) NOT NULL,
-  PRIMARY KEY (config_map_uuid, data_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE config_map_label (
