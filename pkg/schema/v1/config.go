@@ -10,7 +10,10 @@ type Config struct {
 type ConfigKey string
 
 const (
-	ConfigKeyNotificationsSourceID ConfigKey = "notifications.source_id"
-	ConfigKeyNotificationsUsername ConfigKey = "notifications.username"
-	ConfigKeyNotificationsPassword ConfigKey = "notifications.password"
+	ConfigKeyNotificationsSourceID         ConfigKey = "notifications.source_id"
+	ConfigKeyNotificationsUsername         ConfigKey = "notifications.username"
+	ConfigKeyNotificationsPassword         ConfigKey = "notifications.password"
+	ConfigKeyNotificationsUrl              ConfigKey = "notifications.url"
+	ConfigKeyNotificationsKubernetesWebUrl ConfigKey = "notifications.kubernetes_web_url"
+	ConfigKeyNotificationsLocked           ConfigKey = "notifications.locked"
 )
