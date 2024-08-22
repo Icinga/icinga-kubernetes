@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-kubernetes/internal"
-	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/pkg/errors"
 	"io"
 	"k8s.io/klog/v2"
@@ -20,12 +20,12 @@ type Notifiable interface {
 }
 
 type Client struct {
-	db     *database.Database
+	db     *database.DB
 	client http.Client
 	Config
 }
 
-func NewClient(db *database.Database, c Config) *Client {
+func NewClient(db *database.DB, c Config) *Client {
 	return &Client{db: db, client: http.Client{}, Config: c}
 }
 

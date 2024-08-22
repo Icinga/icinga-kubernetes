@@ -3,13 +3,13 @@ package notifications
 import (
 	"context"
 	"fmt"
-	"github.com/icinga/icinga-kubernetes/pkg/database"
+	"github.com/icinga/icinga-go-library/database"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
 	"github.com/pkg/errors"
 )
 
 // SyncSourceConfig synchronises the Icinga Notifications credentials from the YAML config to the database.
-func SyncSourceConfig(ctx context.Context, db *database.Database, config *Config) error {
+func SyncSourceConfig(ctx context.Context, db *database.DB, config *Config) error {
 	var configPairs []*schemav1.Config
 
 	if config.Url != "" {
@@ -23,7 +23,7 @@ func SyncSourceConfig(ctx context.Context, db *database.Database, config *Config
 
 		stmt := fmt.Sprintf(
 			`DELETE FROM %s WHERE %s IN (?)`,
-			db.QuoteIdentifier(database.TableName(&schemav1.Config{})),
+			database.TableName(&schemav1.Config{}),
 			"`key`",
 		)
 
@@ -45,7 +45,7 @@ func SyncSourceConfig(ctx context.Context, db *database.Database, config *Config
 }
 
 // RetrieveConfig retrieves the Icinga Notifications config from the database. The username is "source-<sourceID>".
-func RetrieveConfig(ctx context.Context, db *database.Database, config *Config) error {
+func RetrieveConfig(ctx context.Context, db *database.DB, config *Config) error {
 	var dbConfig []*schemav1.Config
 	if err := db.SelectContext(ctx, &dbConfig, db.BuildSelectStmt(&schemav1.Config{}, &schemav1.Config{})); err != nil {
 		return errors.Wrap(err, "cannot fetch Icinga Notifications config from DB")
