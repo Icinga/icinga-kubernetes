@@ -20,7 +20,7 @@ type Event struct {
 	Note                string
 	Type                string
 	ReferenceKind       string
-	ReferenceNamespace  string
+	ReferenceNamespace  sql.NullString
 	ReferenceName       string
 	FirstSeen           types.UnixMilli
 	LastSeen            types.UnixMilli
@@ -45,7 +45,7 @@ func (e *Event) Obtain(k8s kmetav1.Object) {
 	e.Note = event.Note
 	e.Type = event.Type
 	e.ReferenceKind = event.Regarding.Kind
-	e.ReferenceNamespace = event.Regarding.Namespace
+	e.ReferenceNamespace = NewNullableString(event.Regarding.Namespace)
 	e.ReferenceName = event.Regarding.Name
 
 	if !event.EventTime.Time.IsZero() {

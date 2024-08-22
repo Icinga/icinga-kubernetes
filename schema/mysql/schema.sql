@@ -284,7 +284,7 @@ CREATE TABLE event (
   note text NOT NULL,
   type varchar(255) NOT NULL,
   reference_kind varchar(255) NOT NULL,
-  reference_namespace varchar(63) NOT NULL,
+  reference_namespace varchar(63) NULL DEFAULT NULL,
   reference_name varchar(253) NOT NULL,
   first_seen bigint unsigned NOT NULL,
   last_seen bigint unsigned NOT NULL,
