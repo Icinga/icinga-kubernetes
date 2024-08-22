@@ -3,6 +3,8 @@ package database
 import (
 	"context"
 	"fmt"
+	"github.com/icinga/icinga-go-library/backoff"
+	"github.com/icinga/icinga-go-library/retry"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/com"
 	"time"
@@ -39,31 +41,58 @@ func (db *Database) CleanupOlderThan(
 	count uint64, olderThan time.Time, onSuccess ...OnSuccess[struct{}],
 ) (uint64, error) {
 	var counter com.Counter
-	defer db.periodicLog(ctx, stmt.Build(db.DriverName(), 0), &counter).Stop()
+
+	q := db.Rebind(stmt.Build(db.DriverName(), count))
+
+	defer db.periodicLog(ctx, q, &counter).Stop()
 
 	for {
-		q := db.Rebind(stmt.Build(db.DriverName(), count))
-		rs, err := db.NamedExecContext(ctx, q, cleanupWhere{
-			Time: types.UnixMilli(olderThan),
-		})
-		if err != nil {
-			return 0, CantPerformQuery(err, q)
-		}
+		var rowsDeleted int64
 
-		n, err := rs.RowsAffected()
+		err := retry.WithBackoff(
+			ctx,
+			func(ctx context.Context) error {
+				rs, err := db.NamedExecContext(ctx, q, cleanupWhere{
+					Time: types.UnixMilli(olderThan),
+				})
+				if err != nil {
+					return CantPerformQuery(err, q)
+				}
+
+				rowsDeleted, err = rs.RowsAffected()
+
+				return err
+			},
+			retry.Retryable,
+			backoff.NewExponentialWithJitter(1*time.Millisecond, 1*time.Second),
+			retry.Settings{
+				Timeout: retry.DefaultTimeout,
+				OnRetryableError: func(_ time.Duration, _ uint64, err, lastErr error) {
+					if lastErr == nil || err.Error() != lastErr.Error() {
+						db.log.Info("Can't execute query. Retrying", "error", err)
+					}
+				},
+				OnSuccess: func(elapsed time.Duration, attempt uint64, lastErr error) {
+					if attempt > 1 {
+						db.log.Info("Query retried successfully after error",
+							"after", elapsed, "attempt", attempt, "recovered_error", lastErr)
+					}
+				},
+			},
+		)
 		if err != nil {
 			return 0, err
 		}
 
-		counter.Add(uint64(n))
+		counter.Add(uint64(rowsDeleted))
 
 		for _, onSuccess := range onSuccess {
-			if err := onSuccess(ctx, make([]struct{}, n)); err != nil {
+			if err := onSuccess(ctx, make([]struct{}, rowsDeleted)); err != nil {
 				return 0, err
 			}
 		}
 
-		if n < int64(count) {
+		if rowsDeleted < int64(count) {
 			break
 		}
 	}
