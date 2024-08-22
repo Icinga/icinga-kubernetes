@@ -94,27 +94,35 @@ func main() {
 		}
 	}
 
-	var nclient *notifications.Client
-	if err := notifications.SyncSourceConfig(context.Background(), db, &cfg.Notifications); err != nil {
-		klog.Fatal(err)
+	logs, err := logging.NewLoggingFromConfig("Icinga Kubernetes", cfg.Logging)
+	if err != nil {
+		klog.Fatal(errors.Wrap(err, "can't configure logging"))
 	}
-	if cfg.Notifications.Url != "" {
-		nclient = notifications.NewClient(db, cfg.Notifications)
+
+	db2, err := igldatabase.NewDbFromConfig(&cfg.Database, logs.GetChildLogger("database"), igldatabase.RetryConnectorCallbacks{})
+	if err != nil {
+		klog.Fatal("IGL_DATABASE: ", err)
 	}
 
 	g, ctx := errgroup.WithContext(context.Background())
 
+	var nclient *notifications.Client
+	if err := notifications.SyncSourceConfig(ctx, db, &cfg.Notifications); err != nil {
+		klog.Fatal(err)
+	}
+
+	if cfg.Notifications.Url == "" {
+		err = notifications.RetrieveConfig(ctx, db, &cfg.Notifications)
+		if err != nil {
+			klog.Error(errors.Wrap(err, "cannot retrieve Icinga Notifications config"))
+		}
+	}
+
+	if cfg.Notifications.Url != "" {
+		nclient = notifications.NewClient(db, cfg.Notifications)
+	}
+
 	if cfg.Prometheus.Url != "" {
-		logs, err := logging.NewLoggingFromConfig("Icinga Kubernetes", cfg.Logging)
-		if err != nil {
-			klog.Fatal(errors.Wrap(err, "can't configure logging"))
-		}
-
-		db2, err := igldatabase.NewDbFromConfig(&cfg.Database, logs.GetChildLogger("database"), igldatabase.RetryConnectorCallbacks{})
-		if err != nil {
-			klog.Fatal("IGL_DATABASE: ", err)
-		}
-
 		promClient, err := promapi.NewClient(promapi.Config{Address: cfg.Prometheus.Url})
 		if err != nil {
 			klog.Fatal(errors.Wrap(err, "error creating promClient"))
