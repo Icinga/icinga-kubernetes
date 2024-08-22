@@ -4,9 +4,11 @@ import (
 	"context"
 	"flag"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/google/uuid"
 	"github.com/icinga/icinga-go-library/config"
 	igldatabase "github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/logging"
+	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/internal"
 	"github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
@@ -93,6 +95,40 @@ func main() {
 	}
 
 	g, ctx := errgroup.WithContext(context.Background())
+
+	if _, err := db.ExecContext(ctx, "DELETE FROM kubernetes_instance"); err != nil {
+		klog.Fatal(errors.Wrap(err, "can't delete instance"))
+	}
+	// ,omitempty
+	var kubernetesVersion string
+	var kubernetesHeartbeat time.Time
+	instanceId := uuid.New()
+	defer periodic.Start(ctx, 55*time.Second, func(tick periodic.Tick) {
+		version, err := clientset.Discovery().ServerVersion()
+		if err == nil {
+			kubernetesVersion = version.GitVersion
+			kubernetesHeartbeat = tick.Time
+		}
+
+		instance := schemav1.Instance{
+			Uuid:                instanceId[:],
+			Version:             internal.Version.Version,
+			KubernetesVersion:   schemav1.NewNullableString(kubernetesVersion),
+			KubernetesHeartbeat: types.UnixMilli(kubernetesHeartbeat),
+			KubernetesApiReachable: types.Bool{
+				Bool:  err == nil,
+				Valid: true,
+			},
+			Message:   schemav1.NewNullableString(err),
+			Heartbeat: types.UnixMilli(tick.Time),
+		}
+
+		stmt, _ := db.BuildUpsertStmt(instance)
+
+		if _, err := db.NamedExecContext(ctx, stmt, instance); err != nil {
+			klog.Error(errors.Wrap(err, "can't update instance"))
+		}
+	}, periodic.Immediate()).Stop()
 
 	if cfg.Prometheus.Url != "" {
 		logs, err := logging.NewLoggingFromConfig("Icinga Kubernetes", cfg.Logging)

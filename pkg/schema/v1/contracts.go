@@ -93,6 +93,14 @@ func NewNullableString(s any) sql.NullString {
 		return sql.NullString{Valid: false, String: ""}
 	}
 
+	if v, ok := s.(error); ok {
+		return sql.NullString{Valid: true, String: v.Error()}
+	}
+
+	if s == nil {
+		return sql.NullString{Valid: false, String: ""}
+	}
+
 	v := reflect.ValueOf(s)
 	if v.Kind() == reflect.Pointer {
 		if v.IsNil() {

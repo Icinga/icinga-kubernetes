@@ -900,9 +900,20 @@ CREATE TABLE stateful_set_owner(
   PRIMARY KEY (stateful_set_uuid, owner_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+CREATE TABLE kubernetes_instance (
+  uuid binary(16) NOT NULL,
+  version varchar(255) NOT NULL,
+  kubernetes_version varchar(255) NOT NULL,
+  kubernetes_heartbeat bigint unsigned NULL DEFAULT NULL,
+  kubernetes_api_reachable enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
+  message text NULL DEFAULT NULL,
+  heartbeat bigint unsigned NOT NULL,
+  PRIMARY KEY (uuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin ROW_FORMAT=DYNAMIC;
+
 CREATE TABLE kubernetes_schema (
   id int unsigned NOT NULL AUTO_INCREMENT,
-  version varchar(64) NOT NULL,
+  version varchar(255) NOT NULL,
   timestamp bigint unsigned NOT NULL,
   success enum('n', 'y') DEFAULT NULL,
   reason text DEFAULT NULL,
