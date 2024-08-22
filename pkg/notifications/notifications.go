@@ -3,73 +3,84 @@ package notifications
 import (
 	"context"
 	"fmt"
-	"github.com/google/uuid"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
 	"github.com/pkg/errors"
 )
 
-// SyncSourceConfig synchronises the Icinga Notifications credentials from the YAML config with the database.
+// SyncSourceConfig synchronises the Icinga Notifications credentials from the YAML config to the database.
 func SyncSourceConfig(ctx context.Context, db *database.Database, config *Config) error {
-	var typPtr *schemav1.Config
+	var configPairs []*schemav1.Config
 
-	if IsAutoCreationEnabled(config) {
-		username, password, err := retrieveCredentials(ctx, db)
-		if err != nil {
-			return err
+	if config.Url != "" {
+		configPairs = []*schemav1.Config{
+			{Key: schemav1.ConfigKeyNotificationsUrl, Value: config.Url},
+			{Key: schemav1.ConfigKeyNotificationsKubernetesWebUrl, Value: config.KubernetesWebUrl},
+			{Key: schemav1.ConfigKeyNotificationsUsername, Value: config.Username},
+			{Key: schemav1.ConfigKeyNotificationsPassword, Value: config.Password},
+			{Key: schemav1.ConfigKeyNotificationsLocked, Value: "true"},
 		}
 
-		if username != "" && password != "" {
-			return nil
-		}
-
-		configPairs := []*schemav1.Config{
-			{Key: schemav1.ConfigKeyNotificationsUsername, Value: "Icinga for Kubernetes"},
-			{Key: schemav1.ConfigKeyNotificationsPassword, Value: uuid.NewString()},
-		}
-
-		stmt, _ := db.BuildUpsertStmt(typPtr)
-		if _, err := db.NamedExecContext(ctx, stmt, configPairs); err != nil {
-			return errors.Wrap(err, "cannot upsert Icinga Notifications credentials")
-		}
-	} else {
 		stmt := fmt.Sprintf(
-			"DELETE FROM %s WHERE %[2]s = :password OR %[2]s = :username",
-			db.QuoteIdentifier(database.TableName(typPtr)),
-			db.QuoteIdentifier("key"))
+			`DELETE FROM %s WHERE %s IN (?)`,
+			db.QuoteIdentifier(database.TableName(&schemav1.Config{})),
+			"`key`",
+		)
 
-		// We purposefully do not delete the schemav1.ConfigKeyNotificationsSourceID key as it is used by
-		// Icinga Notifications Web to delete the actual notification source and afterwards it'll delete it as well.
-		args := map[string]any{
-			"password": schemav1.ConfigKeyNotificationsPassword,
-			"username": schemav1.ConfigKeyNotificationsUsername,
-		}
-		if _, err := db.NamedExecContext(ctx, stmt, args); err != nil {
+		if _, err := db.ExecContext(ctx, stmt, schemav1.ConfigKeyNotificationsSourceID); err != nil {
 			return errors.Wrap(err, "cannot delete Icinga Notifications credentials")
 		}
+	} else {
+		configPairs = []*schemav1.Config{
+			{Key: schemav1.ConfigKeyNotificationsLocked, Value: "false"},
+		}
+	}
+
+	stmt, _ := db.BuildUpsertStmt(&schemav1.Config{})
+	if _, err := db.NamedExecContext(ctx, stmt, configPairs); err != nil {
+		return errors.Wrap(err, "cannot upsert Icinga Notifications credentials")
 	}
 
 	return nil
 }
 
-// retrieveCredentials retrieves the Icinga Notifications credentials from the database.
-func retrieveCredentials(ctx context.Context, db *database.Database) (string, string, error) {
-	var typPtr *schemav1.Config
-
+// RetrieveConfig retrieves the Icinga Notifications config from the database. The username is "source-<sourceID>".
+func RetrieveConfig(ctx context.Context, db *database.Database, config *Config) error {
 	var dbConfig []*schemav1.Config
-	if err := db.SelectContext(ctx, &dbConfig, db.BuildSelectStmt(typPtr, typPtr)); err != nil {
-		return "", "", errors.Wrap(err, "cannot fetch Icinga Notifications credentials from DB")
+	if err := db.SelectContext(ctx, &dbConfig, db.BuildSelectStmt(&schemav1.Config{}, &schemav1.Config{})); err != nil {
+		return errors.Wrap(err, "cannot fetch Icinga Notifications config from DB")
 	}
 
-	var username, password string
+	var locked bool
+
 	for _, pair := range dbConfig {
-		switch pair.Key {
-		case schemav1.ConfigKeyNotificationsPassword:
-			password = pair.Value
-		case schemav1.ConfigKeyNotificationsSourceID:
-			username = "source-" + pair.Value
+		if pair.Key == schemav1.ConfigKeyNotificationsLocked {
+			if pair.Value == "true" {
+				locked = true
+			} else {
+				locked = false
+			}
 		}
 	}
 
-	return username, password, nil
+	for _, pair := range dbConfig {
+		switch pair.Key {
+		case schemav1.ConfigKeyNotificationsUrl:
+			config.Url = pair.Value
+		case schemav1.ConfigKeyNotificationsKubernetesWebUrl:
+			config.KubernetesWebUrl = pair.Value
+		case schemav1.ConfigKeyNotificationsPassword:
+			config.Password = pair.Value
+		case schemav1.ConfigKeyNotificationsSourceID:
+			if !locked {
+				config.Username = "source-" + pair.Value
+			}
+		case schemav1.ConfigKeyNotificationsUsername:
+			if locked {
+				config.Username = pair.Value
+			}
+		}
+	}
+
+	return nil
 }

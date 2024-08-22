@@ -37,8 +37,3 @@ func (c *Config) Validate() error {
 
 	return nil
 }
-
-// IsAutoCreationEnabled we are allowed to send events the Icinga Notifications daemon.
-func IsAutoCreationEnabled(c *Config) bool {
-	return c.Url != "" && c.Username == "" && c.Password == ""
-}

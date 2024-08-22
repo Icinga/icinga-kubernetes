@@ -29,18 +29,7 @@ func NewClient(db *database.Database, c Config) *Client {
 	return &Client{db: db, client: http.Client{}, Config: c}
 }
 
-func (c *Client) ProcessEvent(ctx context.Context, notifiable Notifiable) error {
-	var username, password string
-	if !IsAutoCreationEnabled(&c.Config) {
-		username = c.Config.Username
-		password = c.Config.Password
-	} else {
-		var err error
-		if username, password, err = retrieveCredentials(ctx, c.db); err != nil {
-			return err
-		}
-	}
-
+func (c *Client) ProcessEvent(notifiable Notifiable) error {
 	baseUrl, err := url.Parse(c.Config.KubernetesWebUrl)
 	if err != nil {
 		return errors.Wrapf(err, "cannot parse Icinga for Kubernetes Web URL: %q", c.Config.KubernetesWebUrl)
@@ -56,7 +45,7 @@ func (c *Client) ProcessEvent(ctx context.Context, notifiable Notifiable) error 
 		return errors.Wrap(err, "cannot create new notifications http request")
 	}
 
-	r.SetBasicAuth(username, password)
+	r.SetBasicAuth(c.Config.Username, c.Config.Password)
 	r.Header.Set("User-Agent", "icinga-kubernetes/"+internal.Version.Version)
 	r.Header.Add("Content-Type", "application/json")
 
@@ -85,7 +74,7 @@ func (c *Client) Stream(ctx context.Context, entities <-chan any) error {
 				return nil
 			}
 
-			if err := c.ProcessEvent(ctx, entity.(Notifiable)); err != nil {
+			if err := c.ProcessEvent(entity.(Notifiable)); err != nil {
 				klog.Error(err)
 			}
 		case <-ctx.Done():
