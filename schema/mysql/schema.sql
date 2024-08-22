@@ -158,7 +158,7 @@ CREATE TABLE daemon_set_label (
   PRIMARY KEY (daemon_set_uuid, label_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
-CREATE TABLE daemon_set_owner(
+CREATE TABLE daemon_set_owner (
   daemon_set_uuid binary(16) NOT NULL,
   owner_uuid binary(16) NOT NULL,
   kind varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -215,7 +215,7 @@ CREATE TABLE deployment_label (
   PRIMARY KEY (deployment_uuid, label_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
-CREATE TABLE deployment_owner(
+CREATE TABLE deployment_owner (
   deployment_uuid binary(16) NOT NULL,
   owner_uuid binary(16) NOT NULL,
   kind varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -889,7 +889,7 @@ CREATE TABLE stateful_set_label (
   PRIMARY KEY (stateful_set_uuid, label_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
-CREATE TABLE stateful_set_owner(
+CREATE TABLE stateful_set_owner (
   stateful_set_uuid binary(16) NOT NULL,
   owner_uuid binary(16) NOT NULL,
   kind varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
