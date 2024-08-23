@@ -27,6 +27,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	kclientcmd "k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -104,20 +105,46 @@ func main() {
 
 	g, ctx := errgroup.WithContext(context.Background())
 
+	logs, err := logging.NewLoggingFromConfig("Icinga Kubernetes", cfg.Logging)
+	if err != nil {
+		klog.Fatal(errors.Wrap(err, "can't configure logging"))
+	}
+
+	db2, err := igldatabase.NewDbFromConfig(&cfg.Database, logs.GetChildLogger("database"), igldatabase.RetryConnectorCallbacks{})
+	if err != nil {
+		klog.Fatal("IGL_DATABASE: ", err)
+	}
+
+	err = metrics.SyncPrometheusConfig(ctx, db2, &cfg.Prometheus)
+	if err != nil {
+		klog.Error(errors.Wrap(err, "cannot sync prometheus config"))
+	}
+
+	if cfg.Prometheus.Url == "" {
+		if cfg.Prometheus.Url == "" {
+			err = metrics.AutoDetectPrometheus(ctx, clientset, &cfg.Prometheus)
+			if err != nil {
+				klog.Error(errors.Wrap(err, "cannot auto-detect prometheus"))
+			}
+		}
+	}
+
 	if cfg.Prometheus.Url != "" {
-		logs, err := logging.NewLoggingFromConfig("Icinga Kubernetes", cfg.Logging)
-		if err != nil {
-			klog.Fatal(errors.Wrap(err, "can't configure logging"))
+		var basicAuthTransport http.RoundTripper
+
+		if cfg.Prometheus.Username != "" && cfg.Prometheus.Password != "" {
+			basicAuthTransport = &internal.BasicAuthTransport{
+				Username: cfg.Prometheus.Username,
+				Password: cfg.Prometheus.Password,
+			}
 		}
 
-		db2, err := igldatabase.NewDbFromConfig(&cfg.Database, logs.GetChildLogger("database"), igldatabase.RetryConnectorCallbacks{})
+		promClient, err := promapi.NewClient(promapi.Config{
+			Address:      cfg.Prometheus.Url,
+			RoundTripper: basicAuthTransport,
+		})
 		if err != nil {
-			klog.Fatal("IGL_DATABASE: ", err)
-		}
-
-		promClient, err := promapi.NewClient(promapi.Config{Address: cfg.Prometheus.Url})
-		if err != nil {
-			klog.Fatal(errors.Wrap(err, "error creating promClient"))
+			klog.Fatal(errors.Wrap(err, "error creating Prometheus client"))
 		}
 
 		promApiClient := promv1.NewAPI(promClient)
