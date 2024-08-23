@@ -15,6 +15,7 @@ import (
 	kinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	kclientcmd "k8s.io/client-go/tools/clientcmd"
+	"os"
 )
 
 func main() {
@@ -34,7 +35,29 @@ func main() {
 		logging.Fatal(errors.Wrap(err, "can't parse flags"))
 	}
 
-	cfg, err := config.FromYAMLFile[internal.Config](flags.Config)
+	cfg := &internal.Config{}
+	configFile := flags.Config
+
+	if ikConfig, inCluster := os.LookupEnv("ICINGA_KUBERNETES_CONFIG"); inCluster {
+		file, err := os.CreateTemp("", "yaml-config-")
+		if err != nil {
+			logging.Fatal(errors.Wrap(err, "can't create temporary yaml config"))
+		}
+		defer func() {
+			err := os.Remove(file.Name())
+			if err != nil {
+				logging.Fatal(errors.Wrap(err, "can't remove temporary yaml config"))
+			}
+		}()
+
+		if _, err = file.Write([]byte(ikConfig)); err != nil {
+			logging.Fatal(errors.Wrap(err, "can't write to temporary yaml config"))
+		}
+
+		configFile = file.Name()
+	}
+
+	cfg, err = config.FromYAMLFile[internal.Config](configFile)
 	if err != nil {
 		logging.Fatal(errors.Wrap(err, "can't create configuration"))
 	}
