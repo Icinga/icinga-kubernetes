@@ -111,7 +111,7 @@ func main() {
 		}
 
 		promApiClient := promv1.NewAPI(promClient)
-		promMetricSync := metrics.NewPromMetricSync(promApiClient, db2, logs.GetChildLogger("prom-metric-sync"))
+		promMetricSync := metrics.NewPromMetricSync(promApiClient, db2, logs.GetChildLogger("prometheus"))
 
 		g.Go(func() error {
 			return promMetricSync.Nodes(ctx, factory.Core().V1().Nodes().Informer())

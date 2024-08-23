@@ -385,9 +385,11 @@ func (pms *PromMetricSync) run(
 				if len(warnings) > 0 {
 					pms.logger.Warnf("Prometheus warnings: %v\n", warnings)
 				}
+
 				if result == nil {
 					continue
 				}
+
 				for _, res := range result.(model.Vector) {
 					entity := getEntity(promQuery, res)
 					if entity == nil {
@@ -402,9 +404,9 @@ func (pms *PromMetricSync) run(
 				}
 
 				select {
+				case <-time.After(time.Second * 60):
 				case <-ctx.Done():
 					return ctx.Err()
-				case <-time.After(time.Second * 60):
 				}
 			}
 		})
