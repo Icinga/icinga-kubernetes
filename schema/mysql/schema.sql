@@ -924,8 +924,16 @@ CREATE TABLE prometheus_container_metric (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE config (
-    `key` enum('notifications.username', 'notifications.password', 'notifications.source_id', 'prometheus.url', 'prometheus.locked') COLLATE utf8mb4_unicode_ci NOT NULL,
+    `key` enum(
+        'notifications.username',
+        'notifications.password',
+        'notifications.source_id',
+        'prometheus.url',
+        'prometheus.username',
+        'prometheus.password'
+        ) COLLATE utf8mb4_unicode_ci NOT NULL,
     value varchar(255) NOT NULL,
+    locked enum('n', 'y') COLLATE utf8mb4_unicode_ci DEFAULT NULL,
 
     PRIMARY KEY (`key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;

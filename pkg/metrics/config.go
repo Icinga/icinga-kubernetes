@@ -29,10 +29,41 @@ func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *Promethe
 	var configPairs []*schemav1.Config
 
 	if config.Url != "" {
-		configPairs = append(configPairs, &schemav1.Config{Key: schemav1.ConfigKeyPrometheusUrl, Value: config.Url})
-		configPairs = append(configPairs, &schemav1.Config{Key: schemav1.ConfigKeyPrometheusLocked, Value: "true"})
+		configPairs = append(configPairs, &schemav1.Config{Key: schemav1.ConfigKeyPrometheusUrl, Value: config.Url, Locked: "y"})
+
+		if config.Username != "" {
+			configPairs = append(configPairs, &schemav1.Config{Key: schemav1.ConfigKeyPrometheusUsername, Value: config.Username, Locked: "y"})
+			configPairs = append(configPairs, &schemav1.Config{Key: schemav1.ConfigKeyPrometheusPassword, Value: "", Locked: "y"})
+		} else {
+			var deleteKeys []schemav1.ConfigKey
+
+			deleteKeys = append(deleteKeys, schemav1.ConfigKeyPrometheusUsername)
+			deleteKeys = append(deleteKeys, schemav1.ConfigKeyPrometheusPassword)
+
+			deleteStmt := fmt.Sprintf(
+				`DELETE FROM %s WHERE %s = (?)`,
+				database.TableName(&schemav1.Config{}),
+				"`key`",
+			)
+
+			for _, key := range deleteKeys {
+				if _, err := db.ExecContext(ctx, deleteStmt, key); err != nil {
+					return errors.Wrap(err, "cannot delete Prometheus credentials")
+				}
+			}
+		}
 	} else {
-		configPairs = append(configPairs, &schemav1.Config{Key: schemav1.ConfigKeyPrometheusLocked, Value: "false"})
+		err := RetrievePrometheusConfig(ctx, db, config)
+		if err != nil {
+			return err
+		}
+
+		configPairs = append(configPairs, &schemav1.Config{Key: schemav1.ConfigKeyPrometheusUrl, Value: config.Url, Locked: "n"})
+
+		if config.Username != "" {
+			configPairs = append(configPairs, &schemav1.Config{Key: schemav1.ConfigKeyPrometheusUsername, Value: config.Username, Locked: "n"})
+			configPairs = append(configPairs, &schemav1.Config{Key: schemav1.ConfigKeyPrometheusPassword, Value: config.Password, Locked: "n"})
+		}
 	}
 
 	stmt, _ := db.BuildUpsertStmt(&schemav1.Config{})
@@ -53,6 +84,10 @@ func RetrievePrometheusConfig(ctx context.Context, db *database.DB, config *Prom
 		switch c.Key {
 		case schemav1.ConfigKeyPrometheusUrl:
 			config.Url = c.Value
+		case schemav1.ConfigKeyPrometheusUsername:
+			config.Username = c.Value
+		case schemav1.ConfigKeyPrometheusPassword:
+			config.Password = c.Value
 		}
 	}
 

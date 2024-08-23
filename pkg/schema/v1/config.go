@@ -2,8 +2,9 @@ package v1
 
 // Config represents a single key => value pair database config entry.
 type Config struct {
-	Key   ConfigKey
-	Value string
+	Key    ConfigKey
+	Value  string
+	Locked string
 }
 
 // ConfigKey represents the database config.Key enums.
@@ -14,5 +15,6 @@ const (
 	ConfigKeyNotificationsUsername ConfigKey = "notifications.username"
 	ConfigKeyNotificationsPassword ConfigKey = "notifications.password"
 	ConfigKeyPrometheusUrl         ConfigKey = "prometheus.url"
-	ConfigKeyPrometheusLocked      ConfigKey = "prometheus.locked"
+	ConfigKeyPrometheusUsername    ConfigKey = "prometheus.username"
+	ConfigKeyPrometheusPassword    ConfigKey = "prometheus.password"
 )
