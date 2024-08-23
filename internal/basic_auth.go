@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"encoding/base64"
 	"net/http"
 )
 
@@ -13,8 +12,7 @@ type BasicAuthTransport struct {
 
 // RoundTrip executes a single HTTP transaction with the basic auth credentials.
 func (rt *BasicAuthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	basicAuth := "Basic " + base64.StdEncoding.EncodeToString([]byte(rt.Username+":"+rt.Password))
-	req.Header.Set("Authorization", basicAuth)
+	req.SetBasicAuth(rt.Username, rt.Password)
 
 	return http.DefaultTransport.RoundTrip(req)
 }
