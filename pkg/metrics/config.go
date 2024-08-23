@@ -8,6 +8,8 @@ import (
 	"github.com/pkg/errors"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"strings"
 )
 
 // PrometheusConfig defines Prometheus configuration.
@@ -106,15 +108,32 @@ func AutoDetectPrometheus(ctx context.Context, clientset *kubernetes.Clientset, 
 		return errors.New("no Prometheus service found")
 	}
 
-	if len(services.Items) > 1 {
-		return errors.New("multiple Prometheus services found")
+	var ip string
+	var port int32
+
+	// Check if we are running in a Kubernetes cluster. If so, use the
+	// service's ClusterIP. Otherwise, use the API Server's IP and NodePort.
+	if _, err = rest.InClusterConfig(); err == nil {
+		for _, service := range services.Items {
+			if service.Spec.Type == "ClusterIP" {
+				ip = services.Items[0].Spec.ClusterIP
+				port = services.Items[0].Spec.Ports[0].Port
+
+				break
+			}
+		}
+	} else if errors.Is(err, rest.ErrNotInCluster) {
+		for _, service := range services.Items {
+			if service.Spec.Type == "NodePort" {
+				ip = strings.Split(clientset.RESTClient().Get().URL().Host, ":")[0]
+				port = service.Spec.Ports[0].NodePort
+
+				break
+			}
+		}
 	}
 
-	config.Url = fmt.Sprintf(
-		"http://%s:%d",
-		services.Items[0].Spec.ClusterIP,
-		services.Items[0].Spec.Ports[0].Port,
-	)
+	config.Url = fmt.Sprintf("http://%s:%d", ip, port)
 
 	return nil
 }
