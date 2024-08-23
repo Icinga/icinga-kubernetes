@@ -96,7 +96,7 @@ func RetrievePrometheusConfig(ctx context.Context, db *database.DB, config *Prom
 
 func AutoDetectPrometheus(ctx context.Context, clientset *kubernetes.Clientset, config *PrometheusConfig) error {
 	services, err := clientset.CoreV1().Services("monitoring").List(ctx, kmetav1.ListOptions{
-		LabelSelector: "app.kubernetes.io/component=server",
+		LabelSelector: "app.kubernetes.io/name=prometheus",
 	})
 	if err != nil {
 		return errors.Wrap(err, "cannot list Prometheus services")
