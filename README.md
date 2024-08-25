@@ -25,6 +25,26 @@ Icinga for Kubernetes installation.
 ![Icinga for Kubernetes Web Service](doc/res/icinga-kubernetes-web-service.png)
 ![Icinga for Kubernetes Web Pod](doc/res/icinga-kubernetes-web-pod.png)
 
+## Vision and Roadmap
+
+Although every Kubernetes cluster is different, Icinga for Kubernetes aims to provide a zero-configuration baseline for
+monitoring Kubernetes. Our goal is to make it easy to understand the complete state of clusters, including resources,
+workloads, relations, and performance. We strive to offer comprehensive monitoring that provides a clear and
+intuitive view of clusters' health, helping to identify problems and potential bottlenecks.
+
+The Kubernetes API is leveraged to retrieve information about resources and watch ongoing changes.
+This data is stored in a database to reduce pressure on the Kubernetes API and
+to enable powerful filtering through a relational model.
+
+Currently, Icinga for Kubernetes utilizes all available information from the Kubernetes API to
+determine the state of resources and clusters. In future versions, we plan to integrate metrics.
+Upcoming features will also include the use of Icinga Notifications for sending alerts and
+supporting multiple clusters.
+
+We welcome your ideas on what should be included in the baseline.
+Do not hesitate to share your key metrics, important thresholds,
+or correlations used to set up alarms in your environments.
+
 ## Documentation
 
 Icinga for Kubernetes documentation is available at [icinga.com/docs](https://icinga.com/docs/icinga-kubernetes).
