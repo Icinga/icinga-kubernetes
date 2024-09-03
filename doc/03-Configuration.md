@@ -22,3 +22,14 @@ This is also the database used in
 | key      | **Optional.** Path to TLS private key.                             |
 | ca       | **Optional.** Path to TLS CA certificate.                          |
 | insecure | **Optional.** Whether not to verify the peer.                      |
+
+## Prometheus Configuration
+
+Icinga for Kubernetes can synchronize metrics from Prometheus using the Prometheus API.
+The configuration for Prometheus is stored in the `prometheus` section of the [config.example.yml](../config.example.yml) file.
+
+| Option | Description                                                       |
+|--------|-------------------------------------------------------------------|
+| url    | **Required.** The URL (`[Host]:[Port]`) of the Prometheus server. |
+
+Ensure that the URL points to a running Prometheus instance that collects metrics from your Kubernetes cluster.
