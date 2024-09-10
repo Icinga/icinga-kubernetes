@@ -48,9 +48,9 @@ type IngressRule struct {
 	Uuid        types.UUID
 	BackendUuid types.UUID
 	IngressUuid types.UUID
-	Host        string
-	Path        string
-	PathType    sql.NullString
+	Host        sql.NullString
+	Path        sql.NullString
+	PathType    string
 }
 
 func NewIngress() Resource {
@@ -106,11 +106,8 @@ func (i *Ingress) Obtain(k8s kmetav1.Object) {
 		}
 
 		for _, ruleValue := range rules.IngressRuleValue.HTTP.Paths {
-			var pathType sql.NullString
-			if ruleValue.PathType != nil {
-				pathType.String = string(*ruleValue.PathType)
-				pathType.Valid = true
-			}
+			// It is safe to use the pointer directly here.
+			pathType := string(*ruleValue.PathType)
 			if ruleValue.Backend.Service != nil {
 				ingressRuleUuid := NewUUID(i.Uuid, rules.Host+ruleValue.Path+ruleValue.Backend.Service.Name)
 				serviceUuid := NewUUID(ingressRuleUuid, ruleValue.Backend.Service.Name)
@@ -126,8 +123,8 @@ func (i *Ingress) Obtain(k8s kmetav1.Object) {
 					Uuid:        ingressRuleUuid,
 					BackendUuid: serviceUuid,
 					IngressUuid: i.Uuid,
-					Host:        rules.Host,
-					Path:        ruleValue.Path,
+					Host:        NewNullableString(rules.Host),
+					Path:        NewNullableString(ruleValue.Path),
 					PathType:    pathType,
 				})
 			} else if ruleValue.Backend.Resource != nil {
@@ -150,8 +147,8 @@ func (i *Ingress) Obtain(k8s kmetav1.Object) {
 					Uuid:        ingressRuleUuid,
 					IngressUuid: i.Uuid,
 					BackendUuid: resourceUuid,
-					Host:        rules.Host,
-					Path:        ruleValue.Path,
+					Host:        NewNullableString(rules.Host),
+					Path:        NewNullableString(ruleValue.Path),
 					PathType:    pathType,
 				})
 			}
