@@ -48,7 +48,7 @@ type IngressRule struct {
 	Uuid        types.UUID
 	BackendUuid types.UUID
 	IngressUuid types.UUID
-	Host        string
+	Host        sql.NullString
 	Path        string
 	PathType    sql.NullString
 }
@@ -126,7 +126,7 @@ func (i *Ingress) Obtain(k8s kmetav1.Object) {
 					Uuid:        ingressRuleUuid,
 					BackendUuid: serviceUuid,
 					IngressUuid: i.Uuid,
-					Host:        rules.Host,
+					Host:        NewNullableString(rules.Host),
 					Path:        ruleValue.Path,
 					PathType:    pathType,
 				})
@@ -150,7 +150,7 @@ func (i *Ingress) Obtain(k8s kmetav1.Object) {
 					Uuid:        ingressRuleUuid,
 					IngressUuid: i.Uuid,
 					BackendUuid: resourceUuid,
-					Host:        rules.Host,
+					Host:        NewNullableString(rules.Host),
 					Path:        ruleValue.Path,
 					PathType:    pathType,
 				})
