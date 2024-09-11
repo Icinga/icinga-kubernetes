@@ -103,6 +103,37 @@ You can also use our [Helm charts](https://github.com/Icinga/helm-charts/tree/ma
 provide a ready-to-use Icinga stack.
 <!-- {% endif %} -->
 
+## Kubernetes Access Control Requirements
+
+Icinga for Kubernetes requires the following read-only permissions on all resources within a Kubernetes cluster:
+
+* **get**: Allows to retrieve details of resources.
+* **list**: Allows to list all instances of resources.
+* **watch**: Allows to watch for changes to resources.
+
+You can grant these permissions by creating a `ClusterRole` with the necessary rules and
+binding it to an appropriate service account or user.
+Below is an example `ClusterRole` configuration:
+
+```
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: icinga-for-kubernetes
+rules:
+  - apiGroups: [ "*" ]
+    resources: [ "*" ]
+    verbs: [ "get", "list", "watch" ]
+```
+
+A complete example of the Kubernetes RBAC configuration is included in the
+[sample configuration](../icinga-kubernetes.example.yml). As a result,
+you don't need to manually configure access when deploying Icinga for Kubernetes using the sample configuration or our
+[Helm charts](https://github.com/Icinga/helm-charts/tree/main/charts/icinga-stack).
+
+**When running Icinga for Kubernetes outside of a Kubernetes cluster,
+it is required to connect as a user with the necessary permissions.**
+
 ## Installing Icinga for Kubernetes Web
 
 With Icinga for Kubernetes and the database fully set up, you have completed the instructions here and can proceed to
