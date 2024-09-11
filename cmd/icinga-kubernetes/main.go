@@ -63,6 +63,12 @@ func main() {
 
 	kconfig, err := kclientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, &overrides).ClientConfig()
 	if err != nil {
+		if kclientcmd.IsEmptyConfig(err) {
+			klog.Fatal(
+				"no configuration provided: set KUBECONFIG environment variable or --kubeconfig CLI flag to" +
+					" a kubeconfig file with cluster access configured")
+		}
+
 		klog.Fatal(errors.Wrap(err, "can't configure Kubernetes client"))
 	}
 
