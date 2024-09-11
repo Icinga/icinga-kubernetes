@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/google/uuid"
 	"github.com/icinga/icinga-go-library/config"
@@ -39,6 +40,7 @@ func main() {
 	var showVersion bool
 
 	klog.InitFlags(nil)
+	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 
 	pflag.BoolVar(&showVersion, "version", false, "print version and exit")
 	pflag.StringVar(&configLocation, "config", "./config.yml", "path to the config file")
