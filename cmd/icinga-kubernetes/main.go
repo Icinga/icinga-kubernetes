@@ -21,6 +21,7 @@ import (
 	"github.com/pkg/errors"
 	promapi "github.com/prometheus/client_golang/api"
 	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
+	"github.com/spf13/pflag"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/informers"
@@ -35,24 +36,41 @@ import (
 func main() {
 	runtime.ReallyCrash = true
 
-	kconfig, err := kclientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		kclientcmd.NewDefaultClientConfigLoadingRules(), &kclientcmd.ConfigOverrides{}).ClientConfig()
-	if err != nil {
-		klog.Fatal(err)
-	}
-
 	var configLocation string
+	var showVersion bool
 
 	klog.InitFlags(nil)
+	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 
-	flag.BoolFunc("version", "print version and exit", func(_ string) error {
+	pflag.BoolVar(&showVersion, "version", false, "print version and exit")
+	pflag.StringVar(&configLocation, "config", "./config.yml", "path to the config file")
+
+	loadingRules := kclientcmd.NewDefaultClientConfigLoadingRules()
+	loadingRules.DefaultClientConfig = &kclientcmd.DefaultClientConfig
+	pflag.StringVar(&loadingRules.ExplicitPath, "kubeconfig", "", "Path to a kube config. Only required if out-of-cluster")
+
+	overrides := kclientcmd.ConfigOverrides{}
+	kflags := kclientcmd.RecommendedConfigOverrideFlags("")
+	kflags.ContextOverrideFlags.Namespace = kclientcmd.FlagInfo{}
+	kclientcmd.BindOverrideFlags(&overrides, pflag.CommandLine, kflags)
+
+	pflag.Parse()
+
+	if showVersion {
 		internal.Version.Print()
 		os.Exit(0)
+	}
 
-		return nil
-	})
-	flag.StringVar(&configLocation, "config", "./config.yml", "path to the config file")
-	flag.Parse()
+	kconfig, err := kclientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, &overrides).ClientConfig()
+	if err != nil {
+		if kclientcmd.IsEmptyConfig(err) {
+			klog.Fatal(
+				"no configuration provided: set KUBECONFIG environment variable or --kubeconfig CLI flag to" +
+					" a kubeconfig file with cluster access configured")
+		}
+
+		klog.Fatal(errors.Wrap(err, "can't configure Kubernetes client"))
+	}
 
 	clientset, err := kubernetes.NewForConfig(kconfig)
 	if err != nil {

@@ -15,6 +15,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.19.1
 	github.com/prometheus/common v0.53.0
+	github.com/spf13/pflag v1.0.5
 	go.uber.org/zap v1.27.0
 	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842
 	golang.org/x/sync v0.7.0
@@ -52,7 +53,6 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/prometheus/client_model v0.6.0 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
-	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/ssgreg/journald v1.0.0 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
