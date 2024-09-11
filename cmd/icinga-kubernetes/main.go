@@ -51,6 +51,7 @@ func main() {
 
 	overrides := kclientcmd.ConfigOverrides{}
 	kflags := kclientcmd.RecommendedConfigOverrideFlags("")
+	kflags.ContextOverrideFlags.Namespace = kclientcmd.FlagInfo{}
 	kclientcmd.BindOverrideFlags(&overrides, pflag.CommandLine, kflags)
 
 	pflag.Parse()
