@@ -154,10 +154,6 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object) {
 }
 
 func (r *ReplicaSet) getIcingaState() (IcingaState, string) {
-	if gracePeriodReason := IsWithinGracePeriod(r); gracePeriodReason != nil {
-		return Ok, *gracePeriodReason
-	}
-
 	for _, condition := range r.Conditions {
 		if condition.Type == string(kappsv1.ReplicaSetReplicaFailure) && condition.Status == string(kcorev1.ConditionTrue) {
 			reason := fmt.Sprintf("ReplicaSet %s/%s has a failure condition: %s.", r.Namespace, r.Name, condition.Message)

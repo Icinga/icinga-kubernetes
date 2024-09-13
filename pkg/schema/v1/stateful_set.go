@@ -179,10 +179,6 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object) {
 }
 
 func (s *StatefulSet) getIcingaState() (IcingaState, string) {
-	if gracePeriodReason := IsWithinGracePeriod(s); gracePeriodReason != nil {
-		return Ok, *gracePeriodReason
-	}
-
 	switch {
 	case s.AvailableReplicas == 0:
 		reason := fmt.Sprintf("StatefulSet %s/%s has no replica available from %d desired.", s.Namespace, s.Name, s.DesiredReplicas)

@@ -7,9 +7,7 @@ import (
 	"github.com/icinga/icinga-go-library/types"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ktypes "k8s.io/apimachinery/pkg/types"
-	kcache "k8s.io/client-go/tools/cache"
 	"reflect"
-	"time"
 )
 
 var NameSpaceKubernetes = uuid.MustParse("3f249403-2bb0-428f-8e91-504d1fd7ddb6")
@@ -116,25 +114,6 @@ func NewNullableString(s any) sql.NullString {
 	}
 
 	panic(fmt.Sprintf("invalid type %T", s))
-}
-
-func IsWithinGracePeriod(k kmetav1.Object) *string {
-	const gracePeriod = 5 * time.Minute
-
-	deadline := k.GetCreationTimestamp().Add(gracePeriod)
-	now := time.Now()
-	if now.Before(deadline) {
-		key, _ := kcache.MetaNamespaceKeyFunc(k)
-		reason := fmt.Sprintf(
-			"%s %s is within grace period until %s, so its state is not yet evaluated.",
-			types.Name(k),
-			key,
-			deadline)
-
-		return &reason
-	}
-
-	return nil
 }
 
 // Assert interface compliance.
