@@ -22,3 +22,13 @@ This is also the database used in
 | key      | **Optional.** Path to TLS private key.                             |
 | ca       | **Optional.** Path to TLS CA certificate.                          |
 | insecure | **Optional.** Whether not to verify the peer.                      |
+
+## Prometheus Configuration
+
+Connection configuration for a Prometheus instance that collects metrics from your Kubernetes cluster,
+from which Icinga for Kubernetes [synchronizes predefined metrics](01-About.md#metric-sync) to display charts in the UI.
+Defined in the `prometheus` section of the configuration file.
+
+| Option | Description                                                                          |
+|--------|--------------------------------------------------------------------------------------|
+| url    | **Optional.** Prometheus server URL. If not set, metric synchronization is disabled. |
