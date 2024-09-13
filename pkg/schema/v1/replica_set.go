@@ -154,12 +154,6 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object) {
 }
 
 func (r *ReplicaSet) getIcingaState() (IcingaState, string) {
-	if r.DesiredReplicas < 1 {
-		reason := fmt.Sprintf("ReplicaSet %s/%s has an invalid desired replica count: %d.", r.Namespace, r.Name, r.DesiredReplicas)
-
-		return Unknown, reason
-	}
-
 	if gracePeriodReason := IsWithinGracePeriod(r); gracePeriodReason != nil {
 		return Ok, *gracePeriodReason
 	}
@@ -173,7 +167,7 @@ func (r *ReplicaSet) getIcingaState() (IcingaState, string) {
 	}
 
 	switch {
-	case r.AvailableReplicas < 1:
+	case r.AvailableReplicas < 1 && r.DesiredReplicas > 0:
 		reason := fmt.Sprintf("ReplicaSet %s/%s has no replica available from %d desired.", r.Namespace, r.Name, r.DesiredReplicas)
 
 		return Critical, reason
