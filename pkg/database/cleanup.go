@@ -113,7 +113,7 @@ func (db *Database) PeriodicCleanup(ctx context.Context, stmt CleanupStmt) error
 	defer close(errs)
 
 	periodic.Start(ctx, time.Hour, func(tick periodic.Tick) {
-		olderThan := tick.Time.AddDate(0, -1, 0)
+		olderThan := tick.Time.AddDate(0, 0, -1)
 
 		_, err := db.CleanupOlderThan(
 			ctx, stmt, 5000, olderThan,
