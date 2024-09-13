@@ -25,11 +25,10 @@ This is also the database used in
 
 ## Prometheus Configuration
 
-Icinga for Kubernetes can synchronize metrics from Prometheus using the Prometheus API.
-The configuration for Prometheus is stored in the `prometheus` section of the [config.example.yml](../config.example.yml) file.
+Connection configuration for a Prometheus instance that collects metrics from your Kubernetes cluster,
+from which Icinga for Kubernetes [synchronizes predefined metrics](01-About.md#metric-sync) to display charts in the UI.
+Defined in the `prometheus` section of the configuration file.
 
-| Option | Description                                                       |
-|--------|-------------------------------------------------------------------|
-| url    | **Required.** The URL (`[Host]:[Port]`) of the Prometheus server. |
-
-Ensure that the URL points to a running Prometheus instance that collects metrics from your Kubernetes cluster.
+| Option | Description                                                                          |
+|--------|--------------------------------------------------------------------------------------|
+| url    | **Optional.** Prometheus server URL. If not set, metric synchronization is disabled. |

@@ -45,6 +45,15 @@ We welcome your ideas on what should be included in the baseline.
 Do not hesitate to share your key metrics, important thresholds,
 or correlations used to set up alarms in your environments.
 
+## Optional Features
+
+### Metric Sync
+
+Icinga for Kubernetes integrates with Prometheus to synchronize predefined metrics and display charts in the UI.
+In future versions, we plan to incorporate these metrics into state evaluation and alerting.
+To enable this feature you just have to configure a Prometheus server URL
+that collects metrics from your Kubernetes cluster.
+
 ## Documentation
 
 Icinga for Kubernetes documentation is available at [icinga.com/docs](https://icinga.com/docs/icinga-kubernetes).

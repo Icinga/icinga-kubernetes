@@ -18,6 +18,15 @@ At the moment it is only possible to monitor one Kubernetes cluster per Icinga f
 ![Icinga for Kubernetes Web Service](res/icinga-kubernetes-web-service.png)
 ![Icinga for Kubernetes Web Pod](res/icinga-kubernetes-web-pod.png)
 
+## Optional Features
+
+### Metric Sync
+
+Icinga for Kubernetes integrates with Prometheus to synchronize predefined metrics and display charts in the UI.
+In future versions, we plan to incorporate these metrics into state evaluation and alerting.
+To enable this feature you have to [configure a Prometheus server URL](03-Configuration.md#prometheus-configuration)
+that collects metrics from your Kubernetes cluster.
+
 ## Installation
 
 To install Icinga for Kubernetes see [Installation](02-Installation.md).
