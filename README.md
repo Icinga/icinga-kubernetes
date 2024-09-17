@@ -21,8 +21,8 @@ including the database, common setup approaches include the following:
 Please **note** that at the moment it is only possible to monitor one Kubernetes cluster per
 Icinga for Kubernetes installation.
 
-![Icinga for Kubernetes Web Stateful Set](doc/res/icinga-kubernetes-web-stateful-set.png)
-![Icinga for Kubernetes Web Service](doc/res/icinga-kubernetes-web-service.png)
+![Icinga for Kubernetes Web Deployment](doc/res/icinga-kubernetes-web-deployment.png)
+![Icinga for Kubernetes Web Replica Set](doc/res/icinga-kubernetes-web-replica-set.png)
 ![Icinga for Kubernetes Web Pod](doc/res/icinga-kubernetes-web-pod.png)
 
 ## Vision and Roadmap
