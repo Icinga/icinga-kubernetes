@@ -784,7 +784,7 @@ CREATE TABLE service (
   resource_version varchar(255) NOT NULL,
   cluster_ip varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   cluster_ips varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  type enum('ClusterIP', 'NodePort', 'LoadBalance', 'ExternalName') COLLATE utf8mb4_unicode_ci NOT NULL,
+  type enum('ClusterIP', 'NodePort', 'LoadBalancer', 'ExternalName') COLLATE utf8mb4_unicode_ci NOT NULL,
   external_ips varchar(255) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   session_affinity enum('None', 'ClientIP') COLLATE utf8mb4_unicode_ci NOT NULL,
   external_name varchar(255) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
