@@ -1,45 +1,47 @@
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: all-resources-reader
-rules:
-  - apiGroups: [ "*" ]
-    resources: [ "*" ]
-    verbs: [ "get", "watch", "list" ]
-
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: read-all-resources
-roleRef:
-  kind: ClusterRole
-  name: all-resources-reader
-  apiGroup: "rbac.authorization.k8s.io"
-subjects:
-  - kind: ServiceAccount
-    name: icinga-kubernetes
-    namespace: icinga-kubernetes
-
----
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: icinga-kubernetes
+  name: icinga
 
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: icinga-kubernetes
-  namespace: icinga-kubernetes
+  name: icinga-for-kubernetes
+  namespace: icinga
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: icinga-for-kubernetes
+rules:
+  - apiGroups: [ "*" ]
+    resources: [ "*" ]
+    verbs: [ "get", "list", "watch" ]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: icinga-for-kubernetes
+roleRef:
+  apiGroup: "rbac.authorization.k8s.io"
+  kind: ClusterRole
+  name: icinga-for-kubernetes
+subjects:
+  - kind: ServiceAccount
+    name: icinga-for-kubernetes
+    namespace: icinga
+#  - kind: User
+#    name: icinga-for-kubernetes
 
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: icinga-kubernetes-config
-  namespace: icinga-kubernetes
+  name: icinga-for-kubernetes
+  namespace: icinga
 data:
   config.yml: |-
     # This is the configuration file for Icinga for Kubernetes.
@@ -74,12 +76,12 @@ data:
 apiVersion: v1
 kind: Pod
 metadata:
-  name: icinga-kubernetes
-  namespace: icinga-kubernetes
+  name: icinga-for-kubernetes
+  namespace: icinga
 spec:
-  serviceAccountName: icinga-kubernetes
+  serviceAccountName: icinga-for-kubernetes
   containers:
-    - name: icinga-kubernetes
+    - name: icinga-for-kubernetes
       image: icinga/icinga-kubernetes:edge
       volumeMounts:
         - name: config-volume
@@ -88,6 +90,4 @@ spec:
   volumes:
     - name: config-volume
       configMap:
-        name: icinga-kubernetes-config
-
-
+        name: icinga-for-kubernetes
