@@ -49,21 +49,26 @@ data:
     database:
       # Database type. Only 'mysql' is supported yet which is the default.
     #  type: mysql
-      
+    
       # Database host or absolute Unix socket path.
       host: mysql
-      
+    
       # Database port. By default, the MySQL port.
     #  port:
-      
+    
       # Database name.
       database: kubernetes
-      
+    
       # Database user.
       user: kubernetes
-      
+    
       # Database password.
       password: CHANGEME
+    
+    # Configuration for Prometheus metrics API.
+    prometheus:
+      # Prometheus server URL.
+    #  url: http://localhost:9090
 
 ---
 apiVersion: v1
