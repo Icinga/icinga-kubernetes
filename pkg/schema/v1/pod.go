@@ -14,6 +14,7 @@ import (
 	ktypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"strings"
+	"time"
 )
 
 type PodFactory struct {
@@ -276,12 +277,14 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 }
 
 func (p *Pod) getIcingaState(pod *kcorev1.Pod) (IcingaState, string) {
-	if pod.DeletionTimestamp != nil {
-		if pod.Status.Reason == "NodeLost" {
-			return Unknown, ""
-		}
-		// TODO(el): Return Critical if pod.DeletionTimestamp + pod.DeletionGracePeriodSeconds > now.
-		return Ok, fmt.Sprintf("Pod %s/%s is being deleted at %s.", pod.Namespace, pod.Name, pod.DeletionTimestamp)
+	if pod.Status.Reason == "NodeLost" {
+		return Unknown, fmt.Sprintf(
+			"Pod %s/%s is unknown as the node which was running the pod is unresponsive.", pod.Namespace, pod.Name)
+	}
+
+	if PodIsShutDown(pod) {
+		return Ok, fmt.Sprintf(
+			"Pod %s/%s is being deleted at %s.", pod.Namespace, pod.Name, pod.DeletionTimestamp)
 	}
 
 	if PodIsEvicted(pod) {
@@ -315,47 +318,60 @@ func (p *Pod) getIcingaState(pod *kcorev1.Pod) (IcingaState, string) {
 			podConditions[kcorev1.PodScheduled].Message)
 	}
 
+	if pod.Status.Phase == kcorev1.PodFailed {
+		state, reasons := collectContainerStates(p)
+
+		return state, fmt.Sprintf(
+			"Pod %s/%s has failed as all its containers have been termianted and will not be restarted.\n%s",
+			pod.Namespace,
+			pod.Name,
+			reasons)
+	}
+
 	if podConditions[kcorev1.PodReadyToStartContainers].Status == kcorev1.ConditionFalse {
 		return Critical, fmt.Sprintf(
 			"Pod %s/%s is not ready to start containers.", pod.Namespace, pod.Name)
 	}
 
-	if pod.Status.Phase == kcorev1.PodFailed {
-		// TODO(el): For each container, check its state to provide more context about the termination.
-		return Critical, fmt.Sprintf(
-			"Pod %s/%s has failed as all its containers have been terminated, but at least one container has failed.",
-			pod.Namespace, pod.Name)
-	}
+	if podConditions[kcorev1.PodInitialized].Status == kcorev1.ConditionFalse ||
+		podConditions[kcorev1.ContainersReady].Status == kcorev1.ConditionFalse ||
+		podConditions[kcorev1.PodReady].Status == kcorev1.ConditionFalse {
 
-	if podConditions[kcorev1.PodInitialized].Status == kcorev1.ConditionFalse {
-		initContainers := NewContainers[InitContainer](
-			p, pod.Spec.InitContainers, pod.Status.InitContainerStatuses, NewInitContainer)
-		state := Ok
-		reasons := make([]string, 0, len(initContainers))
-		for _, c := range initContainers {
-			state = max(state, c.IcingaState)
-			reasons = append(reasons, fmt.Sprintf(
-				"[%s] %s", strings.ToUpper(c.IcingaState.String()), c.IcingaStateReason))
-		}
+		state, reasons := collectContainerStates(p)
 
-		if len(reasons) == 1 {
-			// Remove square brackets state information.
-			_, reason, _ := strings.Cut(reasons[0], " ")
-
-			return state, reason
-		}
-
-		return state, fmt.Sprintf("%s/%s is %s.\n%s", pod.Namespace, pod.Name, state, strings.Join(reasons, "\n"))
+		return state, fmt.Sprintf("%s/%s is %s.\n%s", pod.Namespace, pod.Name, state, reasons)
 	}
 
 	var notRunning int
 	state := Ok
-	reasons := make([]string, 0, len(p.Containers))
+	reasons := make([]string, 0, len(p.InitContainers)+len(p.SidecarContainers)+len(p.Containers))
+
+	for _, c := range p.InitContainers {
+		if c.IcingaState != Ok {
+			state = max(state, c.IcingaState)
+			notRunning++
+		}
+
+		reasons = append(reasons, fmt.Sprintf(
+			"[%s] %s", strings.ToUpper(c.IcingaState.String()), c.IcingaStateReason))
+	}
+
+	for _, c := range p.SidecarContainers {
+		if c.IcingaState != Ok {
+			state = max(state, c.IcingaState)
+			notRunning++
+		}
+
+		reasons = append(reasons, fmt.Sprintf(
+			"[%s] %s", strings.ToUpper(c.IcingaState.String()), c.IcingaStateReason))
+	}
+
 	for _, c := range p.Containers {
 		if c.IcingaState != Ok {
 			state = max(state, c.IcingaState)
 			notRunning++
 		}
+
 		reasons = append(reasons, fmt.Sprintf(
 			"[%s] %s", strings.ToUpper(c.IcingaState.String()), c.IcingaStateReason))
 	}
@@ -368,7 +384,7 @@ func (p *Pod) getIcingaState(pod *kcorev1.Pod) (IcingaState, string) {
 	}
 
 	return state, fmt.Sprintf(
-		"%s/%s is %s with %d out %d containers running.\n%s",
+		"Pod %s/%s is %s with %d out of %d containers running.\n%s",
 		pod.Namespace,
 		pod.Name,
 		state,
@@ -425,6 +441,30 @@ func PodIsEvicted(pod *kcorev1.Pod) bool {
 	return pod.Status.Phase == kcorev1.PodFailed && pod.Status.Reason == Reason
 }
 
+// PodIsShutDown returns true if kubelet is done with the pod, or it was force-deleted.
+func PodIsShutDown(pod *kcorev1.Pod) bool {
+	// A pod has a deletionTimestamp and a zero deletionGracePeriodSeconds if it:
+	// a) has been processed by kubelet and was marked for deletion by the API server:
+	//    https://github.com/kubernetes/kubernetes/blob/v1.31.1/pkg/kubelet/status/status_manager.go#L897-L912
+	// or
+	// b) was force-deleted.
+	if pod.DeletionTimestamp != nil && pod.DeletionGracePeriodSeconds != nil {
+		if *pod.DeletionGracePeriodSeconds == 0 {
+			return true
+		}
+
+		now := time.Now()
+		deletionTime := pod.DeletionTimestamp.Time
+		gracePeriod := time.Duration(*pod.DeletionGracePeriodSeconds) * time.Second
+		if now.After(deletionTime.Add(gracePeriod)) {
+			// Pod is stuck terminating (e.g. if the node is lost).
+			return true
+		}
+	}
+
+	return false
+}
+
 func removeTrailingWhitespaceAndFullStop(input string) string {
 	trimmed := strings.TrimSpace(input)
 
@@ -433,4 +473,36 @@ func removeTrailingWhitespaceAndFullStop(input string) string {
 	}
 
 	return trimmed
+}
+
+func collectContainerStates(pod *Pod) (IcingaState, string) {
+	state := Ok
+	reasons := make([]string, 0, len(pod.Containers)+len(pod.SidecarContainers)+len(pod.InitContainers))
+
+	for _, c := range pod.InitContainers {
+		state = max(state, c.IcingaState)
+		reasons = append(reasons, fmt.Sprintf(
+			"[%s] %s", strings.ToUpper(c.IcingaState.String()), c.IcingaStateReason))
+	}
+
+	for _, c := range pod.SidecarContainers {
+		state = max(state, c.IcingaState)
+		reasons = append(reasons, fmt.Sprintf(
+			"[%s] %s", strings.ToUpper(c.IcingaState.String()), c.IcingaStateReason))
+	}
+
+	for _, c := range pod.Containers {
+		state = max(state, c.IcingaState)
+		reasons = append(reasons, fmt.Sprintf(
+			"[%s] %s", strings.ToUpper(c.IcingaState.String()), c.IcingaStateReason))
+	}
+
+	if len(reasons) == 1 {
+		// Remove square brackets state information.
+		_, reason, _ := strings.Cut(reasons[0], " ")
+
+		return state, reason
+	}
+
+	return state, strings.Join(reasons, "\n")
 }

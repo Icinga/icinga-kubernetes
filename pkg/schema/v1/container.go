@@ -40,7 +40,7 @@ const (
 	ErrImagePull        = "ErrImagePull" // https://github.com/kubernetes/kubernetes/blob/v1.30.1/pkg/kubelet/images/types.go#L27
 	ErrImagePullBackOff = "ImagePullBackOff"
 
-	// https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/container/sync_result.go#L37
+	ErrCrashLoopBackOff = "CrashLoopBackOff" // https://github.com/kubernetes/kubernetes/blob/v1.31.0/pkg/kubelet/container/sync_result.go#L29
 )
 
 type ContainerCommon struct {
@@ -306,6 +306,21 @@ func (cl *ContainerLog) syncContainerLogs(ctx context.Context, clientset *kubern
 
 func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStatus) (IcingaState, string) {
 	if status.State.Terminated != nil {
+		// TODO(el): Check.
+		if !status.Ready && container.ReadinessProbe != nil && status.LastTerminationState.Terminated != nil {
+			return Critical, fmt.Sprintf(
+				"Container %s is critical as it's not ready due to failing readiness probes."+
+					" Last terminal with non-zero exit code %d and signal %d was at %s. %s.",
+				container.Name,
+				status.LastTerminationState.Terminated.ExitCode,
+				status.LastTerminationState.Terminated.Signal,
+				status.LastTerminationState.Terminated.FinishedAt,
+				ContainerStateReasonAndMassage{
+					status.LastTerminationState.Terminated.Reason,
+					status.LastTerminationState.Terminated.Message,
+				})
+		}
+
 		if status.State.Terminated.ExitCode == 0 {
 			return Ok, fmt.Sprintf(
 				"Container %s terminated successfully at %s.", container.Name, status.State.Terminated.FinishedAt)
@@ -319,7 +334,7 @@ func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStat
 				status.State.Terminated.FinishedAt,
 				ContainerStateReasonAndMassage{
 					status.State.Terminated.Reason,
-					removeTrailingWhitespaceAndFullStop(status.State.Terminated.Message),
+					status.State.Terminated.Message,
 				})
 		}
 
@@ -330,41 +345,46 @@ func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStat
 			status.State.Terminated.FinishedAt,
 			ContainerStateReasonAndMassage{
 				status.State.Terminated.Reason,
-				removeTrailingWhitespaceAndFullStop(status.State.Terminated.Message),
+				status.State.Terminated.Message,
 			})
 	}
 
 	if status.State.Running != nil {
-		var probe string
-
 		if status.Started == nil || !*status.Started {
-			probe = "startup"
-		}
-
-		if !status.Ready {
-			probe = "liveness"
-		}
-
-		if probe != "" {
-			if status.LastTerminationState.Terminated != nil {
-				return Warning, fmt.Sprintf(
-					"Container %s is running since %s but not ready due to failing %s probes."+
+			if container.StartupProbe != nil && status.LastTerminationState.Terminated != nil {
+				return Critical, fmt.Sprintf(
+					"Container %s is critical as it's not ready due to failing startup probes."+
 						" Last terminal with non-zero exit code %d and signal %d was at %s. %s.",
 					container.Name,
-					status.State.Running.StartedAt,
-					probe,
 					status.LastTerminationState.Terminated.ExitCode,
 					status.LastTerminationState.Terminated.Signal,
 					status.LastTerminationState.Terminated.FinishedAt,
 					ContainerStateReasonAndMassage{
 						status.LastTerminationState.Terminated.Reason,
-						removeTrailingWhitespaceAndFullStop(status.LastTerminationState.Terminated.Message),
+						status.LastTerminationState.Terminated.Message,
 					})
 			}
 
-			return Warning, fmt.Sprintf(
-				"Container %s is running since %s but not ready due to failing probes.",
-				container.Name, status.State.Running.StartedAt)
+			return Pending, fmt.Sprintf("Container %s is pending.", container.Name)
+		}
+
+		if !status.Ready {
+			// TODO(el): Check.
+			if container.ReadinessProbe != nil && status.LastTerminationState.Terminated != nil {
+				return Critical, fmt.Sprintf(
+					"Container %s is critical as it's not ready due to failing readiness probes."+
+						" Last terminal with non-zero exit code %d and signal %d was at %s. %s.",
+					container.Name,
+					status.LastTerminationState.Terminated.ExitCode,
+					status.LastTerminationState.Terminated.Signal,
+					status.LastTerminationState.Terminated.FinishedAt,
+					ContainerStateReasonAndMassage{
+						status.LastTerminationState.Terminated.Reason,
+						status.LastTerminationState.Terminated.Message,
+					})
+			}
+
+			return Pending, fmt.Sprintf("Container %s is pending.", container.Name)
 		}
 
 		return Ok, fmt.Sprintf(
@@ -388,7 +408,7 @@ func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStat
 		}
 
 		if status.State.Waiting.Reason == ErrImagePull {
-			// Don't flap.
+			// TODO(el): Don't flap. Does that work?
 			if status.LastTerminationState.Terminated != nil &&
 				status.LastTerminationState.Terminated.Reason == ErrImagePullBackOff {
 				return Critical, fmt.Sprintf(
