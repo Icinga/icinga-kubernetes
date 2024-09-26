@@ -18,6 +18,7 @@ import (
 	"github.com/icinga/icinga-kubernetes/pkg/sync"
 	syncv1 "github.com/icinga/icinga-kubernetes/pkg/sync/v1"
 	k8sMysql "github.com/icinga/icinga-kubernetes/schema/mysql"
+	"github.com/okzk/sdnotify"
 	"github.com/pkg/errors"
 	promapi "github.com/prometheus/client_golang/api"
 	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
@@ -91,6 +92,12 @@ func main() {
 	if err != nil {
 		klog.Fatal(err)
 	}
+
+	// When started by systemd, NOTIFY_SOCKET is set by systemd for Type=notify supervised services, which was the
+	// default setting for the Icinga for Kubernetes service. Before switching to Type=simple. For Type=notify,
+	// we to tell systemd, that Icinga for Kubernetes finished starting up.
+	_ = sdnotify.Ready()
+
 	if !db.Connect() {
 		return
 	}
