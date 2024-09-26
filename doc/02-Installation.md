@@ -98,8 +98,8 @@ run the `icinga/icinga-kubernetes` image using a container runtime of you choice
 
 ```bash
 export KUBECONFIG=$HOME/.kube/config
-export ICINGA_KUBERNETES_CONFIG=config.yml
-docker run --rm -v $ICINGA_KUBERNETES_CONFIG:/config.yml -v $KUBECONFIG:/.kube/config icinga/icinga-kubernetes:edge
+export ICINGA_KUBERNETES_CONFIG=./config.yml
+docker run --rm -v $ICINGA_KUBERNETES_CONFIG:/config.yml -v $KUBECONFIG:/.kube/config icinga/icinga-kubernetes
 ```
 
 #### From Source

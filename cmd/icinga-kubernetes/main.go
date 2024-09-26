@@ -11,9 +11,11 @@ import (
 	"github.com/icinga/icinga-go-library/periodic"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/internal"
+	"github.com/icinga/icinga-kubernetes/pkg/backoff"
 	"github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/metrics"
+	"github.com/icinga/icinga-kubernetes/pkg/retry"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
 	"github.com/icinga/icinga-kubernetes/pkg/sync"
 	syncv1 "github.com/icinga/icinga-kubernetes/pkg/sync/v1"
@@ -33,6 +35,8 @@ import (
 	"strings"
 	"time"
 )
+
+const expectedSchemaVersion = "0.2.0"
 
 func main() {
 	runtime.ReallyCrash = true
@@ -61,6 +65,8 @@ func main() {
 		internal.Version.Print()
 		os.Exit(0)
 	}
+
+	klog.Infof("Starting Icinga for Kubernetes (%s)", internal.Version.Version)
 
 	kconfig, err := kclientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, &overrides).ClientConfig()
 	if err != nil {
@@ -107,6 +113,67 @@ func main() {
 		klog.Fatal(err)
 	}
 
+	g, ctx := errgroup.WithContext(context.Background())
+
+	if hasSchema {
+		var version string
+
+		err = retry.WithBackoff(
+			ctx,
+			func(ctx context.Context) (err error) {
+				query := "SELECT version FROM kubernetes_schema ORDER BY id DESC LIMIT 1"
+				err = db.QueryRowxContext(ctx, query).Scan(&version)
+				if err != nil {
+					err = database.CantPerformQuery(err, query)
+				}
+				return
+			},
+			retry.Retryable,
+			backoff.NewExponentialWithJitter(128*time.Millisecond, 1*time.Minute),
+			retry.Settings{})
+		if err != nil {
+			klog.Fatal(err)
+		}
+
+		if version != expectedSchemaVersion {
+			err = retry.WithBackoff(
+				ctx,
+				func(ctx context.Context) (err error) {
+					rows, err := db.Query(
+						db.Rebind("SELECT table_name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=?"),
+						cfg.Database.Database,
+					)
+					if err != nil {
+						klog.Fatal(err)
+					}
+					defer rows.Close()
+
+					dbLog.Info("Dropping schema")
+
+					for rows.Next() {
+						var tableName string
+						if err := rows.Scan(&tableName); err != nil {
+							klog.Fatal(err)
+						}
+
+						_, err := db.Exec("DROP TABLE " + tableName)
+						if err != nil {
+							klog.Fatal(err)
+						}
+					}
+					return
+				},
+				retry.Retryable,
+				backoff.NewExponentialWithJitter(128*time.Millisecond, 1*time.Minute),
+				retry.Settings{})
+			if err != nil {
+				klog.Fatal(err)
+			}
+
+			hasSchema = false
+		}
+	}
+
 	if !hasSchema {
 		dbLog.Info("Importing schema")
 
@@ -118,8 +185,6 @@ func main() {
 			}
 		}
 	}
-
-	g, ctx := errgroup.WithContext(context.Background())
 
 	if _, err := db.ExecContext(ctx, "DELETE FROM kubernetes_instance"); err != nil {
 		klog.Fatal(errors.Wrap(err, "can't delete instance"))
