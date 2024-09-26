@@ -72,6 +72,26 @@ CREATE TABLE init_container (
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+CREATE TABLE sidecar_container (
+  uuid binary(16) NOT NULL,
+  pod_uuid binary(16) NOT NULL,
+  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  image varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  image_pull_policy enum('Always', 'Never', 'IfNotPresent') COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  cpu_limits bigint unsigned NULL DEFAULT NULL,
+  cpu_requests bigint unsigned NULL DEFAULT NULL,
+  memory_limits bigint unsigned NULL DEFAULT NULL,
+  memory_requests bigint unsigned NULL DEFAULT NULL,
+  state enum('Waiting', 'Running', 'Terminated') COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  state_details longtext NULL DEFAULT NULL,
+  ready enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
+  started enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
+  restart_count int unsigned NOT NULL,
+  icinga_state enum('unknown', 'pending', 'ok', 'warning', 'critical') COLLATE utf8mb4_unicode_ci NOT NULL,
+  icinga_state_reason text NULL DEFAULT NULL,
+  PRIMARY KEY (uuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
 CREATE TABLE container_device (
   container_uuid binary(16) NOT NULL,
   pod_uuid binary(16) NOT NULL,

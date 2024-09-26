@@ -180,6 +180,11 @@ type InitContainer struct {
 }
 
 func NewInitContainer(podUuid types.UUID, container kcorev1.Container, status kcorev1.ContainerStatus) *InitContainer {
+	if container.RestartPolicy != nil && *container.RestartPolicy == kcorev1.ContainerRestartPolicyAlways {
+		// Sidecar container.
+		return nil
+	}
+
 	c := &InitContainer{}
 	c.ContainerCommon.Obtain(podUuid, container, status)
 	c.ContainerResources.Obtain(container)
@@ -194,6 +199,11 @@ type SidecarContainer struct {
 }
 
 func NewSidecarContainer(podUuid types.UUID, container kcorev1.Container, status kcorev1.ContainerStatus) *SidecarContainer {
+	if container.RestartPolicy == nil || *container.RestartPolicy != kcorev1.ContainerRestartPolicyAlways {
+		// Init container.
+		return nil
+	}
+
 	c := &SidecarContainer{}
 	c.ContainerCommon.Obtain(podUuid, container, status)
 	c.ContainerResources.Obtain(container)
