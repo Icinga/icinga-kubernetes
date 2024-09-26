@@ -95,7 +95,7 @@ func main() {
 
 	// When started by systemd, NOTIFY_SOCKET is set by systemd for Type=notify supervised services, which was the
 	// default setting for the Icinga for Kubernetes service. Before switching to Type=simple. For Type=notify,
-	// we to tell systemd, that Icinga for Kubernetes finished starting up.
+	// we need to tell systemd, that Icinga for Kubernetes finished starting up.
 	_ = sdnotify.Ready()
 
 	if !db.Connect() {
