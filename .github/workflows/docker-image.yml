@@ -1,11 +1,15 @@
-name: Docker Image
+name: Docker
 
 on:
   push:
-    branches: [ "main" ]
-    tags: [ "v*" ]
+    branches:
+      - main
   pull_request:
-    branches: [ "main" ]
+    branches:
+      - main
+  release:
+    types:
+      - published
 
 jobs:
   docker:
@@ -19,6 +23,8 @@ jobs:
             icinga/icinga-kubernetes
           tags: |
             type=edge
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -41,3 +47,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
+          # Keep the .git to allow including the commit in the --version output, see also:
+          # https://docs.docker.com/build/building/context/#keep-git-directory
+          build-args: |
+            BUILDKIT_CONTEXT_KEEP_GIT_DIR=1
