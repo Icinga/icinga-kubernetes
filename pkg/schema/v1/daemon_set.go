@@ -161,10 +161,6 @@ func (d *DaemonSet) getIcingaState() (IcingaState, string) {
 		return Unknown, reason
 	}
 
-	if gracePeriodReason := IsWithinGracePeriod(d); gracePeriodReason != nil {
-		return Ok, *gracePeriodReason
-	}
-
 	switch {
 	case d.NumberAvailable == 0:
 		reason := fmt.Sprintf("DaemonSet %s/%s does not have a single pod available which should run on %d desired nodes.", d.Namespace, d.Name, d.DesiredNumberScheduled)
