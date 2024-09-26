@@ -12,6 +12,7 @@ require (
 	github.com/icinga/icinga-go-library v0.0.0-20240524093614-7048f8f10123
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/lib/pq v1.10.9
+	github.com/okzk/sdnotify v0.0.0-20240725214427-1c1fdd37c5ac
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.20.4
 	github.com/prometheus/common v0.59.1
