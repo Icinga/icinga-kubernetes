@@ -37,15 +37,17 @@ type Pod struct {
 	Qos               sql.NullString
 	RestartPolicy     string
 	Yaml              string
-	Conditions        []PodCondition  `db:"-"`
-	Containers        []*Container    `db:"-"`
-	Owners            []PodOwner      `db:"-"`
-	Labels            []Label         `db:"-"`
-	PodLabels         []PodLabel      `db:"-"`
-	Annotations       []Annotation    `db:"-"`
-	PodAnnotations    []PodAnnotation `db:"-"`
-	Pvcs              []PodPvc        `db:"-"`
-	Volumes           []PodVolume     `db:"-"`
+	Conditions        []PodCondition      `db:"-"`
+	Containers        []*Container        `db:"-"`
+	InitContainers    []*InitContainer    `db:"-"`
+	SidecarContainers []*SidecarContainer `db:"-"`
+	Owners            []PodOwner          `db:"-"`
+	Labels            []Label             `db:"-"`
+	PodLabels         []PodLabel          `db:"-"`
+	Annotations       []Annotation        `db:"-"`
+	PodAnnotations    []PodAnnotation     `db:"-"`
+	Pvcs              []PodPvc            `db:"-"`
+	Volumes           []PodVolume         `db:"-"`
 	factory           *PodFactory
 }
 
@@ -137,6 +139,8 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 	}
 
 	p.Containers = NewContainers[Container](p, pod.Spec.Containers, pod.Status.ContainerStatuses, NewContainer)
+	p.InitContainers = NewContainers[InitContainer](p, pod.Spec.InitContainers, pod.Status.InitContainerStatuses, NewInitContainer)
+	p.SidecarContainers = NewContainers[SidecarContainer](p, pod.Spec.InitContainers, pod.Status.InitContainerStatuses, NewSidecarContainer)
 
 	p.IcingaState, p.IcingaStateReason = p.getIcingaState(pod)
 
@@ -387,7 +391,9 @@ func NewContainers[T any](
 	}
 
 	for _, container := range containers {
-		obtained = append(obtained, factory(p.Uuid, container, statusesIdx[container.Name]))
+		if c := factory(p.Uuid, container, statusesIdx[container.Name]); c != nil {
+			obtained = append(obtained, c)
+		}
 	}
 
 	return obtained
@@ -399,6 +405,8 @@ func (p *Pod) Relations() []database.Relation {
 	return []database.Relation{
 		database.HasMany(p.Conditions, fk),
 		database.HasMany(p.Containers, database.WithoutCascadeDelete()),
+		database.HasMany(p.InitContainers, database.WithoutCascadeDelete()),
+		database.HasMany(p.SidecarContainers, database.WithoutCascadeDelete()),
 		database.HasMany(p.Owners, fk),
 		database.HasMany(p.Labels, database.WithoutCascadeDelete()),
 		database.HasMany(p.PodLabels, fk),
