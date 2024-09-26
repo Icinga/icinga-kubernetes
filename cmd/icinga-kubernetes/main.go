@@ -65,6 +65,8 @@ func main() {
 		os.Exit(0)
 	}
 
+	klog.Infof("Starting Icinga for Kubernetes (%s)", internal.Version.Version)
+
 	kconfig, err := kclientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, &overrides).ClientConfig()
 	if err != nil {
 		if kclientcmd.IsEmptyConfig(err) {
