@@ -509,13 +509,17 @@ func (db *Database) UpsertStreamed(
 		var g *errgroup.Group
 		g, ctx = errgroup.WithContext(ctx)
 		streams := make(map[string]chan interface{}, len(relations.Relations()))
+		defer func() {
+			for _, ch := range streams {
+				close(ch)
+			}
+		}()
 		for _, relation := range relations.Relations() {
 			relation := relation
 
 			ch := make(chan interface{})
 			g.Go(func() error {
 				defer runtime.HandleCrash()
-				defer close(ch)
 
 				return db.UpsertStreamed(ctx, ch, WithCascading())
 			})
