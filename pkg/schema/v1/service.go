@@ -10,8 +10,13 @@ import (
 	kruntime "k8s.io/apimachinery/pkg/runtime"
 	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
+	"k8s.io/client-go/kubernetes"
 	"strings"
 )
+
+type ServiceFactory struct {
+	clientset *kubernetes.Clientset
+}
 
 type Service struct {
 	Meta
@@ -40,6 +45,8 @@ type Service struct {
 	Annotations                   []Annotation         `db:"-"`
 	ServiceAnnotations            []ServiceAnnotation  `db:"-"`
 	ResourceAnnotations           []ResourceAnnotation `db:"-"`
+	ServicePods                   []ServicePod         `db:"-"`
+	factory                       *ServiceFactory
 }
 
 type ServiceSelector struct {
@@ -77,8 +84,19 @@ type ServiceAnnotation struct {
 	AnnotationUuid types.UUID
 }
 
-func NewService() Resource {
-	return &Service{}
+type ServicePod struct {
+	ServiceUuid types.UUID
+	PodUuid     types.UUID
+}
+
+func NewServiceFactory(clientset *kubernetes.Clientset) *ServiceFactory {
+	return &ServiceFactory{
+		clientset: clientset,
+	}
+}
+
+func (f *ServiceFactory) NewService() Resource {
+	return &Service{factory: f}
 }
 
 func (s *Service) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
@@ -216,7 +234,6 @@ func (s *Service) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		internalTrafficPolicy = string(*service.Spec.InternalTrafficPolicy)
 	}
 	s.InternalTrafficPolicy = internalTrafficPolicy
-
 	scheme := kruntime.NewScheme()
 	_ = kcorev1.AddToScheme(scheme)
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kcorev1.SchemeGroupVersion)
@@ -238,5 +255,7 @@ func (s *Service) Relations() []database.Relation {
 		database.HasMany(s.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
 		database.HasMany(s.Annotations, database.WithoutCascadeDelete()),
 		database.HasMany(s.ServiceAnnotations, fk),
+		database.HasMany(s.ResourceAnnotations, fk),
+		database.HasMany(s.ServicePods, fk),
 	}
 }
