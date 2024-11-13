@@ -19,6 +19,7 @@ CREATE TABLE label (
 
 CREATE TABLE config_map (
   uuid binary(16) NOT NULL,
+  cluster_uuid binary(16) NOT NULL,
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -125,6 +126,7 @@ CREATE TABLE container_mount (
 
 CREATE TABLE cron_job (
   uuid binary(16) NOT NULL,
+  cluster_uuid binary(16) NOT NULL,
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -158,6 +160,7 @@ CREATE TABLE cron_job_label (
 
 CREATE TABLE daemon_set (
   uuid binary(16) NOT NULL,
+  cluster_uuid binary(16) NOT NULL,
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -213,6 +216,7 @@ CREATE TABLE daemon_set_owner (
 
 CREATE TABLE deployment (
   uuid binary(16) NOT NULL,
+  cluster_uuid binary(16) NOT NULL,
   namespace varchar(63) COLLATE utf8mb4_unicode_ci  NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -286,6 +290,7 @@ CREATE TABLE endpoint (
 
 CREATE TABLE endpoint_slice (
   uuid binary(16) NOT NULL,
+  cluster_uuid binary(16) NOT NULL,
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -314,6 +319,7 @@ CREATE TABLE endpoint_target_ref (
 
 CREATE TABLE event (
   uuid binary(16) NOT NULL,
+  cluster_uuid binary(16) NOT NULL,
   referent_uuid binary(16) NOT NULL,
   namespace varchar(63) NOT NULL,
   name varchar(270) NOT NULL,
@@ -338,6 +344,7 @@ CREATE TABLE event (
 
 CREATE TABLE ingress (
   uuid binary(16) NOT NULL,
+  cluster_uuid binary(16) NOT NULL,
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -386,6 +393,7 @@ CREATE TABLE ingress_tls (
 
 CREATE TABLE job (
   uuid binary(16) NOT NULL,
+  cluster_uuid binary(16) NOT NULL,
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -445,6 +453,7 @@ CREATE TABLE job_owner (
 
 CREATE TABLE namespace (
   uuid binary(16) NOT NULL,
+  cluster_uuid binary(16) NOT NULL,
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL, /* TODO: Remove. A namespace does not have a namespace. */
   name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -479,6 +488,7 @@ CREATE TABLE namespace_label (
 
 CREATE TABLE node (
   uuid binary(16) NOT NULL,
+  cluster_uuid binary(16) NOT NULL,
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -543,6 +553,7 @@ CREATE TABLE node_volume (
 
 CREATE TABLE persistent_volume (
   uuid binary(16) NOT NULL,
+  cluster_uuid binary(16) NOT NULL,
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -572,6 +583,7 @@ CREATE TABLE persistent_volume_claim_ref (
 
 CREATE TABLE pod (
   uuid binary(16) NOT NULL,
+  cluster_uuid binary(16) NOT NULL,
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -695,6 +707,7 @@ CREATE TABLE prometheus_pod_metric (
 
 CREATE TABLE pvc (
   uuid binary(16) NOT NULL,
+  cluster_uuid binary(16) NOT NULL,
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -737,6 +750,7 @@ CREATE TABLE pvc_label (
 
 CREATE TABLE replica_set (
   uuid binary(16) NOT NULL,
+  cluster_uuid binary(16) NOT NULL,
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -789,6 +803,7 @@ CREATE TABLE replica_set_owner (
 
 CREATE TABLE secret (
   uuid binary(16) NOT NULL,
+  cluster_uuid binary(16) NOT NULL,
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -820,6 +835,7 @@ CREATE TABLE selector (
 
 CREATE TABLE service (
   uuid binary(16) NOT NULL,
+  cluster_uuid binary(16) NOT NULL,
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -885,6 +901,7 @@ CREATE TABLE service_selector (
 
 CREATE TABLE stateful_set (
   uuid binary(16) NOT NULL,
+  cluster_uuid binary(16) NOT NULL,
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
