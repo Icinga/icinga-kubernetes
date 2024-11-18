@@ -5,6 +5,7 @@ import (
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
+	"github.com/icinga/icinga-kubernetes/pkg/notifications"
 	kappsv1 "k8s.io/api/apps/v1"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -154,23 +155,19 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object) {
 	r.Yaml = string(output)
 }
 
-// GetNotificationsEvent implements the notifications.Notifiable interface.
-func (r *ReplicaSet) GetNotificationsEvent(baseUrl *url.URL) map[string]any {
-	replicaSetUrl := baseUrl.JoinPath("/replicaset")
-	replicaSetUrl.RawQuery = fmt.Sprintf("id=%s", r.Uuid)
-
-	return map[string]any{
-		"name":     r.Namespace + "/" + r.Name,
-		"severity": r.IcingaState.ToSeverity(),
-		"message":  r.IcingaStateReason,
-		"url":      replicaSetUrl.String(),
-		"tags": map[string]any{
+func (r *ReplicaSet) MarshalEvent() (notifications.Event, error) {
+	return notifications.Event{
+		Name:     r.Namespace + "/" + r.Name,
+		Severity: r.IcingaState.ToSeverity(),
+		Message:  r.IcingaStateReason,
+		URL:      &url.URL{Path: "/replicaset", RawQuery: fmt.Sprintf("id=%s", r.Uuid)},
+		Tags: map[string]string{
+			"uuid":      r.Uuid.String(),
 			"name":      r.Name,
 			"namespace": r.Namespace,
-			"uuid":      r.Uuid.String(),
 			"resource":  "replica_set",
 		},
-	}
+	}, nil
 }
 
 func (r *ReplicaSet) getIcingaState() (IcingaState, string) {

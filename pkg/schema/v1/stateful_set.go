@@ -5,6 +5,7 @@ import (
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
+	"github.com/icinga/icinga-kubernetes/pkg/notifications"
 	kappsv1 "k8s.io/api/apps/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kruntime "k8s.io/apimachinery/pkg/runtime"
@@ -179,23 +180,19 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object) {
 	s.Yaml = string(output)
 }
 
-// GetNotificationsEvent implements the notifications.Notifiable interface.
-func (s *StatefulSet) GetNotificationsEvent(baseUrl *url.URL) map[string]any {
-	statefulSetUrl := baseUrl.JoinPath("/statefulset")
-	statefulSetUrl.RawQuery = fmt.Sprintf("id=%s", s.Uuid)
-
-	return map[string]any{
-		"name":     s.Namespace + "/" + s.Name,
-		"severity": s.IcingaState.ToSeverity(),
-		"message":  s.IcingaStateReason,
-		"url":      statefulSetUrl.String(),
-		"tags": map[string]any{
+func (s *StatefulSet) MarshalEvent() (notifications.Event, error) {
+	return notifications.Event{
+		Name:     s.Namespace + "/" + s.Name,
+		Severity: s.IcingaState.ToSeverity(),
+		Message:  s.IcingaStateReason,
+		URL:      &url.URL{Path: "/statefulset", RawQuery: fmt.Sprintf("id=%s", s.Uuid)},
+		Tags: map[string]string{
+			"uuid":      s.Uuid.String(),
 			"name":      s.Name,
 			"namespace": s.Namespace,
-			"uuid":      s.Uuid.String(),
 			"resource":  "stateful_set",
 		},
-	}
+	}, nil
 }
 
 func (s *StatefulSet) getIcingaState() (IcingaState, string) {

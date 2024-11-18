@@ -11,6 +11,7 @@ import (
 	"github.com/icinga/icinga-go-library/periodic"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/internal"
+	cachev1 "github.com/icinga/icinga-kubernetes/internal/cache/v1"
 	"github.com/icinga/icinga-kubernetes/pkg/backoff"
 	"github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/icinga/icinga-kubernetes/pkg/daemon"
@@ -19,7 +20,6 @@ import (
 	"github.com/icinga/icinga-kubernetes/pkg/notifications"
 	"github.com/icinga/icinga-kubernetes/pkg/retry"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
-	"github.com/icinga/icinga-kubernetes/pkg/sync"
 	syncv1 "github.com/icinga/icinga-kubernetes/pkg/sync/v1"
 	k8sMysql "github.com/icinga/icinga-kubernetes/schema/mysql"
 	"github.com/okzk/sdnotify"
@@ -35,6 +35,7 @@ import (
 	"k8s.io/klog/v2"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -232,20 +233,41 @@ func main() {
 		}
 	}, periodic.Immediate()).Stop()
 
-	var nclient *notifications.Client
-	if err := notifications.SyncSourceConfig(ctx, db2, &cfg.Notifications); err != nil {
+	if err := internal.SyncNotificationsConfig(ctx, db2, &cfg.Notifications); err != nil {
 		klog.Fatal(err)
 	}
 
-	if cfg.Notifications.Url == "" {
-		err = notifications.RetrieveConfig(ctx, db2, &cfg.Notifications)
-		if err != nil {
-			klog.Error(errors.Wrap(err, "cannot retrieve Icinga Notifications config"))
-		}
-	}
-
 	if cfg.Notifications.Url != "" {
-		nclient = notifications.NewClient(db2, cfg.Notifications)
+		klog.Infof("Sending notifications to %s", cfg.Notifications.Url)
+
+		nclient, err := notifications.NewClient("icinga-kubernetes/"+internal.Version.Version, cfg.Notifications)
+		if err != nil {
+			klog.Fatal(err)
+		}
+
+		g.Go(func() error {
+			return nclient.Stream(ctx, cachev1.Multiplexers().Nodes().UpsertEvents().Out())
+		})
+
+		g.Go(func() error {
+			return nclient.Stream(ctx, cachev1.Multiplexers().DaemonSets().UpsertEvents().Out())
+		})
+
+		g.Go(func() error {
+			return nclient.Stream(ctx, cachev1.Multiplexers().StatefulSets().UpsertEvents().Out())
+		})
+
+		g.Go(func() error {
+			return nclient.Stream(ctx, cachev1.Multiplexers().Deployments().UpsertEvents().Out())
+		})
+
+		g.Go(func() error {
+			return nclient.Stream(ctx, cachev1.Multiplexers().ReplicaSets().UpsertEvents().Out())
+		})
+
+		g.Go(func() error {
+			return nclient.Stream(ctx, cachev1.Multiplexers().Pods().UpsertEvents().Out())
+		})
 	}
 
 	if cfg.Prometheus.Url != "" {
@@ -271,144 +293,190 @@ func main() {
 
 		return s.Run(ctx)
 	})
+
+	wg := sync.WaitGroup{}
+
+	wg.Add(1)
 	g.Go(func() error {
-		nodes := internal.NewMultiplex()
-		if cfg.Notifications.Url != "" {
-			nodesOut := nodes.Out()
-			g.Go(func() error { return nclient.Stream(ctx, nodesOut) })
-		}
-
-		nodesIn := nodes.In()
-		g.Go(func() error { return nodes.Do(ctx) })
-
 		s := syncv1.NewSync(db, factory.Core().V1().Nodes().Informer(), log.WithName("nodes"), schemav1.NewNode)
-		return s.Run(ctx, sync.WithOnUpsert(com.ForwardBulk(nodesIn)))
-	})
-	g.Go(func() error {
-		pods := internal.NewMultiplex()
-		deletedPodUuids := internal.NewMultiplex()
 
+		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
-			podsOut := pods.Out()
-			g.Go(func() error { return nclient.Stream(ctx, podsOut) })
+			forwardForNotifications = append(
+				forwardForNotifications,
+				syncv1.WithOnUpsert(com.ForwardBulk(cachev1.Multiplexers().Nodes().UpsertEvents().In())),
+				syncv1.WithOnDelete(com.ForwardBulk(cachev1.Multiplexers().Nodes().DeleteEvents().In())),
+			)
 		}
 
-		schemav1.SyncContainers(ctx, db, g, pods.Out(), deletedPodUuids.Out())
+		wg.Done()
+
+		return s.Run(ctx, forwardForNotifications...)
+	})
+
+	wg.Add(1)
+	g.Go(func() error {
+		schemav1.SyncContainers(
+			ctx,
+			db,
+			g,
+			cachev1.Multiplexers().Pods().UpsertEvents().Out(),
+			cachev1.Multiplexers().Pods().DeleteEvents().Out(),
+		)
 
 		f := schemav1.NewPodFactory(clientset)
 		s := syncv1.NewSync(db, factory.Core().V1().Pods().Informer(), log.WithName("pods"), f.New)
 
-		podsIn := pods.In()
-		deletedIn := deletedPodUuids.In()
+		wg.Done()
 
-		g.Go(func() error { return pods.Do(ctx) })
-		g.Go(func() error { return deletedPodUuids.Do(ctx) })
-
-		return s.Run(ctx, sync.WithOnUpsert(com.ForwardBulk(podsIn)), sync.WithOnDelete(com.ForwardBulk(deletedIn)))
+		return s.Run(
+			ctx,
+			syncv1.WithOnUpsert(com.ForwardBulk(cachev1.Multiplexers().Pods().UpsertEvents().In())),
+			syncv1.WithOnDelete(com.ForwardBulk(cachev1.Multiplexers().Pods().DeleteEvents().In())),
+		)
 	})
-	g.Go(func() error {
-		deployments := internal.NewMultiplex()
-		if cfg.Notifications.Url != "" {
-			deploymentsOut := deployments.Out()
-			g.Go(func() error { return nclient.Stream(ctx, deploymentsOut) })
-		}
-		s := syncv1.NewSync(db, factory.Apps().V1().Deployments().Informer(), log.WithName("deployments"), schemav1.NewDeployment)
 
-		deploymentsIn := deployments.In()
-		g.Go(func() error { return deployments.Do(ctx) })
-
-		return s.Run(ctx, sync.WithOnUpsert(com.ForwardBulk(deploymentsIn)))
-	})
+	wg.Add(1)
 	g.Go(func() error {
-		daemonSet := internal.NewMultiplex()
+		s := syncv1.NewSync(
+			db, factory.Apps().V1().Deployments().Informer(), log.WithName("deployments"), schemav1.NewDeployment)
+
+		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
-			daemonSetOut := daemonSet.Out()
-			g.Go(func() error { return nclient.Stream(ctx, daemonSetOut) })
+			forwardForNotifications = append(
+				forwardForNotifications,
+				syncv1.WithOnUpsert(com.ForwardBulk(cachev1.Multiplexers().Deployments().UpsertEvents().In())),
+				syncv1.WithOnDelete(com.ForwardBulk(cachev1.Multiplexers().Deployments().DeleteEvents().In())),
+			)
 		}
 
-		daemonSetIn := daemonSet.In()
-		g.Go(func() error { return daemonSet.Do(ctx) })
+		wg.Done()
 
-		s := syncv1.NewSync(db, factory.Apps().V1().DaemonSets().Informer(), log.WithName("daemon-sets"), schemav1.NewDaemonSet)
-
-		return s.Run(ctx, sync.WithOnUpsert(com.ForwardBulk(daemonSetIn)))
+		return s.Run(ctx, forwardForNotifications...)
 	})
+
+	wg.Add(1)
 	g.Go(func() error {
-		replicaSet := internal.NewMultiplex()
+		s := syncv1.NewSync(
+			db, factory.Apps().V1().DaemonSets().Informer(), log.WithName("daemon-sets"), schemav1.NewDaemonSet)
+
+		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
-			replicaSetOut := replicaSet.Out()
-			g.Go(func() error { return nclient.Stream(ctx, replicaSetOut) })
+			forwardForNotifications = append(
+				forwardForNotifications,
+				syncv1.WithOnUpsert(com.ForwardBulk(cachev1.Multiplexers().DaemonSets().UpsertEvents().In())),
+				syncv1.WithOnDelete(com.ForwardBulk(cachev1.Multiplexers().DaemonSets().DeleteEvents().In())),
+			)
 		}
 
-		replicaSetIn := replicaSet.In()
-		g.Go(func() error { return replicaSet.Do(ctx) })
+		wg.Done()
 
-		s := syncv1.NewSync(db, factory.Apps().V1().ReplicaSets().Informer(), log.WithName("replica-sets"), schemav1.NewReplicaSet)
-
-		return s.Run(ctx, sync.WithOnUpsert(com.ForwardBulk(replicaSetIn)))
+		return s.Run(ctx, forwardForNotifications...)
 	})
+
+	wg.Add(1)
 	g.Go(func() error {
-		statefulSet := internal.NewMultiplex()
+		s := syncv1.NewSync(
+			db, factory.Apps().V1().ReplicaSets().Informer(), log.WithName("replica-sets"), schemav1.NewReplicaSet)
+
+		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
-			statefulSetOut := statefulSet.Out()
-			g.Go(func() error { return nclient.Stream(ctx, statefulSetOut) })
+			forwardForNotifications = append(
+				forwardForNotifications,
+				syncv1.WithOnUpsert(com.ForwardBulk(cachev1.Multiplexers().ReplicaSets().UpsertEvents().In())),
+				syncv1.WithOnDelete(com.ForwardBulk(cachev1.Multiplexers().ReplicaSets().DeleteEvents().In())),
+			)
 		}
 
-		statefulSetIn := statefulSet.In()
-		g.Go(func() error { return statefulSet.Do(ctx) })
+		wg.Done()
 
-		s := syncv1.NewSync(db, factory.Apps().V1().StatefulSets().Informer(), log.WithName("stateful-sets"), schemav1.NewStatefulSet)
-
-		return s.Run(ctx, sync.WithOnUpsert(com.ForwardBulk(statefulSetIn)))
+		return s.Run(ctx, forwardForNotifications...)
 	})
+
+	wg.Add(1)
+	g.Go(func() error {
+		s := syncv1.NewSync(
+			db, factory.Apps().V1().StatefulSets().Informer(), log.WithName("stateful-sets"), schemav1.NewStatefulSet)
+
+		var forwardForNotifications []syncv1.Feature
+		if cfg.Notifications.Url != "" {
+			forwardForNotifications = append(
+				forwardForNotifications,
+				syncv1.WithOnUpsert(com.ForwardBulk(cachev1.Multiplexers().StatefulSets().UpsertEvents().In())),
+				syncv1.WithOnDelete(com.ForwardBulk(cachev1.Multiplexers().StatefulSets().DeleteEvents().In())),
+			)
+		}
+
+		wg.Done()
+
+		return s.Run(ctx, forwardForNotifications...)
+	})
+
 	g.Go(func() error {
 		s := syncv1.NewSync(db, factory.Core().V1().Services().Informer(), log.WithName("services"), schemav1.NewService)
 
 		return s.Run(ctx)
 	})
+
 	g.Go(func() error {
 		s := syncv1.NewSync(db, factory.Discovery().V1().EndpointSlices().Informer(), log.WithName("endpoints"), schemav1.NewEndpointSlice)
 
 		return s.Run(ctx)
 	})
+
 	g.Go(func() error {
 		s := syncv1.NewSync(db, factory.Core().V1().Secrets().Informer(), log.WithName("secrets"), schemav1.NewSecret)
 		return s.Run(ctx)
 	})
+
 	g.Go(func() error {
 		s := syncv1.NewSync(db, factory.Core().V1().ConfigMaps().Informer(), log.WithName("config-maps"), schemav1.NewConfigMap)
 
 		return s.Run(ctx)
 	})
+
 	g.Go(func() error {
 		s := syncv1.NewSync(db, factory.Events().V1().Events().Informer(), log.WithName("events"), schemav1.NewEvent)
 
-		return s.Run(ctx, sync.WithNoDelete(), sync.WithNoWarumup())
+		return s.Run(ctx, syncv1.WithNoDelete(), syncv1.WithNoWarumup())
 	})
+
 	g.Go(func() error {
 		s := syncv1.NewSync(db, factory.Core().V1().PersistentVolumeClaims().Informer(), log.WithName("pvcs"), schemav1.NewPvc)
 
 		return s.Run(ctx)
 	})
+
 	g.Go(func() error {
 		s := syncv1.NewSync(db, factory.Core().V1().PersistentVolumes().Informer(), log.WithName("persistent-volumes"), schemav1.NewPersistentVolume)
 
 		return s.Run(ctx)
 	})
+
 	g.Go(func() error {
 		s := syncv1.NewSync(db, factory.Batch().V1().Jobs().Informer(), log.WithName("jobs"), schemav1.NewJob)
 
 		return s.Run(ctx)
 	})
+
 	g.Go(func() error {
 		s := syncv1.NewSync(db, factory.Batch().V1().CronJobs().Informer(), log.WithName("cron-jobs"), schemav1.NewCronJob)
 
 		return s.Run(ctx)
 	})
+
 	g.Go(func() error {
 		s := syncv1.NewSync(db, factory.Networking().V1().Ingresses().Informer(), log.WithName("ingresses"), schemav1.NewIngress)
 
 		return s.Run(ctx)
+	})
+
+	g.Go(func() error {
+		wg.Wait()
+
+		klog.V(2).Info("Starting multiplexers")
+
+		return cachev1.Multiplexers().Run(ctx)
 	})
 
 	g.Go(func() error {

@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/icinga/icinga-go-library/database"
-	"github.com/icinga/icinga-kubernetes/internal"
 	"github.com/pkg/errors"
 	"io"
 	"k8s.io/klog/v2"
@@ -13,53 +11,66 @@ import (
 	"net/url"
 )
 
-// Notifiable can be implemented by all k8s types that want to submit notification events to Icinga Notifications.
-type Notifiable interface {
-	// GetNotificationsEvent returns the event data of this type that will be transmitted to Icinga Notifications.
-	GetNotificationsEvent(baseUrl *url.URL) map[string]any
-}
-
 type Client struct {
-	db     *database.DB
-	client http.Client
-	Config
+	client          http.Client
+	userAgent       string
+	processEventUrl string
+	webUrl          *url.URL
 }
 
-func NewClient(db *database.DB, c Config) *Client {
-	return &Client{db: db, client: http.Client{}, Config: c}
+func NewClient(name string, config Config) (*Client, error) {
+	baseUrl, err := url.Parse(config.Url)
+	if err != nil {
+		return nil, errors.Wrap(err, "unable to parse url")
+	}
+
+	webUrl, err := url.Parse(config.KubernetesWebUrl)
+	if err != nil {
+		return nil, errors.Wrap(err, "unable to parse web url")
+	}
+
+	return &Client{
+		client: http.Client{
+			Transport: &basicAuthTransport{
+				RoundTripper: http.DefaultTransport,
+				username:     config.Username,
+				password:     config.Password,
+			},
+		},
+		userAgent:       name,
+		processEventUrl: baseUrl.ResolveReference(&url.URL{Path: "/process-event"}).String(),
+		webUrl:          webUrl,
+	}, nil
 }
 
-func (c *Client) ProcessEvent(notifiable Notifiable) error {
-	baseUrl, err := url.Parse(c.Config.KubernetesWebUrl)
+func (c *Client) ProcessEvent(ctx context.Context, event Marshaler) error {
+	e, _ := event.MarshalEvent()
+	e.URL = c.webUrl.ResolveReference(e.URL)
+
+	body, err := json.Marshal(e)
 	if err != nil {
-		return errors.Wrapf(err, "cannot parse Icinga for Kubernetes Web URL: %q", c.Config.KubernetesWebUrl)
+		return errors.Wrapf(err, "cannot marshal notifications event data of type: %T", e)
 	}
 
-	body, err := json.Marshal(notifiable.GetNotificationsEvent(baseUrl))
-	if err != nil {
-		return errors.Wrapf(err, "cannot marshal notifications event data of type: %T", notifiable)
-	}
-
-	r, err := http.NewRequest(http.MethodPost, c.Config.Url+"/process-event", bytes.NewBuffer(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.processEventUrl, bytes.NewReader(body))
 	if err != nil {
 		return errors.Wrap(err, "cannot create new notifications http request")
 	}
 
-	r.SetBasicAuth(c.Config.Username, c.Config.Password)
-	r.Header.Set("User-Agent", "icinga-kubernetes/"+internal.Version.Version)
-	r.Header.Add("Content-Type", "application/json")
+	req.Header.Add("Content-Type", "application/json")
 
-	res, err := c.client.Do(r)
+	res, err := c.client.Do(req)
 	if err != nil {
 		return errors.Wrap(err, "cannot send notifications event")
 	}
+
 	defer func() {
-		_, _ = io.Copy(io.Discard, res.Body)
 		_ = res.Body.Close()
 	}()
 
-	if res.StatusCode != http.StatusOK && res.StatusCode != http.StatusAlreadyReported {
-		return errors.Errorf("received unexpected http status code from Icinga Notifications: %d", res.StatusCode)
+	if res.StatusCode != http.StatusOK && res.StatusCode != http.StatusNotAcceptable {
+		_, msg := io.ReadAll(res.Body)
+		return errors.Errorf("received unexpected http status code from Icinga Notifications: %d: %s", res.StatusCode, msg)
 	}
 
 	return nil
@@ -74,11 +85,23 @@ func (c *Client) Stream(ctx context.Context, entities <-chan any) error {
 				return nil
 			}
 
-			if err := c.ProcessEvent(entity.(Notifiable)); err != nil {
+			if err := c.ProcessEvent(ctx, entity.(Marshaler)); err != nil {
 				klog.Error(err)
 			}
 		case <-ctx.Done():
 			return ctx.Err()
 		}
 	}
+}
+
+type basicAuthTransport struct {
+	http.RoundTripper
+	username string
+	password string
+}
+
+func (t *basicAuthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req.SetBasicAuth(t.username, t.password)
+
+	return t.RoundTripper.RoundTrip(req)
 }

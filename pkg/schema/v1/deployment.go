@@ -5,6 +5,7 @@ import (
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
+	"github.com/icinga/icinga-kubernetes/pkg/notifications"
 	kappsv1 "k8s.io/api/apps/v1"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -167,23 +168,19 @@ func (d *Deployment) Obtain(k8s kmetav1.Object) {
 	d.Yaml = string(output)
 }
 
-// GetNotificationsEvent implements the notifications.Notifiable interface.
-func (d *Deployment) GetNotificationsEvent(baseUrl *url.URL) map[string]any {
-	deploymentUrl := baseUrl.JoinPath("/deployment")
-	deploymentUrl.RawQuery = fmt.Sprintf("id=%s", d.Uuid)
-
-	return map[string]any{
-		"name":     d.Namespace + "/" + d.Name,
-		"severity": d.IcingaState.ToSeverity(),
-		"message":  d.IcingaStateReason,
-		"url":      deploymentUrl.String(),
-		"tags": map[string]any{
+func (d *Deployment) MarshalEvent() (notifications.Event, error) {
+	return notifications.Event{
+		Name:     d.Namespace + "/" + d.Name,
+		Severity: d.IcingaState.ToSeverity(),
+		Message:  d.IcingaStateReason,
+		URL:      &url.URL{Path: "/deployment", RawQuery: fmt.Sprintf("id=%s", d.Uuid)},
+		Tags: map[string]string{
+			"uuid":      d.Uuid.String(),
 			"name":      d.Name,
 			"namespace": d.Namespace,
-			"uuid":      d.Uuid.String(),
 			"resource":  "deployment",
 		},
-	}
+	}, nil
 }
 
 func (d *Deployment) getIcingaState() (IcingaState, string) {

@@ -6,6 +6,7 @@ import (
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
+	"github.com/icinga/icinga-kubernetes/pkg/notifications"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kruntime "k8s.io/apimachinery/pkg/runtime"
@@ -277,23 +278,19 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 	p.Yaml = string(output)
 }
 
-// GetNotificationsEvent implements the notifications.Notifiable interface.
-func (p *Pod) GetNotificationsEvent(baseUrl *url.URL) map[string]any {
-	podUrl := baseUrl.JoinPath("/pod")
-	podUrl.RawQuery = fmt.Sprintf("id=%s", p.Uuid)
-
-	return map[string]any{
-		"name":     p.Namespace + "/" + p.Name,
-		"severity": p.IcingaState.ToSeverity(),
-		"message":  p.IcingaStateReason,
-		"url":      podUrl.String(),
-		"tags": map[string]any{
+func (p *Pod) MarshalEvent() (notifications.Event, error) {
+	return notifications.Event{
+		Name:     p.Namespace + "/" + p.Name,
+		Severity: p.IcingaState.ToSeverity(),
+		Message:  p.IcingaStateReason,
+		URL:      &url.URL{Path: "/pod", RawQuery: fmt.Sprintf("id=%s", p.Uuid)},
+		Tags: map[string]string{
+			"uuid":      p.Uuid.String(),
 			"name":      p.Name,
 			"namespace": p.Namespace,
-			"uuid":      p.Uuid.String(),
 			"resource":  "pod",
 		},
-	}
+	}, nil
 }
 
 func (p *Pod) getIcingaState(pod *kcorev1.Pod) (IcingaState, string) {

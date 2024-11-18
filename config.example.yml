@@ -28,17 +28,14 @@ prometheus:
 
 # Configuration for Icinga Notifications daemon.
 notifications:
-  # Icinga Notifications daemon base URL.
-  # If not set, Icinga for Kubernetes won't send any event to Icinga Notifications (disabled).
+  # Icinga Notifications daemon URL.
 #  url: http://localhost:5680
 
-  # The base URL of your Icinga for Kubernetes web module to be used for the generated Icinga Notifications events.
+  # Username for authenticating the Icinga for Kubernetes source in Icinga Notifications.
+#  username: source-\d+
+
+  # Password for authenticating the Icinga for Kubernetes source in Icinga Notifications.
+#  password: password
+
+  # The base URL of Icinga for Kubernetes Web used in generated Icinga Notification events.
 #  kubernetes_web_url: http://localhost/icingaweb2/kubernetes
-
-  # The Icinga for Kubernetes source username used to authenticate in Icinga Notifications.
-  # Leave it empty to let Icinga for Kubernetes generate the credentials automatically.
-#  username: kubernetes
-
-  # The Icinga for Kubernetes source password used to authenticate in Icinga Notifications.
-  # Leave it empty to let Icinga for Kubernetes generate the credentials automatically.
-#  password: 0bcf3398-12c8-4cb5-849d-81dcd0644cc7
