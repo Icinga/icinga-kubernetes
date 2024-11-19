@@ -6,7 +6,6 @@ import (
 	"github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
-	"github.com/icinga/icinga-kubernetes/pkg/sync"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/cache"
@@ -33,10 +32,10 @@ func NewSync(
 	}
 }
 
-func (s *Sync) Run(ctx context.Context, features ...sync.Feature) error {
-	controller := sync.NewController(s.informer, s.log.WithName("controller"))
+func (s *Sync) Run(ctx context.Context, features ...Feature) error {
+	controller := NewController(s.informer, s.log.WithName("controller"))
 
-	with := sync.NewFeatures(features...)
+	with := NewFeatures(features...)
 
 	if !with.NoWarmup() {
 		if err := s.warmup(ctx, controller); err != nil {
@@ -47,7 +46,7 @@ func (s *Sync) Run(ctx context.Context, features ...sync.Feature) error {
 	return s.sync(ctx, controller, features...)
 }
 
-func (s *Sync) warmup(ctx context.Context, c *sync.Controller) error {
+func (s *Sync) warmup(ctx context.Context, c *Controller) error {
 	g, ctx := errgroup.WithContext(ctx)
 
 	entities, errs := s.db.YieldAll(ctx, func() (interface{}, error) {
@@ -78,8 +77,8 @@ func (s *Sync) warmup(ctx context.Context, c *sync.Controller) error {
 	return g.Wait()
 }
 
-func (s *Sync) sync(ctx context.Context, c *sync.Controller, features ...sync.Feature) error {
-	sink := sync.NewSink(func(i *sync.Item) interface{} {
+func (s *Sync) sync(ctx context.Context, c *Controller, features ...Feature) error {
+	sink := NewSink(func(i *Item) interface{} {
 		entity := s.factory()
 		entity.Obtain(*i.Item)
 
@@ -88,7 +87,7 @@ func (s *Sync) sync(ctx context.Context, c *sync.Controller, features ...sync.Fe
 		return k
 	})
 
-	with := sync.NewFeatures(features...)
+	with := NewFeatures(features...)
 
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error {

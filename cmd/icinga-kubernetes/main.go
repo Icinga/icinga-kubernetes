@@ -11,13 +11,15 @@ import (
 	"github.com/icinga/icinga-go-library/periodic"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/internal"
+	cachev1 "github.com/icinga/icinga-kubernetes/internal/cache/v1"
 	"github.com/icinga/icinga-kubernetes/pkg/backoff"
 	"github.com/icinga/icinga-kubernetes/pkg/com"
+	"github.com/icinga/icinga-kubernetes/pkg/daemon"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/metrics"
+	"github.com/icinga/icinga-kubernetes/pkg/notifications"
 	"github.com/icinga/icinga-kubernetes/pkg/retry"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
-	"github.com/icinga/icinga-kubernetes/pkg/sync"
 	syncv1 "github.com/icinga/icinga-kubernetes/pkg/sync/v1"
 	k8sMysql "github.com/icinga/icinga-kubernetes/schema/mysql"
 	"github.com/okzk/sdnotify"
@@ -33,6 +35,7 @@ import (
 	"k8s.io/klog/v2"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -87,7 +90,7 @@ func main() {
 	factory := informers.NewSharedInformerFactory(clientset, 0)
 	log := klog.NewKlogr()
 
-	var cfg internal.Config
+	var cfg daemon.Config
 	err = config.FromYAMLFile(configLocation, &cfg)
 	if err != nil {
 		klog.Fatal(errors.Wrap(err, "can't create configuration"))
@@ -186,6 +189,16 @@ func main() {
 		}
 	}
 
+	logs, err := logging.NewLoggingFromConfig("Icinga Kubernetes", cfg.Logging)
+	if err != nil {
+		klog.Fatal(errors.Wrap(err, "can't configure logging"))
+	}
+
+	db2, err := igldatabase.NewDbFromConfig(&cfg.Database, logs.GetChildLogger("database"), igldatabase.RetryConnectorCallbacks{})
+	if err != nil {
+		klog.Fatal("IGL_DATABASE: ", err)
+	}
+
 	if _, err := db.ExecContext(ctx, "DELETE FROM kubernetes_instance"); err != nil {
 		klog.Fatal(errors.Wrap(err, "can't delete instance"))
 	}
@@ -220,17 +233,44 @@ func main() {
 		}
 	}, periodic.Immediate()).Stop()
 
+	if err := internal.SyncNotificationsConfig(ctx, db2, &cfg.Notifications); err != nil {
+		klog.Fatal(err)
+	}
+
+	if cfg.Notifications.Url != "" {
+		klog.Infof("Sending notifications to %s", cfg.Notifications.Url)
+
+		nclient, err := notifications.NewClient("icinga-kubernetes/"+internal.Version.Version, cfg.Notifications)
+		if err != nil {
+			klog.Fatal(err)
+		}
+
+		g.Go(func() error {
+			return nclient.Stream(ctx, cachev1.Multiplexers().Nodes().UpsertEvents().Out())
+		})
+
+		g.Go(func() error {
+			return nclient.Stream(ctx, cachev1.Multiplexers().DaemonSets().UpsertEvents().Out())
+		})
+
+		g.Go(func() error {
+			return nclient.Stream(ctx, cachev1.Multiplexers().StatefulSets().UpsertEvents().Out())
+		})
+
+		g.Go(func() error {
+			return nclient.Stream(ctx, cachev1.Multiplexers().Deployments().UpsertEvents().Out())
+		})
+
+		g.Go(func() error {
+			return nclient.Stream(ctx, cachev1.Multiplexers().ReplicaSets().UpsertEvents().Out())
+		})
+
+		g.Go(func() error {
+			return nclient.Stream(ctx, cachev1.Multiplexers().Pods().UpsertEvents().Out())
+		})
+	}
+
 	if cfg.Prometheus.Url != "" {
-		logs, err := logging.NewLoggingFromConfig("Icinga Kubernetes", cfg.Logging)
-		if err != nil {
-			klog.Fatal(errors.Wrap(err, "can't configure logging"))
-		}
-
-		db2, err := igldatabase.NewDbFromConfig(&cfg.Database, logs.GetChildLogger("database"), igldatabase.RetryConnectorCallbacks{})
-		if err != nil {
-			klog.Fatal("IGL_DATABASE: ", err)
-		}
-
 		promClient, err := promapi.NewClient(promapi.Config{Address: cfg.Prometheus.Url})
 		if err != nil {
 			klog.Fatal(errors.Wrap(err, "error creating promClient"))
@@ -253,92 +293,190 @@ func main() {
 
 		return s.Run(ctx)
 	})
+
+	wg := sync.WaitGroup{}
+
+	wg.Add(1)
 	g.Go(func() error {
 		s := syncv1.NewSync(db, factory.Core().V1().Nodes().Informer(), log.WithName("nodes"), schemav1.NewNode)
 
-		return s.Run(ctx)
-	})
-	g.Go(func() error {
-		pods := make(chan any)
-		deletePodIds := make(chan interface{})
-		defer close(pods)
-		defer close(deletePodIds)
+		var forwardForNotifications []syncv1.Feature
+		if cfg.Notifications.Url != "" {
+			forwardForNotifications = append(
+				forwardForNotifications,
+				syncv1.WithOnUpsert(com.ForwardBulk(cachev1.Multiplexers().Nodes().UpsertEvents().In())),
+				syncv1.WithOnDelete(com.ForwardBulk(cachev1.Multiplexers().Nodes().DeleteEvents().In())),
+			)
+		}
 
-		schemav1.SyncContainers(ctx, db, g, pods, deletePodIds)
+		wg.Done()
+
+		return s.Run(ctx, forwardForNotifications...)
+	})
+
+	wg.Add(1)
+	g.Go(func() error {
+		schemav1.SyncContainers(
+			ctx,
+			db,
+			g,
+			cachev1.Multiplexers().Pods().UpsertEvents().Out(),
+			cachev1.Multiplexers().Pods().DeleteEvents().Out(),
+		)
 
 		f := schemav1.NewPodFactory(clientset)
 		s := syncv1.NewSync(db, factory.Core().V1().Pods().Informer(), log.WithName("pods"), f.New)
 
-		return s.Run(ctx, sync.WithOnUpsert(com.ForwardBulk(pods)), sync.WithOnDelete(com.ForwardBulk(deletePodIds)))
-	})
-	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Apps().V1().Deployments().Informer(), log.WithName("deployments"), schemav1.NewDeployment)
+		wg.Done()
 
-		return s.Run(ctx)
+		return s.Run(
+			ctx,
+			syncv1.WithOnUpsert(com.ForwardBulk(cachev1.Multiplexers().Pods().UpsertEvents().In())),
+			syncv1.WithOnDelete(com.ForwardBulk(cachev1.Multiplexers().Pods().DeleteEvents().In())),
+		)
 	})
-	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Apps().V1().DaemonSets().Informer(), log.WithName("daemon-sets"), schemav1.NewDaemonSet)
 
-		return s.Run(ctx)
-	})
+	wg.Add(1)
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Apps().V1().ReplicaSets().Informer(), log.WithName("replica-sets"), schemav1.NewReplicaSet)
+		s := syncv1.NewSync(
+			db, factory.Apps().V1().Deployments().Informer(), log.WithName("deployments"), schemav1.NewDeployment)
 
-		return s.Run(ctx)
+		var forwardForNotifications []syncv1.Feature
+		if cfg.Notifications.Url != "" {
+			forwardForNotifications = append(
+				forwardForNotifications,
+				syncv1.WithOnUpsert(com.ForwardBulk(cachev1.Multiplexers().Deployments().UpsertEvents().In())),
+				syncv1.WithOnDelete(com.ForwardBulk(cachev1.Multiplexers().Deployments().DeleteEvents().In())),
+			)
+		}
+
+		wg.Done()
+
+		return s.Run(ctx, forwardForNotifications...)
 	})
+
+	wg.Add(1)
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Apps().V1().StatefulSets().Informer(), log.WithName("stateful-sets"), schemav1.NewStatefulSet)
+		s := syncv1.NewSync(
+			db, factory.Apps().V1().DaemonSets().Informer(), log.WithName("daemon-sets"), schemav1.NewDaemonSet)
 
-		return s.Run(ctx)
+		var forwardForNotifications []syncv1.Feature
+		if cfg.Notifications.Url != "" {
+			forwardForNotifications = append(
+				forwardForNotifications,
+				syncv1.WithOnUpsert(com.ForwardBulk(cachev1.Multiplexers().DaemonSets().UpsertEvents().In())),
+				syncv1.WithOnDelete(com.ForwardBulk(cachev1.Multiplexers().DaemonSets().DeleteEvents().In())),
+			)
+		}
+
+		wg.Done()
+
+		return s.Run(ctx, forwardForNotifications...)
 	})
+
+	wg.Add(1)
+	g.Go(func() error {
+		s := syncv1.NewSync(
+			db, factory.Apps().V1().ReplicaSets().Informer(), log.WithName("replica-sets"), schemav1.NewReplicaSet)
+
+		var forwardForNotifications []syncv1.Feature
+		if cfg.Notifications.Url != "" {
+			forwardForNotifications = append(
+				forwardForNotifications,
+				syncv1.WithOnUpsert(com.ForwardBulk(cachev1.Multiplexers().ReplicaSets().UpsertEvents().In())),
+				syncv1.WithOnDelete(com.ForwardBulk(cachev1.Multiplexers().ReplicaSets().DeleteEvents().In())),
+			)
+		}
+
+		wg.Done()
+
+		return s.Run(ctx, forwardForNotifications...)
+	})
+
+	wg.Add(1)
+	g.Go(func() error {
+		s := syncv1.NewSync(
+			db, factory.Apps().V1().StatefulSets().Informer(), log.WithName("stateful-sets"), schemav1.NewStatefulSet)
+
+		var forwardForNotifications []syncv1.Feature
+		if cfg.Notifications.Url != "" {
+			forwardForNotifications = append(
+				forwardForNotifications,
+				syncv1.WithOnUpsert(com.ForwardBulk(cachev1.Multiplexers().StatefulSets().UpsertEvents().In())),
+				syncv1.WithOnDelete(com.ForwardBulk(cachev1.Multiplexers().StatefulSets().DeleteEvents().In())),
+			)
+		}
+
+		wg.Done()
+
+		return s.Run(ctx, forwardForNotifications...)
+	})
+
 	g.Go(func() error {
 		s := syncv1.NewSync(db, factory.Core().V1().Services().Informer(), log.WithName("services"), schemav1.NewService)
 
 		return s.Run(ctx)
 	})
+
 	g.Go(func() error {
 		s := syncv1.NewSync(db, factory.Discovery().V1().EndpointSlices().Informer(), log.WithName("endpoints"), schemav1.NewEndpointSlice)
 
 		return s.Run(ctx)
 	})
+
 	g.Go(func() error {
 		s := syncv1.NewSync(db, factory.Core().V1().Secrets().Informer(), log.WithName("secrets"), schemav1.NewSecret)
 		return s.Run(ctx)
 	})
+
 	g.Go(func() error {
 		s := syncv1.NewSync(db, factory.Core().V1().ConfigMaps().Informer(), log.WithName("config-maps"), schemav1.NewConfigMap)
 
 		return s.Run(ctx)
 	})
+
 	g.Go(func() error {
 		s := syncv1.NewSync(db, factory.Events().V1().Events().Informer(), log.WithName("events"), schemav1.NewEvent)
 
-		return s.Run(ctx, sync.WithNoDelete(), sync.WithNoWarumup())
+		return s.Run(ctx, syncv1.WithNoDelete(), syncv1.WithNoWarumup())
 	})
+
 	g.Go(func() error {
 		s := syncv1.NewSync(db, factory.Core().V1().PersistentVolumeClaims().Informer(), log.WithName("pvcs"), schemav1.NewPvc)
 
 		return s.Run(ctx)
 	})
+
 	g.Go(func() error {
 		s := syncv1.NewSync(db, factory.Core().V1().PersistentVolumes().Informer(), log.WithName("persistent-volumes"), schemav1.NewPersistentVolume)
 
 		return s.Run(ctx)
 	})
+
 	g.Go(func() error {
 		s := syncv1.NewSync(db, factory.Batch().V1().Jobs().Informer(), log.WithName("jobs"), schemav1.NewJob)
 
 		return s.Run(ctx)
 	})
+
 	g.Go(func() error {
 		s := syncv1.NewSync(db, factory.Batch().V1().CronJobs().Informer(), log.WithName("cron-jobs"), schemav1.NewCronJob)
 
 		return s.Run(ctx)
 	})
+
 	g.Go(func() error {
 		s := syncv1.NewSync(db, factory.Networking().V1().Ingresses().Informer(), log.WithName("ingresses"), schemav1.NewIngress)
 
 		return s.Run(ctx)
+	})
+
+	g.Go(func() error {
+		wg.Wait()
+
+		klog.V(2).Info("Starting multiplexers")
+
+		return cachev1.Multiplexers().Run(ctx)
 	})
 
 	g.Go(func() error {

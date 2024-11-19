@@ -5,6 +5,7 @@ import (
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
+	"github.com/icinga/icinga-kubernetes/pkg/notifications"
 	kappsv1 "k8s.io/api/apps/v1"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -12,6 +13,7 @@ import (
 	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	ktypes "k8s.io/apimachinery/pkg/types"
+	"net/url"
 	"strings"
 )
 
@@ -151,6 +153,21 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object) {
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kappsv1.SchemeGroupVersion)
 	output, _ := kruntime.Encode(codec, replicaSet)
 	r.Yaml = string(output)
+}
+
+func (r *ReplicaSet) MarshalEvent() (notifications.Event, error) {
+	return notifications.Event{
+		Name:     r.Namespace + "/" + r.Name,
+		Severity: r.IcingaState.ToSeverity(),
+		Message:  r.IcingaStateReason,
+		URL:      &url.URL{Path: "/replicaset", RawQuery: fmt.Sprintf("id=%s", r.Uuid)},
+		Tags: map[string]string{
+			"uuid":      r.Uuid.String(),
+			"name":      r.Name,
+			"namespace": r.Namespace,
+			"resource":  "replica_set",
+		},
+	}, nil
 }
 
 func (r *ReplicaSet) getIcingaState() (IcingaState, string) {

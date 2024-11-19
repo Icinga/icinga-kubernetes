@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
+	"github.com/icinga/icinga-kubernetes/pkg/notifications"
 	"github.com/pkg/errors"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -12,6 +13,7 @@ import (
 	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	knet "k8s.io/utils/net"
 	"net"
+	"net/url"
 	"strings"
 )
 
@@ -190,14 +192,29 @@ func (n *Node) Obtain(k8s kmetav1.Object) {
 	}
 }
 
+func (n *Node) MarshalEvent() (notifications.Event, error) {
+	return notifications.Event{
+		Name:     n.Namespace + "/" + n.Name,
+		Severity: n.IcingaState.ToSeverity(),
+		Message:  n.IcingaStateReason,
+		URL:      &url.URL{Path: "/node", RawQuery: fmt.Sprintf("id=%s", n.Uuid)},
+		Tags: map[string]string{
+			"uuid":      n.Uuid.String(),
+			"name":      n.Name,
+			"namespace": n.Namespace,
+			"resource":  "node",
+		},
+	}, nil
+}
+
 func (n *Node) getIcingaState(node *kcorev1.Node) (IcingaState, string) {
-	//if node.Status.Phase == kcorev1.NodePending {
+	// if node.Status.Phase == kcorev1.NodePending {
 	//	return Pending, fmt.Sprintf("Node %s is pending.", node.Name)
-	//}
+	// }
 	//
-	//if node.Status.Phase == kcorev1.NodeTerminated {
+	// if node.Status.Phase == kcorev1.NodeTerminated {
 	//	return Ok, fmt.Sprintf("Node %s is terminated.", node.Name)
-	//}
+	// }
 
 	var state IcingaState
 	var reason []string

@@ -6,6 +6,7 @@ import (
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
+	"github.com/icinga/icinga-kubernetes/pkg/notifications"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kruntime "k8s.io/apimachinery/pkg/runtime"
@@ -13,6 +14,7 @@ import (
 	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	ktypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -274,6 +276,21 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kcorev1.SchemeGroupVersion)
 	output, _ := kruntime.Encode(codec, pod)
 	p.Yaml = string(output)
+}
+
+func (p *Pod) MarshalEvent() (notifications.Event, error) {
+	return notifications.Event{
+		Name:     p.Namespace + "/" + p.Name,
+		Severity: p.IcingaState.ToSeverity(),
+		Message:  p.IcingaStateReason,
+		URL:      &url.URL{Path: "/pod", RawQuery: fmt.Sprintf("id=%s", p.Uuid)},
+		Tags: map[string]string{
+			"uuid":      p.Uuid.String(),
+			"name":      p.Name,
+			"namespace": p.Namespace,
+			"resource":  "pod",
+		},
+	}, nil
 }
 
 func (p *Pod) getIcingaState(pod *kcorev1.Pod) (IcingaState, string) {

@@ -5,12 +5,14 @@ import (
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
+	"github.com/icinga/icinga-kubernetes/pkg/notifications"
 	kappsv1 "k8s.io/api/apps/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kruntime "k8s.io/apimachinery/pkg/runtime"
 	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	ktypes "k8s.io/apimachinery/pkg/types"
+	"net/url"
 	"strings"
 )
 
@@ -176,6 +178,21 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object) {
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kappsv1.SchemeGroupVersion)
 	output, _ := kruntime.Encode(codec, statefulSet)
 	s.Yaml = string(output)
+}
+
+func (s *StatefulSet) MarshalEvent() (notifications.Event, error) {
+	return notifications.Event{
+		Name:     s.Namespace + "/" + s.Name,
+		Severity: s.IcingaState.ToSeverity(),
+		Message:  s.IcingaStateReason,
+		URL:      &url.URL{Path: "/statefulset", RawQuery: fmt.Sprintf("id=%s", s.Uuid)},
+		Tags: map[string]string{
+			"uuid":      s.Uuid.String(),
+			"name":      s.Name,
+			"namespace": s.Namespace,
+			"resource":  "stateful_set",
+		},
+	}, nil
 }
 
 func (s *StatefulSet) getIcingaState() (IcingaState, string) {

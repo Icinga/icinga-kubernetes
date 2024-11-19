@@ -1,4 +1,4 @@
-package sync
+package v1
 
 import "github.com/icinga/icinga-kubernetes/pkg/com"
 

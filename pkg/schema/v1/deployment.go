@@ -5,6 +5,7 @@ import (
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
+	"github.com/icinga/icinga-kubernetes/pkg/notifications"
 	kappsv1 "k8s.io/api/apps/v1"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -12,6 +13,7 @@ import (
 	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	ktypes "k8s.io/apimachinery/pkg/types"
+	"net/url"
 	"strings"
 )
 
@@ -164,6 +166,21 @@ func (d *Deployment) Obtain(k8s kmetav1.Object) {
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kappsv1.SchemeGroupVersion)
 	output, _ := kruntime.Encode(codec, deployment)
 	d.Yaml = string(output)
+}
+
+func (d *Deployment) MarshalEvent() (notifications.Event, error) {
+	return notifications.Event{
+		Name:     d.Namespace + "/" + d.Name,
+		Severity: d.IcingaState.ToSeverity(),
+		Message:  d.IcingaStateReason,
+		URL:      &url.URL{Path: "/deployment", RawQuery: fmt.Sprintf("id=%s", d.Uuid)},
+		Tags: map[string]string{
+			"uuid":      d.Uuid.String(),
+			"name":      d.Name,
+			"namespace": d.Namespace,
+			"resource":  "deployment",
+		},
+	}, nil
 }
 
 func (d *Deployment) getIcingaState() (IcingaState, string) {
