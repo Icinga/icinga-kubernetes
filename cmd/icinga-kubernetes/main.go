@@ -36,6 +36,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	kclientcmd "k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -298,10 +299,36 @@ func main() {
 		return SyncServicePods(ctx, kdb, factory.Core().V1().Services(), factory.Core().V1().Pods())
 	})
 
+	err = metrics.SyncPrometheusConfig(ctx, db, &cfg.Prometheus)
+	if err != nil {
+		klog.Error(errors.Wrap(err, "cannot sync prometheus config"))
+	}
+
+	if cfg.Prometheus.Url == "" {
+		if cfg.Prometheus.Url == "" {
+			err = metrics.AutoDetectPrometheus(ctx, clientset, &cfg.Prometheus)
+			if err != nil {
+				klog.Error(errors.Wrap(err, "cannot auto-detect prometheus"))
+			}
+		}
+	}
+
 	if cfg.Prometheus.Url != "" {
-		promClient, err := promapi.NewClient(promapi.Config{Address: cfg.Prometheus.Url})
+		var basicAuthTransport http.RoundTripper
+
+		if cfg.Prometheus.Username != "" && cfg.Prometheus.Password != "" {
+			basicAuthTransport = &internal.BasicAuthTransport{
+				Username: cfg.Prometheus.Username,
+				Password: cfg.Prometheus.Password,
+			}
+		}
+
+		promClient, err := promapi.NewClient(promapi.Config{
+			Address:      cfg.Prometheus.Url,
+			RoundTripper: basicAuthTransport,
+		})
 		if err != nil {
-			klog.Fatal(errors.Wrap(err, "error creating promClient"))
+			klog.Fatal(errors.Wrap(err, "error creating Prometheus client"))
 		}
 
 		promApiClient := promv1.NewAPI(promClient)
