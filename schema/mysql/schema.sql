@@ -309,7 +309,7 @@ CREATE TABLE endpoint_target_ref (
 
 CREATE TABLE event (
   uuid binary(16) NOT NULL,
-  referent_uuid binary(16) NOT NULL,
+  reference_uuid binary(16) NOT NULL,
   namespace varchar(63) NOT NULL,
   name varchar(270) NOT NULL,
   uid varchar(255) NOT NULL,
