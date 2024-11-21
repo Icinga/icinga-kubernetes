@@ -413,7 +413,8 @@ func main() {
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().Services().Informer(), log.WithName("services"), schemav1.NewService)
+		f := schemav1.NewServiceFactory(clientset)
+		s := syncv1.NewSync(db, factory.Core().V1().Services().Informer(), log.WithName("services"), f.NewService)
 
 		return s.Run(ctx)
 	})

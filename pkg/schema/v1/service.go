@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"context"
 	"database/sql"
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
@@ -10,8 +11,13 @@ import (
 	kruntime "k8s.io/apimachinery/pkg/runtime"
 	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
+	"k8s.io/client-go/kubernetes"
 	"strings"
 )
+
+type ServiceFactory struct {
+	clientset *kubernetes.Clientset
+}
 
 type Service struct {
 	Meta
@@ -38,6 +44,8 @@ type Service struct {
 	ServiceLabels                 []ServiceLabel      `db:"-"`
 	Annotations                   []Annotation        `db:"-"`
 	ServiceAnnotations            []ServiceAnnotation `db:"-"`
+	ServicePods                   []ServicePod        `db:"-"`
+	factory                       *ServiceFactory
 }
 
 type ServiceSelector struct {
@@ -75,8 +83,19 @@ type ServiceAnnotation struct {
 	AnnotationUuid types.UUID
 }
 
-func NewService() Resource {
-	return &Service{}
+type ServicePod struct {
+	ServiceUuid types.UUID
+	PodUuid     types.UUID
+}
+
+func NewServiceFactory(clientset *kubernetes.Clientset) *ServiceFactory {
+	return &ServiceFactory{
+		clientset: clientset,
+	}
+}
+
+func (f *ServiceFactory) NewService() Resource {
+	return &Service{factory: f}
 }
 
 func (s *Service) Obtain(k8s kmetav1.Object) {
@@ -207,11 +226,40 @@ func (s *Service) Obtain(k8s kmetav1.Object) {
 	}
 	s.InternalTrafficPolicy = internalTrafficPolicy
 
+	if len(service.Spec.Selector) > 0 {
+		selector := kmetav1.LabelSelector{
+			MatchLabels: service.Spec.Selector,
+		}
+		labelSelector, err := kmetav1.LabelSelectorAsSelector(&selector)
+		if err != nil {
+			return
+		}
+
+		pods, err := s.queryMatchingPods(labelSelector.String())
+		if err != nil {
+			return
+		}
+
+		for _, pod := range pods.Items {
+			podUuid := EnsureUUID(pod.ObjectMeta.UID)
+			s.ServicePods = append(s.ServicePods, ServicePod{
+				ServiceUuid: s.Uuid,
+				PodUuid:     podUuid,
+			})
+		}
+	}
+
 	scheme := kruntime.NewScheme()
 	_ = kcorev1.AddToScheme(scheme)
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kcorev1.SchemeGroupVersion)
 	output, _ := kruntime.Encode(codec, service)
 	s.Yaml = string(output)
+}
+
+func (s *Service) queryMatchingPods(labelSelector string) (*kcorev1.PodList, error) {
+	return s.factory.clientset.CoreV1().Pods("").List(context.TODO(), kmetav1.ListOptions{
+		LabelSelector: labelSelector,
+	})
 }
 
 func (s *Service) Relations() []database.Relation {
@@ -226,5 +274,6 @@ func (s *Service) Relations() []database.Relation {
 		database.HasMany(s.ServiceSelectors, fk),
 		database.HasMany(s.ServiceAnnotations, fk),
 		database.HasMany(s.Annotations, database.WithoutCascadeDelete()),
+		database.HasMany(s.ServicePods, fk),
 	}
 }
