@@ -3,6 +3,7 @@ package v1
 import (
 	"context"
 	"github.com/go-logr/logr"
+	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
@@ -12,10 +13,11 @@ import (
 )
 
 type Sync struct {
-	db       *database.Database
-	informer cache.SharedIndexInformer
-	log      logr.Logger
-	factory  func() schemav1.Resource
+	db          *database.Database
+	informer    cache.SharedIndexInformer
+	log         logr.Logger
+	factory     func() schemav1.Resource
+	clusterUuid types.UUID
 }
 
 func NewSync(
@@ -23,12 +25,14 @@ func NewSync(
 	informer cache.SharedIndexInformer,
 	log logr.Logger,
 	factory func() schemav1.Resource,
+	clusterUuid types.UUID,
 ) *Sync {
 	return &Sync{
-		db:       db,
-		informer: informer,
-		log:      log,
-		factory:  factory,
+		db:          db,
+		informer:    informer,
+		log:         log,
+		factory:     factory,
+		clusterUuid: clusterUuid,
 	}
 }
 
@@ -80,7 +84,7 @@ func (s *Sync) warmup(ctx context.Context, c *Controller) error {
 func (s *Sync) sync(ctx context.Context, c *Controller, features ...Feature) error {
 	sink := NewSink(func(i *Item) interface{} {
 		entity := s.factory()
-		entity.Obtain(*i.Item)
+		entity.Obtain(*i.Item, s.clusterUuid)
 
 		return entity
 	}, func(k interface{}) interface{} {

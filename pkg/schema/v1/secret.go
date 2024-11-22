@@ -34,8 +34,8 @@ func NewSecret() Resource {
 	return &Secret{}
 }
 
-func (s *Secret) Obtain(k8s kmetav1.Object) {
-	s.ObtainMeta(k8s)
+func (s *Secret) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
+	s.ObtainMeta(k8s, clusterUuid)
 
 	secret := k8s.(*kcorev1.Secret)
 

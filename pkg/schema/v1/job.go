@@ -77,8 +77,8 @@ func NewJob() Resource {
 	return &Job{}
 }
 
-func (j *Job) Obtain(k8s kmetav1.Object) {
-	j.ObtainMeta(k8s)
+func (j *Job) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
+	j.ObtainMeta(k8s, clusterUuid)
 
 	job := k8s.(*kbatchv1.Job)
 

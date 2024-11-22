@@ -117,8 +117,8 @@ func (f *PodFactory) New() Resource {
 	return &Pod{factory: f}
 }
 
-func (p *Pod) Obtain(k8s kmetav1.Object) {
-	p.ObtainMeta(k8s)
+func (p *Pod) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
+	p.ObtainMeta(k8s, clusterUuid)
 
 	pod := k8s.(*kcorev1.Pod)
 
