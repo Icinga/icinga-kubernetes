@@ -28,6 +28,7 @@ import (
 	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/spf13/pflag"
 	"golang.org/x/sync/errgroup"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -38,6 +39,10 @@ import (
 	"sync"
 	"time"
 )
+
+type clusterContextKeyType string
+
+const clusterContextKey clusterContextKeyType = "clusterContextKey"
 
 const expectedSchemaVersion = "0.2.0"
 
@@ -117,6 +122,16 @@ func main() {
 	}
 
 	g, ctx := errgroup.WithContext(context.Background())
+
+	namespaceName := "kube-system"
+	ns, err := clientset.CoreV1().Namespaces().Get(ctx, namespaceName, v1.GetOptions{})
+	if err != nil {
+		klog.Fatalf("Failed to retrieve namespace '%s': %v. Ensure the cluster is accessible and the namespace exists.", namespaceName, err)
+	}
+
+	clusterUuid := schemav1.EnsureUUID(ns.UID)
+
+	ctx = context.WithValue(ctx, clusterContextKey, clusterUuid)
 
 	if hasSchema {
 		var version string
