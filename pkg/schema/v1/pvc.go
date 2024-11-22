@@ -78,8 +78,8 @@ func NewPvc() Resource {
 	return &Pvc{}
 }
 
-func (p *Pvc) Obtain(k8s kmetav1.Object) {
-	p.ObtainMeta(k8s)
+func (p *Pvc) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
+	p.ObtainMeta(k8s, clusterUuid)
 
 	pvc := k8s.(*kcorev1.PersistentVolumeClaim)
 

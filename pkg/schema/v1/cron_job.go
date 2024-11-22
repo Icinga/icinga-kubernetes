@@ -47,8 +47,8 @@ func NewCronJob() Resource {
 	return &CronJob{}
 }
 
-func (c *CronJob) Obtain(k8s kmetav1.Object) {
-	c.ObtainMeta(k8s)
+func (c *CronJob) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
+	c.ObtainMeta(k8s, clusterUuid)
 
 	cronJob := k8s.(*kbatchv1.CronJob)
 

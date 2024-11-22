@@ -304,7 +304,7 @@ func main() {
 	}
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().Namespaces().Informer(), log.WithName("namespaces"), schemav1.NewNamespace)
+		s := syncv1.NewSync(db, factory.Core().V1().Namespaces().Informer(), log.WithName("namespaces"), schemav1.NewNamespace, clusterUuid)
 
 		return s.Run(ctx)
 	})
@@ -313,7 +313,7 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().Nodes().Informer(), log.WithName("nodes"), schemav1.NewNode)
+		s := syncv1.NewSync(db, factory.Core().V1().Nodes().Informer(), log.WithName("nodes"), schemav1.NewNode, clusterUuid)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -340,7 +340,7 @@ func main() {
 		)
 
 		f := schemav1.NewPodFactory(clientset)
-		s := syncv1.NewSync(db, factory.Core().V1().Pods().Informer(), log.WithName("pods"), f.New)
+		s := syncv1.NewSync(db, factory.Core().V1().Pods().Informer(), log.WithName("pods"), f.New, clusterUuid)
 
 		wg.Done()
 
@@ -354,7 +354,7 @@ func main() {
 	wg.Add(1)
 	g.Go(func() error {
 		s := syncv1.NewSync(
-			db, factory.Apps().V1().Deployments().Informer(), log.WithName("deployments"), schemav1.NewDeployment)
+			db, factory.Apps().V1().Deployments().Informer(), log.WithName("deployments"), schemav1.NewDeployment, clusterUuid)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -373,7 +373,7 @@ func main() {
 	wg.Add(1)
 	g.Go(func() error {
 		s := syncv1.NewSync(
-			db, factory.Apps().V1().DaemonSets().Informer(), log.WithName("daemon-sets"), schemav1.NewDaemonSet)
+			db, factory.Apps().V1().DaemonSets().Informer(), log.WithName("daemon-sets"), schemav1.NewDaemonSet, clusterUuid)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -392,7 +392,7 @@ func main() {
 	wg.Add(1)
 	g.Go(func() error {
 		s := syncv1.NewSync(
-			db, factory.Apps().V1().ReplicaSets().Informer(), log.WithName("replica-sets"), schemav1.NewReplicaSet)
+			db, factory.Apps().V1().ReplicaSets().Informer(), log.WithName("replica-sets"), schemav1.NewReplicaSet, clusterUuid)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -411,7 +411,7 @@ func main() {
 	wg.Add(1)
 	g.Go(func() error {
 		s := syncv1.NewSync(
-			db, factory.Apps().V1().StatefulSets().Informer(), log.WithName("stateful-sets"), schemav1.NewStatefulSet)
+			db, factory.Apps().V1().StatefulSets().Informer(), log.WithName("stateful-sets"), schemav1.NewStatefulSet, clusterUuid)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -428,60 +428,60 @@ func main() {
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().Services().Informer(), log.WithName("services"), schemav1.NewService)
+		s := syncv1.NewSync(db, factory.Core().V1().Services().Informer(), log.WithName("services"), schemav1.NewService, clusterUuid)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Discovery().V1().EndpointSlices().Informer(), log.WithName("endpoints"), schemav1.NewEndpointSlice)
+		s := syncv1.NewSync(db, factory.Discovery().V1().EndpointSlices().Informer(), log.WithName("endpoints"), schemav1.NewEndpointSlice, clusterUuid)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().Secrets().Informer(), log.WithName("secrets"), schemav1.NewSecret)
+		s := syncv1.NewSync(db, factory.Core().V1().Secrets().Informer(), log.WithName("secrets"), schemav1.NewSecret, clusterUuid)
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().ConfigMaps().Informer(), log.WithName("config-maps"), schemav1.NewConfigMap)
+		s := syncv1.NewSync(db, factory.Core().V1().ConfigMaps().Informer(), log.WithName("config-maps"), schemav1.NewConfigMap, clusterUuid)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Events().V1().Events().Informer(), log.WithName("events"), schemav1.NewEvent)
+		s := syncv1.NewSync(db, factory.Events().V1().Events().Informer(), log.WithName("events"), schemav1.NewEvent, clusterUuid)
 
 		return s.Run(ctx, syncv1.WithNoDelete(), syncv1.WithNoWarumup())
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().PersistentVolumeClaims().Informer(), log.WithName("pvcs"), schemav1.NewPvc)
+		s := syncv1.NewSync(db, factory.Core().V1().PersistentVolumeClaims().Informer(), log.WithName("pvcs"), schemav1.NewPvc, clusterUuid)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().PersistentVolumes().Informer(), log.WithName("persistent-volumes"), schemav1.NewPersistentVolume)
+		s := syncv1.NewSync(db, factory.Core().V1().PersistentVolumes().Informer(), log.WithName("persistent-volumes"), schemav1.NewPersistentVolume, clusterUuid)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Batch().V1().Jobs().Informer(), log.WithName("jobs"), schemav1.NewJob)
+		s := syncv1.NewSync(db, factory.Batch().V1().Jobs().Informer(), log.WithName("jobs"), schemav1.NewJob, clusterUuid)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Batch().V1().CronJobs().Informer(), log.WithName("cron-jobs"), schemav1.NewCronJob)
+		s := syncv1.NewSync(db, factory.Batch().V1().CronJobs().Informer(), log.WithName("cron-jobs"), schemav1.NewCronJob, clusterUuid)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Networking().V1().Ingresses().Informer(), log.WithName("ingresses"), schemav1.NewIngress)
+		s := syncv1.NewSync(db, factory.Networking().V1().Ingresses().Informer(), log.WithName("ingresses"), schemav1.NewIngress, clusterUuid)
 
 		return s.Run(ctx)
 	})

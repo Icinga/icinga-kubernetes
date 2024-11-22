@@ -56,8 +56,8 @@ func NewPersistentVolume() Resource {
 	return &PersistentVolume{}
 }
 
-func (p *PersistentVolume) Obtain(k8s kmetav1.Object) {
-	p.ObtainMeta(k8s)
+func (p *PersistentVolume) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
+	p.ObtainMeta(k8s, clusterUuid)
 
 	persistentVolume := k8s.(*kcorev1.PersistentVolume)
 
