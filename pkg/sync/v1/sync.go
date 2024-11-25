@@ -3,19 +3,22 @@ package v1
 import (
 	"context"
 	"github.com/go-logr/logr"
+	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
 	"golang.org/x/sync/errgroup"
+	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/cache"
 )
 
 type Sync struct {
-	db       *database.Database
-	informer cache.SharedIndexInformer
-	log      logr.Logger
-	factory  func() schemav1.Resource
+	db          *database.Database
+	informer    cache.SharedIndexInformer
+	log         logr.Logger
+	factory     func() schemav1.Resource
+	clusterUuid types.UUID
 }
 
 func NewSync(
@@ -23,22 +26,24 @@ func NewSync(
 	informer cache.SharedIndexInformer,
 	log logr.Logger,
 	factory func() schemav1.Resource,
+	clusterUuid types.UUID,
 ) *Sync {
 	return &Sync{
-		db:       db,
-		informer: informer,
-		log:      log,
-		factory:  factory,
+		db:          db,
+		informer:    informer,
+		log:         log,
+		factory:     factory,
+		clusterUuid: clusterUuid,
 	}
 }
 
-func (s *Sync) Run(ctx context.Context, features ...Feature) error {
+func (s *Sync) Run(ctx context.Context, k8s kmetav1.Object, features ...Feature) error {
 	controller := NewController(s.informer, s.log.WithName("controller"))
 
 	with := NewFeatures(features...)
 
 	if !with.NoWarmup() {
-		if err := s.warmup(ctx, controller); err != nil {
+		if err := s.warmup(ctx, controller, k8s); err != nil {
 			return err
 		}
 	}
@@ -46,12 +51,16 @@ func (s *Sync) Run(ctx context.Context, features ...Feature) error {
 	return s.sync(ctx, controller, features...)
 }
 
-func (s *Sync) warmup(ctx context.Context, c *Controller) error {
+func (s *Sync) warmup(ctx context.Context, c *Controller, k8s kmetav1.Object) error {
 	g, ctx := errgroup.WithContext(ctx)
+
+	meta := &schemav1.Meta{ClusterUuid: s.clusterUuid}
+	query := s.db.BuildSelectStmt(s.factory(), meta) + ` WHERE cluster_uuid=:cluster_uuid`
 
 	entities, errs := s.db.YieldAll(ctx, func() (interface{}, error) {
 		return s.factory(), nil
-	}, s.db.BuildSelectStmt(s.factory(), &schemav1.Meta{}))
+	}, query, meta)
+
 	// Let errors from YieldAll() cancel the group.
 	com.ErrgroupReceive(ctx, g, errs)
 
@@ -80,7 +89,7 @@ func (s *Sync) warmup(ctx context.Context, c *Controller) error {
 func (s *Sync) sync(ctx context.Context, c *Controller, features ...Feature) error {
 	sink := NewSink(func(i *Item) interface{} {
 		entity := s.factory()
-		entity.Obtain(*i.Item)
+		entity.Obtain(*i.Item, s.clusterUuid)
 
 		return entity
 	}, func(k interface{}) interface{} {
