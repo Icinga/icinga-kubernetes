@@ -563,6 +563,12 @@ CREATE TABLE persistent_volume (
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+CREATE TABLE persistent_volume_annotation (
+  persistent_volume_uuid binary(16) NOT NULL,
+  annotation_uuid binary(16) NOT NULL,
+  PRIMARY KEY (persistent_volume_uuid, annotation_uuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
 CREATE TABLE persistent_volume_claim_ref (
   persistent_volume_uuid binary(16) NOT NULL,
   kind varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
