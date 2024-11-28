@@ -7,6 +7,7 @@ import (
 
 type Instance struct {
 	Uuid                   types.Binary
+	ClusterUuid            types.UUID
 	Version                string
 	KubernetesVersion      sql.NullString
 	KubernetesHeartbeat    types.UnixMilli
