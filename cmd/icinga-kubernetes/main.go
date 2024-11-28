@@ -13,6 +13,7 @@ import (
 	"github.com/icinga/icinga-kubernetes/internal"
 	cachev1 "github.com/icinga/icinga-kubernetes/internal/cache/v1"
 	"github.com/icinga/icinga-kubernetes/pkg/backoff"
+	"github.com/icinga/icinga-kubernetes/pkg/cluster"
 	"github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/icinga/icinga-kubernetes/pkg/daemon"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
@@ -40,10 +41,6 @@ import (
 	"time"
 )
 
-type clusterContextKeyType string
-
-const clusterContextKey clusterContextKeyType = "clusterContextKey"
-
 const expectedSchemaVersion = "0.2.0"
 
 func main() {
@@ -51,12 +48,14 @@ func main() {
 
 	var configLocation string
 	var showVersion bool
+	var clusterName string
 
 	klog.InitFlags(nil)
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 
 	pflag.BoolVar(&showVersion, "version", false, "print version and exit")
 	pflag.StringVar(&configLocation, "config", "./config.yml", "path to the config file")
+	pflag.StringVar(&clusterName, "cluster-name", "", "name of the current cluster")
 
 	loadingRules := kclientcmd.NewDefaultClientConfigLoadingRules()
 	loadingRules.DefaultClientConfig = &kclientcmd.DefaultClientConfig
@@ -122,16 +121,6 @@ func main() {
 	}
 
 	g, ctx := errgroup.WithContext(context.Background())
-
-	namespaceName := "kube-system"
-	ns, err := clientset.CoreV1().Namespaces().Get(ctx, namespaceName, v1.GetOptions{})
-	if err != nil {
-		klog.Fatalf("Failed to retrieve namespace '%s': %v. Ensure the cluster is accessible and the namespace exists.", namespaceName, err)
-	}
-
-	clusterUuid := schemav1.EnsureUUID(ns.UID)
-
-	ctx = context.WithValue(ctx, clusterContextKey, clusterUuid)
 
 	if hasSchema {
 		var version string
@@ -214,7 +203,25 @@ func main() {
 		klog.Fatal("IGL_DATABASE: ", err)
 	}
 
-	if _, err := db.ExecContext(ctx, "DELETE FROM kubernetes_instance"); err != nil {
+	namespaceName := "kube-system"
+	ns, err := clientset.CoreV1().Namespaces().Get(context.TODO(), namespaceName, v1.GetOptions{})
+	if err != nil {
+		klog.Fatalf("Failed to retrieve namespace '%s' for cluster '%s': %v", namespaceName, clusterName, err)
+	}
+
+	clusterInstance := &schemav1.Cluster{
+		Uuid: schemav1.EnsureUUID(ns.UID),
+		Name: clusterName,
+	}
+
+	ctx = cluster.NewClusterUuidContext(ctx, clusterInstance.Uuid)
+
+	stmt, _ := db.BuildUpsertStmt(clusterInstance)
+	if _, err := db.NamedExecContext(ctx, stmt, clusterInstance); err != nil {
+		klog.Error(errors.Wrap(err, "can't update cluster"))
+	}
+
+	if _, err := db.ExecContext(ctx, "DELETE FROM kubernetes_instance WHERE cluster_uuid = ?", clusterInstance.Uuid); err != nil {
 		klog.Fatal(errors.Wrap(err, "can't delete instance"))
 	}
 	// ,omitempty
@@ -230,6 +237,7 @@ func main() {
 
 		instance := schemav1.Instance{
 			Uuid:                instanceId[:],
+			ClusterUuid:         clusterInstance.Uuid,
 			Version:             internal.Version.Version,
 			KubernetesVersion:   schemav1.NewNullableString(kubernetesVersion),
 			KubernetesHeartbeat: types.UnixMilli(kubernetesHeartbeat),
@@ -248,7 +256,7 @@ func main() {
 		}
 	}, periodic.Immediate()).Stop()
 
-	if err := internal.SyncNotificationsConfig(ctx, db2, &cfg.Notifications); err != nil {
+	if err := internal.SyncNotificationsConfig(ctx, db2, &cfg.Notifications, clusterInstance.Uuid); err != nil {
 		klog.Fatal(err)
 	}
 
@@ -304,7 +312,7 @@ func main() {
 	}
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().Namespaces().Informer(), log.WithName("namespaces"), schemav1.NewNamespace, clusterUuid)
+		s := syncv1.NewSync(db, factory.Core().V1().Namespaces().Informer(), log.WithName("namespaces"), schemav1.NewNamespace)
 
 		return s.Run(ctx)
 	})
@@ -313,7 +321,7 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().Nodes().Informer(), log.WithName("nodes"), schemav1.NewNode, clusterUuid)
+		s := syncv1.NewSync(db, factory.Core().V1().Nodes().Informer(), log.WithName("nodes"), schemav1.NewNode)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -340,7 +348,7 @@ func main() {
 		)
 
 		f := schemav1.NewPodFactory(clientset)
-		s := syncv1.NewSync(db, factory.Core().V1().Pods().Informer(), log.WithName("pods"), f.New, clusterUuid)
+		s := syncv1.NewSync(db, factory.Core().V1().Pods().Informer(), log.WithName("pods"), f.New)
 
 		wg.Done()
 
@@ -354,7 +362,7 @@ func main() {
 	wg.Add(1)
 	g.Go(func() error {
 		s := syncv1.NewSync(
-			db, factory.Apps().V1().Deployments().Informer(), log.WithName("deployments"), schemav1.NewDeployment, clusterUuid)
+			db, factory.Apps().V1().Deployments().Informer(), log.WithName("deployments"), schemav1.NewDeployment)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -373,7 +381,7 @@ func main() {
 	wg.Add(1)
 	g.Go(func() error {
 		s := syncv1.NewSync(
-			db, factory.Apps().V1().DaemonSets().Informer(), log.WithName("daemon-sets"), schemav1.NewDaemonSet, clusterUuid)
+			db, factory.Apps().V1().DaemonSets().Informer(), log.WithName("daemon-sets"), schemav1.NewDaemonSet)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -392,7 +400,7 @@ func main() {
 	wg.Add(1)
 	g.Go(func() error {
 		s := syncv1.NewSync(
-			db, factory.Apps().V1().ReplicaSets().Informer(), log.WithName("replica-sets"), schemav1.NewReplicaSet, clusterUuid)
+			db, factory.Apps().V1().ReplicaSets().Informer(), log.WithName("replica-sets"), schemav1.NewReplicaSet)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -411,7 +419,7 @@ func main() {
 	wg.Add(1)
 	g.Go(func() error {
 		s := syncv1.NewSync(
-			db, factory.Apps().V1().StatefulSets().Informer(), log.WithName("stateful-sets"), schemav1.NewStatefulSet, clusterUuid)
+			db, factory.Apps().V1().StatefulSets().Informer(), log.WithName("stateful-sets"), schemav1.NewStatefulSet)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -428,60 +436,60 @@ func main() {
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().Services().Informer(), log.WithName("services"), schemav1.NewService, clusterUuid)
+		s := syncv1.NewSync(db, factory.Core().V1().Services().Informer(), log.WithName("services"), schemav1.NewService)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Discovery().V1().EndpointSlices().Informer(), log.WithName("endpoints"), schemav1.NewEndpointSlice, clusterUuid)
+		s := syncv1.NewSync(db, factory.Discovery().V1().EndpointSlices().Informer(), log.WithName("endpoints"), schemav1.NewEndpointSlice)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().Secrets().Informer(), log.WithName("secrets"), schemav1.NewSecret, clusterUuid)
+		s := syncv1.NewSync(db, factory.Core().V1().Secrets().Informer(), log.WithName("secrets"), schemav1.NewSecret)
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().ConfigMaps().Informer(), log.WithName("config-maps"), schemav1.NewConfigMap, clusterUuid)
+		s := syncv1.NewSync(db, factory.Core().V1().ConfigMaps().Informer(), log.WithName("config-maps"), schemav1.NewConfigMap)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Events().V1().Events().Informer(), log.WithName("events"), schemav1.NewEvent, clusterUuid)
+		s := syncv1.NewSync(db, factory.Events().V1().Events().Informer(), log.WithName("events"), schemav1.NewEvent)
 
 		return s.Run(ctx, syncv1.WithNoDelete(), syncv1.WithNoWarumup())
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().PersistentVolumeClaims().Informer(), log.WithName("pvcs"), schemav1.NewPvc, clusterUuid)
+		s := syncv1.NewSync(db, factory.Core().V1().PersistentVolumeClaims().Informer(), log.WithName("pvcs"), schemav1.NewPvc)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().PersistentVolumes().Informer(), log.WithName("persistent-volumes"), schemav1.NewPersistentVolume, clusterUuid)
+		s := syncv1.NewSync(db, factory.Core().V1().PersistentVolumes().Informer(), log.WithName("persistent-volumes"), schemav1.NewPersistentVolume)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Batch().V1().Jobs().Informer(), log.WithName("jobs"), schemav1.NewJob, clusterUuid)
+		s := syncv1.NewSync(db, factory.Batch().V1().Jobs().Informer(), log.WithName("jobs"), schemav1.NewJob)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Batch().V1().CronJobs().Informer(), log.WithName("cron-jobs"), schemav1.NewCronJob, clusterUuid)
+		s := syncv1.NewSync(db, factory.Batch().V1().CronJobs().Informer(), log.WithName("cron-jobs"), schemav1.NewCronJob)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Networking().V1().Ingresses().Informer(), log.WithName("ingresses"), schemav1.NewIngress, clusterUuid)
+		s := syncv1.NewSync(db, factory.Networking().V1().Ingresses().Informer(), log.WithName("ingresses"), schemav1.NewIngress)
 
 		return s.Run(ctx)
 	})

@@ -11,22 +11,23 @@ import (
 	"github.com/pkg/errors"
 )
 
-func SyncNotificationsConfig(ctx context.Context, db *database.DB, config *notifications.Config) error {
+func SyncNotificationsConfig(ctx context.Context, db *database.DB, config *notifications.Config, clusterUuid types.UUID) error {
 	_true := types.Bool{Bool: true, Valid: true}
 
 	if config.Url != "" {
 		toDb := []schemav1.Config{
-			{Key: schemav1.ConfigKeyNotificationsUrl, Value: config.Url, Locked: _true},
-			{Key: schemav1.ConfigKeyNotificationsUsername, Value: config.Username, Locked: _true},
-			{Key: schemav1.ConfigKeyNotificationsPassword, Value: config.Password, Locked: _true},
+			{ClusterUuid: clusterUuid, Key: schemav1.ConfigKeyNotificationsUrl, Value: config.Url, Locked: _true},
+			{ClusterUuid: clusterUuid, Key: schemav1.ConfigKeyNotificationsUsername, Value: config.Username, Locked: _true},
+			{ClusterUuid: clusterUuid, Key: schemav1.ConfigKeyNotificationsPassword, Value: config.Password, Locked: _true},
 		}
 
 		err := db.ExecTx(ctx, func(ctx context.Context, tx *sqlx.Tx) error {
 			if kwebUrl := config.KubernetesWebUrl; kwebUrl != "" {
 				toDb = append(toDb, schemav1.Config{
-					Key:    schemav1.ConfigKeyNotificationsKubernetesWebUrl,
-					Value:  kwebUrl,
-					Locked: _true,
+					ClusterUuid: clusterUuid,
+					Key:         schemav1.ConfigKeyNotificationsKubernetesWebUrl,
+					Value:       kwebUrl,
+					Locked:      _true,
 				})
 			} else {
 				if err := tx.SelectContext(ctx, &config.KubernetesWebUrl, fmt.Sprintf(
@@ -41,9 +42,10 @@ func SyncNotificationsConfig(ctx context.Context, db *database.DB, config *notif
 			if _, err := tx.ExecContext(
 				ctx,
 				fmt.Sprintf(
-					`DELETE FROM "%s" WHERE "key" LIKE ? AND "locked" = ?`,
+					`DELETE FROM "%s" WHERE "cluster_uuid" = ? AND "key" LIKE ? AND "locked" = ?`,
 					database.TableName(&schemav1.Config{}),
 				),
+				clusterUuid,
 				`notifications.%`,
 				_true,
 			); err != nil {
@@ -65,9 +67,10 @@ func SyncNotificationsConfig(ctx context.Context, db *database.DB, config *notif
 			if _, err := tx.ExecContext(
 				ctx,
 				fmt.Sprintf(
-					`DELETE FROM "%s" WHERE "key" LIKE ? AND "locked" = ?`,
+					`DELETE FROM "%s" WHERE "cluster_uuid" = ? AND "key" LIKE ? AND "locked" = ?`,
 					database.TableName(&schemav1.Config{}),
 				),
+				clusterUuid,
 				`notifications.%`,
 				_true,
 			); err != nil {
