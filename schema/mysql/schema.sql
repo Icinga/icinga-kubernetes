@@ -368,6 +368,12 @@ CREATE TABLE ingress_backend_service (
   PRIMARY KEY (service_uuid, ingress_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+CREATE TABLE ingress_label (
+  ingress_uuid binary(16) NOT NULL,
+  label_uuid binary(16) NOT NULL,
+  PRIMARY KEY (ingress_uuid, label_uuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
 CREATE TABLE ingress_rule (
   uuid binary(16) NOT NULL,
   backend_uuid binary(16) NOT NULL,
