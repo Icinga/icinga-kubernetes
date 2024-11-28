@@ -583,6 +583,12 @@ CREATE TABLE persistent_volume_claim_ref (
   PRIMARY KEY (persistent_volume_uuid, uid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+CREATE TABLE persistent_volume_label (
+  persistent_volume_uuid binary(16) NOT NULL,
+  label_uuid binary(16) NOT NULL,
+  PRIMARY KEY (persistent_volume_uuid, label_uuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
 CREATE TABLE pod (
   uuid binary(16) NOT NULL,
   namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,

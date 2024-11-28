@@ -27,6 +27,8 @@ type PersistentVolume struct {
 	Message                     sql.NullString
 	Yaml                        string
 	Claim                       *PersistentVolumeClaimRef    `db:"-"`
+	Labels                      []Label                      `db:"-"`
+	PersistentVolumeLabels      []PersistentVolumeLabel      `db:"-"`
 	Annotations                 []Annotation                 `db:"-"`
 	PersistentVolumeAnnotations []PersistentVolumeAnnotation `db:"-"`
 }
@@ -36,6 +38,11 @@ type PersistentVolumeClaimRef struct {
 	Kind                 string
 	Name                 string
 	Uid                  ktypes.UID
+}
+
+type PersistentVolumeLabel struct {
+	PersistentVolumeUuid types.UUID
+	LabelUuid            types.UUID
 }
 
 type PersistentVolumeAnnotation struct {
@@ -82,6 +89,19 @@ func (p *PersistentVolume) Obtain(k8s kmetav1.Object) {
 		}
 	}
 
+	for labelName, labelValue := range persistentVolume.Labels {
+		labelUuid := NewUUID(p.Uuid, strings.ToLower(labelName+":"+labelValue))
+		p.Labels = append(p.Labels, Label{
+			Uuid:  labelUuid,
+			Name:  labelName,
+			Value: labelValue,
+		})
+		p.PersistentVolumeLabels = append(p.PersistentVolumeLabels, PersistentVolumeLabel{
+			PersistentVolumeUuid: p.Uuid,
+			LabelUuid:            labelUuid,
+		})
+	}
+
 	for annotationName, annotationValue := range persistentVolume.Annotations {
 		annotationUuid := NewUUID(p.Uuid, strings.ToLower(annotationName+":"+annotationValue))
 		p.Annotations = append(p.Annotations, Annotation{
@@ -111,6 +131,8 @@ func (p *PersistentVolume) Relations() []database.Relation {
 
 	return []database.Relation{
 		database.HasOne(p.Claim, fk),
+		database.HasMany(p.Labels, database.WithoutCascadeDelete()),
+		database.HasMany(p.PersistentVolumeLabels, fk),
 		database.HasMany(p.PersistentVolumeAnnotations, fk),
 		database.HasMany(p.Annotations, database.WithoutCascadeDelete()),
 	}
