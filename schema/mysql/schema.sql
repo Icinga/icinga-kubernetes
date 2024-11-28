@@ -342,6 +342,12 @@ CREATE TABLE ingress (
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+CREATE TABLE ingress_annotation (
+  ingress_uuid binary(16) NOT NULL,
+  annotation_uuid binary(16) NOT NULL,
+  PRIMARY KEY (ingress_uuid, annotation_uuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
 CREATE TABLE ingress_backend_resource (
   resource_uuid binary(16) NOT NULL,
   ingress_uuid binary(16) NOT NULL,
