@@ -14,6 +14,7 @@ type Secret struct {
 	Immutable           types.Bool
 	Labels              []Label              `db:"-"`
 	SecretLabels        []SecretLabel        `db:"-"`
+	ResourceLabels      []ResourceLabel      `db:"-"`
 	Annotations         []Annotation         `db:"-"`
 	SecretAnnotations   []SecretAnnotation   `db:"-"`
 	ResourceAnnotations []ResourceAnnotation `db:"-"`
@@ -60,6 +61,10 @@ func (s *Secret) Obtain(k8s kmetav1.Object) {
 			SecretUuid: s.Uuid,
 			LabelUuid:  labelUuid,
 		})
+		s.ResourceLabels = append(s.ResourceLabels, ResourceLabel{
+			ResourceUuid: s.Uuid,
+			LabelUuid:    labelUuid,
+		})
 	}
 
 	for annotationName, annotationValue := range secret.Annotations {
@@ -86,6 +91,7 @@ func (s *Secret) Relations() []database.Relation {
 	return []database.Relation{
 		database.HasMany(s.Labels, database.WithoutCascadeDelete()),
 		database.HasMany(s.SecretLabels, fk),
+		database.HasMany(s.ResourceLabels, fk),
 		database.HasMany(s.SecretAnnotations, fk),
 		database.HasMany(s.Annotations, database.WithoutCascadeDelete()),
 		database.HasMany(s.ResourceAnnotations, fk),

@@ -13,6 +13,7 @@ type ConfigMap struct {
 	Immutable            types.Bool
 	Labels               []Label               `db:"-"`
 	ConfigMapLabels      []ConfigMapLabel      `db:"-"`
+	ResourceLabels       []ResourceLabel       `db:"-"`
 	Annotations          []Annotation          `db:"-"`
 	ConfigMapAnnotations []ConfigMapAnnotation `db:"-"`
 	ResourceAnnotations  []ResourceAnnotation  `db:"-"`
@@ -57,6 +58,10 @@ func (c *ConfigMap) Obtain(k8s kmetav1.Object) {
 			ConfigMapUuid: c.Uuid,
 			LabelUuid:     labelUuid,
 		})
+		c.ResourceLabels = append(c.ResourceLabels, ResourceLabel{
+			ResourceUuid: c.Uuid,
+			LabelUuid:    labelUuid,
+		})
 	}
 
 	for annotationName, annotationValue := range configMap.Annotations {
@@ -83,6 +88,7 @@ func (c *ConfigMap) Relations() []database.Relation {
 	return []database.Relation{
 		database.HasMany(c.Labels, database.WithoutCascadeDelete()),
 		database.HasMany(c.ConfigMapLabels, fk),
+		database.HasMany(c.ResourceLabels, fk),
 		database.HasMany(c.ConfigMapAnnotations, fk),
 		database.HasMany(c.Annotations, database.WithoutCascadeDelete()),
 		database.HasMany(c.ResourceAnnotations, fk),

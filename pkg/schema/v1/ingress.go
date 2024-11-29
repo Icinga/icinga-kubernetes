@@ -21,6 +21,7 @@ type Ingress struct {
 	IngressRule            []IngressRule            `db:"-"`
 	Labels                 []Label                  `db:"-"`
 	IngressLabels          []IngressLabel           `db:"-"`
+	ResourceLabels         []ResourceLabel          `db:"-"`
 	Annotations            []Annotation             `db:"-"`
 	IngressAnnotations     []IngressAnnotation      `db:"-"`
 	ResourceAnnotations    []ResourceAnnotation     `db:"-"`
@@ -183,6 +184,10 @@ func (i *Ingress) Obtain(k8s kmetav1.Object) {
 			IngressUuid: i.Uuid,
 			LabelUuid:   labelUuid,
 		})
+		i.ResourceLabels = append(i.ResourceLabels, ResourceLabel{
+			ResourceUuid: i.Uuid,
+			LabelUuid:    labelUuid,
+		})
 	}
 
 	for annotationName, annotationValue := range ingress.Annotations {
@@ -219,6 +224,7 @@ func (i *Ingress) Relations() []database.Relation {
 		database.HasMany(i.IngressRule, fk),
 		database.HasMany(i.Labels, database.WithoutCascadeDelete()),
 		database.HasMany(i.IngressLabels, fk),
+		database.HasMany(i.ResourceLabels, fk),
 		database.HasMany(i.IngressAnnotations, fk),
 		database.HasMany(i.Annotations, database.WithoutCascadeDelete()),
 		database.HasMany(i.ResourceAnnotations, fk),

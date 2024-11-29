@@ -27,6 +27,7 @@ type CronJob struct {
 	Yaml                       string
 	Labels                     []Label              `db:"-"`
 	CronJobLabels              []CronJobLabel       `db:"-"`
+	ResourceLabels             []ResourceLabel      `db:"-"`
 	Annotations                []Annotation         `db:"-"`
 	CronJobAnnotations         []CronJobAnnotation  `db:"-"`
 	ResourceAnnotations        []ResourceAnnotation `db:"-"`
@@ -88,6 +89,10 @@ func (c *CronJob) Obtain(k8s kmetav1.Object) {
 			CronJobUuid: c.Uuid,
 			LabelUuid:   labelUuid,
 		})
+		c.ResourceLabels = append(c.ResourceLabels, ResourceLabel{
+			ResourceUuid: c.Uuid,
+			LabelUuid:    labelUuid,
+		})
 	}
 
 	for annotationName, annotationValue := range cronJob.Annotations {
@@ -120,6 +125,7 @@ func (c *CronJob) Relations() []database.Relation {
 	return []database.Relation{
 		database.HasMany(c.Labels, database.WithoutCascadeDelete()),
 		database.HasMany(c.CronJobLabels, fk),
+		database.HasMany(c.ResourceLabels, fk),
 		database.HasMany(c.CronJobAnnotations, fk),
 		database.HasMany(c.Annotations, database.WithoutCascadeDelete()),
 		database.HasMany(c.ResourceAnnotations, fk),

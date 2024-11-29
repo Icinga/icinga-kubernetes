@@ -32,6 +32,7 @@ type ReplicaSet struct {
 	Owners                []ReplicaSetOwner      `db:"-"`
 	Labels                []Label                `db:"-"`
 	ReplicaSetLabels      []ReplicaSetLabel      `db:"-"`
+	ResourceLabels        []ResourceLabel        `db:"-"`
 	Annotations           []Annotation           `db:"-"`
 	ReplicaSetAnnotations []ReplicaSetAnnotation `db:"-"`
 	ResourceAnnotations   []ResourceAnnotation   `db:"-"`
@@ -134,6 +135,10 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object) {
 			ReplicaSetUuid: r.Uuid,
 			LabelUuid:      labelUuid,
 		})
+		r.ResourceLabels = append(r.ResourceLabels, ResourceLabel{
+			ResourceUuid: r.Uuid,
+			LabelUuid:    labelUuid,
+		})
 	}
 
 	for annotationName, annotationValue := range replicaSet.Annotations {
@@ -208,6 +213,7 @@ func (r *ReplicaSet) Relations() []database.Relation {
 		database.HasMany(r.Owners, fk),
 		database.HasMany(r.ReplicaSetLabels, fk),
 		database.HasMany(r.Labels, database.WithoutCascadeDelete()),
+		database.HasMany(r.ResourceLabels, fk),
 		database.HasMany(r.ReplicaSetAnnotations, fk),
 		database.HasMany(r.Annotations, database.WithoutCascadeDelete()),
 		database.HasMany(r.ResourceAnnotations, fk),

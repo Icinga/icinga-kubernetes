@@ -34,6 +34,7 @@ type DaemonSet struct {
 	Owners                 []DaemonSetOwner      `db:"-"`
 	Labels                 []Label               `db:"-"`
 	DaemonSetLabels        []DaemonSetLabel      `db:"-"`
+	ResourceLabels         []ResourceLabel       `db:"-"`
 	Annotations            []Annotation          `db:"-"`
 	DaemonSetAnnotations   []DaemonSetAnnotation `db:"-"`
 	ResourceAnnotations    []ResourceAnnotation  `db:"-"`
@@ -135,6 +136,10 @@ func (d *DaemonSet) Obtain(k8s kmetav1.Object) {
 			DaemonSetUuid: d.Uuid,
 			LabelUuid:     labelUuid,
 		})
+		d.ResourceLabels = append(d.ResourceLabels, ResourceLabel{
+			ResourceUuid: d.Uuid,
+			LabelUuid:    labelUuid,
+		})
 	}
 
 	for annotationName, annotationValue := range daemonSet.Annotations {
@@ -207,6 +212,7 @@ func (d *DaemonSet) Relations() []database.Relation {
 		database.HasMany(d.Owners, fk),
 		database.HasMany(d.DaemonSetLabels, fk),
 		database.HasMany(d.Labels, database.WithoutCascadeDelete()),
+		database.HasMany(d.ResourceLabels, fk),
 		database.HasMany(d.DaemonSetAnnotations, fk),
 		database.HasMany(d.Annotations, database.WithoutCascadeDelete()),
 		database.HasMany(d.ResourceAnnotations, fk),

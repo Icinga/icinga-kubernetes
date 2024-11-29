@@ -47,6 +47,7 @@ type Pod struct {
 	Owners              []PodOwner           `db:"-"`
 	Labels              []Label              `db:"-"`
 	PodLabels           []PodLabel           `db:"-"`
+	ResourceLabels      []ResourceLabel      `db:"-"`
 	Annotations         []Annotation         `db:"-"`
 	PodAnnotations      []PodAnnotation      `db:"-"`
 	ResourceAnnotations []ResourceAnnotation `db:"-"`
@@ -205,6 +206,10 @@ func (p *Pod) Obtain(k8s kmetav1.Object) {
 		p.PodLabels = append(p.PodLabels, PodLabel{
 			PodUuid:   p.Uuid,
 			LabelUuid: labelUuid,
+		})
+		p.ResourceLabels = append(p.ResourceLabels, ResourceLabel{
+			ResourceUuid: p.Uuid,
+			LabelUuid:    labelUuid,
 		})
 	}
 
@@ -448,6 +453,7 @@ func (p *Pod) Relations() []database.Relation {
 		database.HasMany(p.Owners, fk),
 		database.HasMany(p.Labels, database.WithoutCascadeDelete()),
 		database.HasMany(p.PodLabels, fk),
+		database.HasMany(p.ResourceLabels, fk),
 		database.HasMany(p.Annotations, database.WithoutCascadeDelete()),
 		database.HasMany(p.PodAnnotations, fk),
 		database.HasMany(p.ResourceAnnotations, fk),

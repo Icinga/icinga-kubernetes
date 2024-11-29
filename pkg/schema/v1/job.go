@@ -36,6 +36,7 @@ type Job struct {
 	Conditions              []JobCondition       `db:"-"`
 	Labels                  []Label              `db:"-"`
 	JobLabels               []JobLabel           `db:"-"`
+	ResourceLabels          []ResourceLabel      `db:"-"`
 	Annotations             []Annotation         `db:"-"`
 	JobAnnotations          []JobAnnotation      `db:"-"`
 	ResourceAnnotations     []ResourceAnnotation `db:"-"`
@@ -162,6 +163,10 @@ func (j *Job) Obtain(k8s kmetav1.Object) {
 			JobUuid:   j.Uuid,
 			LabelUuid: labelUuid,
 		})
+		j.ResourceLabels = append(j.ResourceLabels, ResourceLabel{
+			ResourceUuid: j.Uuid,
+			LabelUuid:    labelUuid,
+		})
 	}
 
 	for annotationName, annotationValue := range job.Annotations {
@@ -277,6 +282,7 @@ func (j *Job) Relations() []database.Relation {
 		database.HasMany(j.Conditions, fk),
 		database.HasMany(j.Labels, database.WithoutCascadeDelete()),
 		database.HasMany(j.JobLabels, fk),
+		database.HasMany(j.ResourceLabels, fk),
 		database.HasMany(j.JobAnnotations, fk),
 		database.HasMany(j.Annotations, database.WithoutCascadeDelete()),
 		database.HasMany(j.Owners, fk),

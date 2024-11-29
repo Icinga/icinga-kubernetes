@@ -48,6 +48,7 @@ type Pvc struct {
 	Conditions          []PvcCondition       `db:"-"`
 	Labels              []Label              `db:"-"`
 	PvcLabels           []PvcLabel           `db:"-"`
+	ResourceLabels      []ResourceLabel      `db:"-"`
 	Annotations         []Annotation         `db:"-"`
 	PvcAnnotations      []PvcAnnotation      `db:"-"`
 	ResourceAnnotations []ResourceAnnotation `db:"-"`
@@ -130,6 +131,10 @@ func (p *Pvc) Obtain(k8s kmetav1.Object) {
 			PvcUuid:   p.Uuid,
 			LabelUuid: labelUuid,
 		})
+		p.ResourceLabels = append(p.ResourceLabels, ResourceLabel{
+			ResourceUuid: p.Uuid,
+			LabelUuid:    labelUuid,
+		})
 	}
 
 	for annotationName, annotationValue := range pvc.Annotations {
@@ -164,5 +169,6 @@ func (p *Pvc) Relations() []database.Relation {
 		database.HasMany(p.PvcLabels, fk),
 		database.HasMany(p.Labels, database.WithoutCascadeDelete()),
 		database.HasMany(p.ResourceAnnotations, fk),
+		database.HasMany(p.ResourceLabels, fk),
 	}
 }
