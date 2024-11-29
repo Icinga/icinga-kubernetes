@@ -36,6 +36,7 @@ type DaemonSet struct {
 	DaemonSetLabels        []DaemonSetLabel      `db:"-"`
 	Annotations            []Annotation          `db:"-"`
 	DaemonSetAnnotations   []DaemonSetAnnotation `db:"-"`
+	ResourceAnnotations    []ResourceAnnotation  `db:"-"`
 }
 
 type DaemonSetCondition struct {
@@ -147,6 +148,10 @@ func (d *DaemonSet) Obtain(k8s kmetav1.Object) {
 			DaemonSetUuid:  d.Uuid,
 			AnnotationUuid: annotationUuid,
 		})
+		d.ResourceAnnotations = append(d.ResourceAnnotations, ResourceAnnotation{
+			ResourceUuid:   d.Uuid,
+			AnnotationUuid: annotationUuid,
+		})
 	}
 
 	scheme := kruntime.NewScheme()
@@ -204,5 +209,6 @@ func (d *DaemonSet) Relations() []database.Relation {
 		database.HasMany(d.Labels, database.WithoutCascadeDelete()),
 		database.HasMany(d.DaemonSetAnnotations, fk),
 		database.HasMany(d.Annotations, database.WithoutCascadeDelete()),
+		database.HasMany(d.ResourceAnnotations, fk),
 	}
 }

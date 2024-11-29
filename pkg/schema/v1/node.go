@@ -42,12 +42,13 @@ type Node struct {
 	KubeProxyVersion        string
 	IcingaState             IcingaState
 	IcingaStateReason       string
-	Conditions              []NodeCondition  `db:"-"`
-	Volumes                 []NodeVolume     `db:"-"`
-	Labels                  []Label          `db:"-"`
-	NodeLabels              []NodeLabel      `db:"-"`
-	Annotations             []Annotation     `db:"-"`
-	NodeAnnotations         []NodeAnnotation `db:"-"`
+	Conditions              []NodeCondition      `db:"-"`
+	Volumes                 []NodeVolume         `db:"-"`
+	Labels                  []Label              `db:"-"`
+	NodeLabels              []NodeLabel          `db:"-"`
+	Annotations             []Annotation         `db:"-"`
+	NodeAnnotations         []NodeAnnotation     `db:"-"`
+	ResourceAnnotations     []ResourceAnnotation `db:"-"`
 }
 
 type NodeCondition struct {
@@ -189,6 +190,10 @@ func (n *Node) Obtain(k8s kmetav1.Object) {
 			NodeUuid:       n.Uuid,
 			AnnotationUuid: annotationUuid,
 		})
+		n.ResourceAnnotations = append(n.ResourceAnnotations, ResourceAnnotation{
+			ResourceUuid:   n.Uuid,
+			AnnotationUuid: annotationUuid,
+		})
 	}
 }
 
@@ -255,6 +260,7 @@ func (n *Node) Relations() []database.Relation {
 		database.HasMany(n.Labels, database.WithoutCascadeDelete()),
 		database.HasMany(n.NodeAnnotations, fk),
 		database.HasMany(n.Annotations, database.WithoutCascadeDelete()),
+		database.HasMany(n.ResourceAnnotations, fk),
 	}
 }
 

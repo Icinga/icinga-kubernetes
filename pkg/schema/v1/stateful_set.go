@@ -40,6 +40,7 @@ type StatefulSet struct {
 	StatefulSetLabels                               []StatefulSetLabel      `db:"-"`
 	Annotations                                     []Annotation            `db:"-"`
 	StatefulSetAnnotations                          []StatefulSetAnnotation `db:"-"`
+	ResourceAnnotations                             []ResourceAnnotation    `db:"-"`
 }
 
 type StatefulSetCondition struct {
@@ -171,6 +172,10 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object) {
 			StatefulSetUuid: s.Uuid,
 			AnnotationUuid:  annotationUuid,
 		})
+		s.ResourceAnnotations = append(s.ResourceAnnotations, ResourceAnnotation{
+			ResourceUuid:   s.Uuid,
+			AnnotationUuid: annotationUuid,
+		})
 	}
 
 	scheme := kruntime.NewScheme()
@@ -222,5 +227,6 @@ func (s *StatefulSet) Relations() []database.Relation {
 		database.HasMany(s.Labels, database.WithoutCascadeDelete()),
 		database.HasMany(s.StatefulSetAnnotations, fk),
 		database.HasMany(s.Annotations, database.WithoutCascadeDelete()),
+		database.HasMany(s.ResourceAnnotations, fk),
 	}
 }

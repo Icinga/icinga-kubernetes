@@ -20,6 +20,7 @@ type Namespace struct {
 	NamespaceLabels      []NamespaceLabel      `db:"-"`
 	Annotations          []Annotation          `db:"-"`
 	NamespaceAnnotations []NamespaceAnnotation `db:"-"`
+	ResourceAnnotations  []ResourceAnnotation  `db:"-"`
 }
 
 type NamespaceCondition struct {
@@ -87,6 +88,10 @@ func (n *Namespace) Obtain(k8s kmetav1.Object) {
 			NamespaceUuid:  n.Uuid,
 			AnnotationUuid: annotationUuid,
 		})
+		n.ResourceAnnotations = append(n.ResourceAnnotations, ResourceAnnotation{
+			ResourceUuid:   n.Uuid,
+			AnnotationUuid: annotationUuid,
+		})
 	}
 
 	scheme := kruntime.NewScheme()
@@ -105,5 +110,6 @@ func (n *Namespace) Relations() []database.Relation {
 		database.HasMany(n.Labels, database.WithoutCascadeDelete()),
 		database.HasMany(n.NamespaceAnnotations, fk),
 		database.HasMany(n.Annotations, database.WithoutCascadeDelete()),
+		database.HasMany(n.ResourceAnnotations, fk),
 	}
 }

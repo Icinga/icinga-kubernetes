@@ -30,14 +30,15 @@ type Service struct {
 	LoadBalancerClass             sql.NullString
 	InternalTrafficPolicy         string
 	Yaml                          string
-	Selectors                     []Selector          `db:"-"`
-	ServiceSelectors              []ServiceSelector   `db:"-"`
-	Ports                         []ServicePort       `db:"-"`
-	Conditions                    []ServiceCondition  `db:"-"`
-	Labels                        []Label             `db:"-"`
-	ServiceLabels                 []ServiceLabel      `db:"-"`
-	Annotations                   []Annotation        `db:"-"`
-	ServiceAnnotations            []ServiceAnnotation `db:"-"`
+	Selectors                     []Selector           `db:"-"`
+	ServiceSelectors              []ServiceSelector    `db:"-"`
+	Ports                         []ServicePort        `db:"-"`
+	Conditions                    []ServiceCondition   `db:"-"`
+	Labels                        []Label              `db:"-"`
+	ServiceLabels                 []ServiceLabel       `db:"-"`
+	Annotations                   []Annotation         `db:"-"`
+	ServiceAnnotations            []ServiceAnnotation  `db:"-"`
+	ResourceAnnotations           []ResourceAnnotation `db:"-"`
 }
 
 type ServiceSelector struct {
@@ -118,6 +119,10 @@ func (s *Service) Obtain(k8s kmetav1.Object) {
 		})
 		s.ServiceAnnotations = append(s.ServiceAnnotations, ServiceAnnotation{
 			ServiceUuid:    s.Uuid,
+			AnnotationUuid: annotationUuid,
+		})
+		s.ResourceAnnotations = append(s.ResourceAnnotations, ResourceAnnotation{
+			ResourceUuid:   s.Uuid,
 			AnnotationUuid: annotationUuid,
 		})
 	}
@@ -226,5 +231,6 @@ func (s *Service) Relations() []database.Relation {
 		database.HasMany(s.ServiceSelectors, fk),
 		database.HasMany(s.ServiceAnnotations, fk),
 		database.HasMany(s.Annotations, database.WithoutCascadeDelete()),
+		database.HasMany(s.ResourceAnnotations, fk),
 	}
 }

@@ -10,12 +10,13 @@ import (
 
 type Secret struct {
 	Meta
-	Type              string
-	Immutable         types.Bool
-	Labels            []Label            `db:"-"`
-	SecretLabels      []SecretLabel      `db:"-"`
-	Annotations       []Annotation       `db:"-"`
-	SecretAnnotations []SecretAnnotation `db:"-"`
+	Type                string
+	Immutable           types.Bool
+	Labels              []Label              `db:"-"`
+	SecretLabels        []SecretLabel        `db:"-"`
+	Annotations         []Annotation         `db:"-"`
+	SecretAnnotations   []SecretAnnotation   `db:"-"`
+	ResourceAnnotations []ResourceAnnotation `db:"-"`
 }
 
 type SecretLabel struct {
@@ -72,6 +73,10 @@ func (s *Secret) Obtain(k8s kmetav1.Object) {
 			SecretUuid:     s.Uuid,
 			AnnotationUuid: annotationUuid,
 		})
+		s.ResourceAnnotations = append(s.ResourceAnnotations, ResourceAnnotation{
+			ResourceUuid:   s.Uuid,
+			AnnotationUuid: annotationUuid,
+		})
 	}
 }
 
@@ -83,5 +88,6 @@ func (s *Secret) Relations() []database.Relation {
 		database.HasMany(s.SecretLabels, fk),
 		database.HasMany(s.SecretAnnotations, fk),
 		database.HasMany(s.Annotations, database.WithoutCascadeDelete()),
+		database.HasMany(s.ResourceAnnotations, fk),
 	}
 }

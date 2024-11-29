@@ -25,10 +25,11 @@ type CronJob struct {
 	LastScheduleTime           types.UnixMilli
 	LastSuccessfulTime         types.UnixMilli
 	Yaml                       string
-	Labels                     []Label             `db:"-"`
-	CronJobLabels              []CronJobLabel      `db:"-"`
-	Annotations                []Annotation        `db:"-"`
-	CronJobAnnotations         []CronJobAnnotation `db:"-"`
+	Labels                     []Label              `db:"-"`
+	CronJobLabels              []CronJobLabel       `db:"-"`
+	Annotations                []Annotation         `db:"-"`
+	CronJobAnnotations         []CronJobAnnotation  `db:"-"`
+	ResourceAnnotations        []ResourceAnnotation `db:"-"`
 }
 
 type CronJobLabel struct {
@@ -100,6 +101,10 @@ func (c *CronJob) Obtain(k8s kmetav1.Object) {
 			CronJobUuid:    c.Uuid,
 			AnnotationUuid: annotationUuid,
 		})
+		c.ResourceAnnotations = append(c.ResourceAnnotations, ResourceAnnotation{
+			ResourceUuid:   c.Uuid,
+			AnnotationUuid: annotationUuid,
+		})
 	}
 
 	scheme := kruntime.NewScheme()
@@ -117,5 +122,6 @@ func (c *CronJob) Relations() []database.Relation {
 		database.HasMany(c.CronJobLabels, fk),
 		database.HasMany(c.CronJobAnnotations, fk),
 		database.HasMany(c.Annotations, database.WithoutCascadeDelete()),
+		database.HasMany(c.ResourceAnnotations, fk),
 	}
 }

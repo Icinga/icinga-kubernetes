@@ -33,12 +33,13 @@ type Job struct {
 	Yaml                    string
 	IcingaState             IcingaState
 	IcingaStateReason       string
-	Conditions              []JobCondition  `db:"-"`
-	Labels                  []Label         `db:"-"`
-	JobLabels               []JobLabel      `db:"-"`
-	Annotations             []Annotation    `db:"-"`
-	JobAnnotations          []JobAnnotation `db:"-"`
-	Owners                  []JobOwner      `db:"-"`
+	Conditions              []JobCondition       `db:"-"`
+	Labels                  []Label              `db:"-"`
+	JobLabels               []JobLabel           `db:"-"`
+	Annotations             []Annotation         `db:"-"`
+	JobAnnotations          []JobAnnotation      `db:"-"`
+	ResourceAnnotations     []ResourceAnnotation `db:"-"`
+	Owners                  []JobOwner           `db:"-"`
 }
 
 type JobCondition struct {
@@ -172,6 +173,10 @@ func (j *Job) Obtain(k8s kmetav1.Object) {
 		})
 		j.JobAnnotations = append(j.JobAnnotations, JobAnnotation{
 			JobUuid:        j.Uuid,
+			AnnotationUuid: annotationUuid,
+		})
+		j.ResourceAnnotations = append(j.ResourceAnnotations, ResourceAnnotation{
+			ResourceUuid:   j.Uuid,
 			AnnotationUuid: annotationUuid,
 		})
 	}

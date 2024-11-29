@@ -34,6 +34,7 @@ type ReplicaSet struct {
 	ReplicaSetLabels      []ReplicaSetLabel      `db:"-"`
 	Annotations           []Annotation           `db:"-"`
 	ReplicaSetAnnotations []ReplicaSetAnnotation `db:"-"`
+	ResourceAnnotations   []ResourceAnnotation   `db:"-"`
 }
 
 type ReplicaSetCondition struct {
@@ -146,6 +147,10 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object) {
 			ReplicaSetUuid: r.Uuid,
 			AnnotationUuid: annotationUuid,
 		})
+		r.ResourceAnnotations = append(r.ResourceAnnotations, ResourceAnnotation{
+			ResourceUuid:   r.Uuid,
+			AnnotationUuid: annotationUuid,
+		})
 	}
 
 	scheme := kruntime.NewScheme()
@@ -205,5 +210,6 @@ func (r *ReplicaSet) Relations() []database.Relation {
 		database.HasMany(r.Labels, database.WithoutCascadeDelete()),
 		database.HasMany(r.ReplicaSetAnnotations, fk),
 		database.HasMany(r.Annotations, database.WithoutCascadeDelete()),
+		database.HasMany(r.ResourceAnnotations, fk),
 	}
 }

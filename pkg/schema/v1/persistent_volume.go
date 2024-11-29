@@ -31,6 +31,7 @@ type PersistentVolume struct {
 	PersistentVolumeLabels      []PersistentVolumeLabel      `db:"-"`
 	Annotations                 []Annotation                 `db:"-"`
 	PersistentVolumeAnnotations []PersistentVolumeAnnotation `db:"-"`
+	ResourceAnnotations         []PersistentVolumeAnnotation `db:"-"`
 }
 
 type PersistentVolumeClaimRef struct {
@@ -113,6 +114,10 @@ func (p *PersistentVolume) Obtain(k8s kmetav1.Object) {
 			PersistentVolumeUuid: p.Uuid,
 			AnnotationUuid:       annotationUuid,
 		})
+		p.ResourceAnnotations = append(p.ResourceAnnotations, PersistentVolumeAnnotation{
+			PersistentVolumeUuid: p.Uuid,
+			AnnotationUuid:       annotationUuid,
+		})
 	}
 
 	scheme := kruntime.NewScheme()
@@ -135,5 +140,6 @@ func (p *PersistentVolume) Relations() []database.Relation {
 		database.HasMany(p.PersistentVolumeLabels, fk),
 		database.HasMany(p.PersistentVolumeAnnotations, fk),
 		database.HasMany(p.Annotations, database.WithoutCascadeDelete()),
+		database.HasMany(p.ResourceAnnotations, fk),
 	}
 }

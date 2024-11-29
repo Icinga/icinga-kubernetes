@@ -23,6 +23,7 @@ type Ingress struct {
 	IngressLabels          []IngressLabel           `db:"-"`
 	Annotations            []Annotation             `db:"-"`
 	IngressAnnotations     []IngressAnnotation      `db:"-"`
+	ResourceAnnotations    []ResourceAnnotation     `db:"-"`
 }
 
 type IngressTls struct {
@@ -195,6 +196,10 @@ func (i *Ingress) Obtain(k8s kmetav1.Object) {
 			IngressUuid:    i.Uuid,
 			AnnotationUuid: annotationUuid,
 		})
+		i.ResourceAnnotations = append(i.ResourceAnnotations, ResourceAnnotation{
+			ResourceUuid:   i.Uuid,
+			AnnotationUuid: annotationUuid,
+		})
 	}
 
 	scheme := kruntime.NewScheme()
@@ -216,5 +221,6 @@ func (i *Ingress) Relations() []database.Relation {
 		database.HasMany(i.IngressLabels, fk),
 		database.HasMany(i.IngressAnnotations, fk),
 		database.HasMany(i.Annotations, database.WithoutCascadeDelete()),
+		database.HasMany(i.ResourceAnnotations, fk),
 	}
 }

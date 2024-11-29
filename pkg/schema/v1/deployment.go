@@ -38,6 +38,7 @@ type Deployment struct {
 	DeploymentLabels        []DeploymentLabel      `db:"-"`
 	Annotations             []Annotation           `db:"-"`
 	DeploymentAnnotations   []DeploymentAnnotation `db:"-"`
+	ResourceAnnotations     []ResourceAnnotation   `db:"-"`
 }
 
 type DeploymentCondition struct {
@@ -159,6 +160,10 @@ func (d *Deployment) Obtain(k8s kmetav1.Object) {
 			DeploymentUuid: d.Uuid,
 			AnnotationUuid: annotationUuid,
 		})
+		d.ResourceAnnotations = append(d.ResourceAnnotations, ResourceAnnotation{
+			ResourceUuid:   d.Uuid,
+			AnnotationUuid: annotationUuid,
+		})
 	}
 
 	scheme := kruntime.NewScheme()
@@ -223,5 +228,6 @@ func (d *Deployment) Relations() []database.Relation {
 		database.HasMany(d.Labels, database.WithoutCascadeDelete()),
 		database.HasMany(d.DeploymentAnnotations, fk),
 		database.HasMany(d.Annotations, database.WithoutCascadeDelete()),
+		database.HasMany(d.ResourceAnnotations, fk),
 	}
 }
