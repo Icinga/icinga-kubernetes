@@ -9,6 +9,7 @@ import (
 	kruntime "k8s.io/apimachinery/pkg/runtime"
 	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
+	"strings"
 )
 
 type Ingress struct {
@@ -18,6 +19,10 @@ type Ingress struct {
 	IngressBackendService  []IngressBackendService  `db:"-"`
 	IngressBackendResource []IngressBackendResource `db:"-"`
 	IngressRule            []IngressRule            `db:"-"`
+	Labels                 []Label                  `db:"-"`
+	IngressLabels          []IngressLabel           `db:"-"`
+	Annotations            []Annotation             `db:"-"`
+	IngressAnnotations     []IngressAnnotation      `db:"-"`
 }
 
 type IngressTls struct {
@@ -51,6 +56,16 @@ type IngressRule struct {
 	Host        sql.NullString
 	Path        sql.NullString
 	PathType    string
+}
+
+type IngressLabel struct {
+	IngressUuid types.UUID
+	LabelUuid   types.UUID
+}
+
+type IngressAnnotation struct {
+	IngressUuid    types.UUID
+	AnnotationUuid types.UUID
 }
 
 func NewIngress() Resource {
@@ -156,6 +171,32 @@ func (i *Ingress) Obtain(k8s kmetav1.Object) {
 
 	}
 
+	for labelName, labelValue := range ingress.Labels {
+		labelUuid := NewUUID(i.Uuid, strings.ToLower(labelName+":"+labelValue))
+		i.Labels = append(i.Labels, Label{
+			Uuid:  labelUuid,
+			Name:  labelName,
+			Value: labelValue,
+		})
+		i.IngressLabels = append(i.IngressLabels, IngressLabel{
+			IngressUuid: i.Uuid,
+			LabelUuid:   labelUuid,
+		})
+	}
+
+	for annotationName, annotationValue := range ingress.Annotations {
+		annotationUuid := NewUUID(i.Uuid, strings.ToLower(annotationName+":"+annotationValue))
+		i.Annotations = append(i.Annotations, Annotation{
+			Uuid:  annotationUuid,
+			Name:  annotationName,
+			Value: annotationValue,
+		})
+		i.IngressAnnotations = append(i.IngressAnnotations, IngressAnnotation{
+			IngressUuid:    i.Uuid,
+			AnnotationUuid: annotationUuid,
+		})
+	}
+
 	scheme := kruntime.NewScheme()
 	_ = networkingv1.AddToScheme(scheme)
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), networkingv1.SchemeGroupVersion)
@@ -171,5 +212,9 @@ func (i *Ingress) Relations() []database.Relation {
 		database.HasMany(i.IngressBackendService, fk),
 		database.HasMany(i.IngressBackendResource, fk),
 		database.HasMany(i.IngressRule, fk),
+		database.HasMany(i.Labels, database.WithoutCascadeDelete()),
+		database.HasMany(i.IngressLabels, fk),
+		database.HasMany(i.IngressAnnotations, fk),
+		database.HasMany(i.Annotations, database.WithoutCascadeDelete()),
 	}
 }
