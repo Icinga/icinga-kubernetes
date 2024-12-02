@@ -32,8 +32,8 @@ func NewEvent() Resource {
 	return &Event{}
 }
 
-func (e *Event) Obtain(k8s kmetav1.Object) {
-	e.ObtainMeta(k8s)
+func (e *Event) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
+	e.ObtainMeta(k8s, clusterUuid)
 
 	event := k8s.(*keventsv1.Event)
 

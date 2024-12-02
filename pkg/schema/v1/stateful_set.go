@@ -77,8 +77,8 @@ func NewStatefulSet() Resource {
 	return &StatefulSet{}
 }
 
-func (s *StatefulSet) Obtain(k8s kmetav1.Object) {
-	s.ObtainMeta(k8s)
+func (s *StatefulSet) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
+	s.ObtainMeta(k8s, clusterUuid)
 
 	statefulSet := k8s.(*kappsv1.StatefulSet)
 
