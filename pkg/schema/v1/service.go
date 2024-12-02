@@ -30,14 +30,16 @@ type Service struct {
 	LoadBalancerClass             sql.NullString
 	InternalTrafficPolicy         string
 	Yaml                          string
-	Selectors                     []Selector          `db:"-"`
-	ServiceSelectors              []ServiceSelector   `db:"-"`
-	Ports                         []ServicePort       `db:"-"`
-	Conditions                    []ServiceCondition  `db:"-"`
-	Labels                        []Label             `db:"-"`
-	ServiceLabels                 []ServiceLabel      `db:"-"`
-	Annotations                   []Annotation        `db:"-"`
-	ServiceAnnotations            []ServiceAnnotation `db:"-"`
+	Selectors                     []Selector           `db:"-"`
+	ServiceSelectors              []ServiceSelector    `db:"-"`
+	Ports                         []ServicePort        `db:"-"`
+	Conditions                    []ServiceCondition   `db:"-"`
+	Labels                        []Label              `db:"-"`
+	ServiceLabels                 []ServiceLabel       `db:"-"`
+	ResourceLabels                []ResourceLabel      `db:"-"`
+	Annotations                   []Annotation         `db:"-"`
+	ServiceAnnotations            []ServiceAnnotation  `db:"-"`
+	ResourceAnnotations           []ResourceAnnotation `db:"-"`
 }
 
 type ServiceSelector struct {
@@ -119,6 +121,14 @@ func (s *Service) Obtain(k8s kmetav1.Object) {
 		s.ServiceAnnotations = append(s.ServiceAnnotations, ServiceAnnotation{
 			ServiceUuid:    s.Uuid,
 			AnnotationUuid: annotationUuid,
+		})
+		s.ResourceAnnotations = append(s.ResourceAnnotations, ResourceAnnotation{
+			ResourceUuid:   s.Uuid,
+			AnnotationUuid: annotationUuid,
+		})
+		s.ResourceLabels = append(s.ResourceLabels, ResourceLabel{
+			ResourceUuid: s.Uuid,
+			LabelUuid:    annotationUuid,
 		})
 	}
 
@@ -222,9 +232,11 @@ func (s *Service) Relations() []database.Relation {
 		database.HasMany(s.Ports, fk),
 		database.HasMany(s.Labels, database.WithoutCascadeDelete()),
 		database.HasMany(s.ServiceLabels, fk),
+		database.HasMany(s.ResourceLabels, fk),
 		database.HasMany(s.Selectors, database.WithoutCascadeDelete()),
 		database.HasMany(s.ServiceSelectors, fk),
 		database.HasMany(s.ServiceAnnotations, fk),
 		database.HasMany(s.Annotations, database.WithoutCascadeDelete()),
+		database.HasMany(s.ResourceAnnotations, fk),
 	}
 }

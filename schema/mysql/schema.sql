@@ -5,11 +5,23 @@ CREATE TABLE annotation (
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+CREATE TABLE resource_annotation (
+  resource_uuid binary(16) NOT NULL,
+  annotation_uuid binary(16) NOT NULL,
+  PRIMARY KEY (resource_uuid, annotation_uuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
 CREATE TABLE label (
   uuid binary(16) NOT NULL,
   name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
   value varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (uuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE resource_label (
+  resource_uuid binary(16) NOT NULL,
+  label_uuid binary(16) NOT NULL,
+  PRIMARY KEY (resource_uuid, label_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE config_map (

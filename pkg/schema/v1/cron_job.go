@@ -25,10 +25,12 @@ type CronJob struct {
 	LastScheduleTime           types.UnixMilli
 	LastSuccessfulTime         types.UnixMilli
 	Yaml                       string
-	Labels                     []Label             `db:"-"`
-	CronJobLabels              []CronJobLabel      `db:"-"`
-	Annotations                []Annotation        `db:"-"`
-	CronJobAnnotations         []CronJobAnnotation `db:"-"`
+	Labels                     []Label              `db:"-"`
+	CronJobLabels              []CronJobLabel       `db:"-"`
+	ResourceLabels             []ResourceLabel      `db:"-"`
+	Annotations                []Annotation         `db:"-"`
+	CronJobAnnotations         []CronJobAnnotation  `db:"-"`
+	ResourceAnnotations        []ResourceAnnotation `db:"-"`
 }
 
 type CronJobLabel struct {
@@ -87,6 +89,10 @@ func (c *CronJob) Obtain(k8s kmetav1.Object) {
 			CronJobUuid: c.Uuid,
 			LabelUuid:   labelUuid,
 		})
+		c.ResourceLabels = append(c.ResourceLabels, ResourceLabel{
+			ResourceUuid: c.Uuid,
+			LabelUuid:    labelUuid,
+		})
 	}
 
 	for annotationName, annotationValue := range cronJob.Annotations {
@@ -98,6 +104,10 @@ func (c *CronJob) Obtain(k8s kmetav1.Object) {
 		})
 		c.CronJobAnnotations = append(c.CronJobAnnotations, CronJobAnnotation{
 			CronJobUuid:    c.Uuid,
+			AnnotationUuid: annotationUuid,
+		})
+		c.ResourceAnnotations = append(c.ResourceAnnotations, ResourceAnnotation{
+			ResourceUuid:   c.Uuid,
 			AnnotationUuid: annotationUuid,
 		})
 	}
@@ -115,7 +125,9 @@ func (c *CronJob) Relations() []database.Relation {
 	return []database.Relation{
 		database.HasMany(c.Labels, database.WithoutCascadeDelete()),
 		database.HasMany(c.CronJobLabels, fk),
+		database.HasMany(c.ResourceLabels, fk),
 		database.HasMany(c.CronJobAnnotations, fk),
 		database.HasMany(c.Annotations, database.WithoutCascadeDelete()),
+		database.HasMany(c.ResourceAnnotations, fk),
 	}
 }

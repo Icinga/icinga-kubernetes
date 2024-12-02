@@ -42,12 +42,14 @@ type Node struct {
 	KubeProxyVersion        string
 	IcingaState             IcingaState
 	IcingaStateReason       string
-	Conditions              []NodeCondition  `db:"-"`
-	Volumes                 []NodeVolume     `db:"-"`
-	Labels                  []Label          `db:"-"`
-	NodeLabels              []NodeLabel      `db:"-"`
-	Annotations             []Annotation     `db:"-"`
-	NodeAnnotations         []NodeAnnotation `db:"-"`
+	Conditions              []NodeCondition      `db:"-"`
+	Volumes                 []NodeVolume         `db:"-"`
+	Labels                  []Label              `db:"-"`
+	NodeLabels              []NodeLabel          `db:"-"`
+	ResourceLabels          []ResourceLabel      `db:"-"`
+	Annotations             []Annotation         `db:"-"`
+	NodeAnnotations         []NodeAnnotation     `db:"-"`
+	ResourceAnnotations     []ResourceAnnotation `db:"-"`
 }
 
 type NodeCondition struct {
@@ -170,6 +172,10 @@ func (n *Node) Obtain(k8s kmetav1.Object) {
 			NodeUuid:  n.Uuid,
 			LabelUuid: labelUuid,
 		})
+		n.ResourceLabels = append(n.ResourceLabels, ResourceLabel{
+			ResourceUuid: n.Uuid,
+			LabelUuid:    labelUuid,
+		})
 	}
 
 	scheme := kruntime.NewScheme()
@@ -187,6 +193,10 @@ func (n *Node) Obtain(k8s kmetav1.Object) {
 		})
 		n.NodeAnnotations = append(n.NodeAnnotations, NodeAnnotation{
 			NodeUuid:       n.Uuid,
+			AnnotationUuid: annotationUuid,
+		})
+		n.ResourceAnnotations = append(n.ResourceAnnotations, ResourceAnnotation{
+			ResourceUuid:   n.Uuid,
 			AnnotationUuid: annotationUuid,
 		})
 	}
@@ -253,8 +263,10 @@ func (n *Node) Relations() []database.Relation {
 		database.HasMany(n.Volumes, fk),
 		database.HasMany(n.NodeLabels, fk),
 		database.HasMany(n.Labels, database.WithoutCascadeDelete()),
+		database.HasMany(n.ResourceLabels, fk),
 		database.HasMany(n.NodeAnnotations, fk),
 		database.HasMany(n.Annotations, database.WithoutCascadeDelete()),
+		database.HasMany(n.ResourceAnnotations, fk),
 	}
 }
 

@@ -36,8 +36,10 @@ type Deployment struct {
 	Owners                  []DeploymentOwner      `db:"-"`
 	Labels                  []Label                `db:"-"`
 	DeploymentLabels        []DeploymentLabel      `db:"-"`
+	ResourceLabels          []ResourceLabel        `db:"-"`
 	Annotations             []Annotation           `db:"-"`
 	DeploymentAnnotations   []DeploymentAnnotation `db:"-"`
+	ResourceAnnotations     []ResourceAnnotation   `db:"-"`
 }
 
 type DeploymentCondition struct {
@@ -146,6 +148,10 @@ func (d *Deployment) Obtain(k8s kmetav1.Object) {
 			DeploymentUuid: d.Uuid,
 			LabelUuid:      labelUuid,
 		})
+		d.ResourceLabels = append(d.ResourceLabels, ResourceLabel{
+			ResourceUuid: d.Uuid,
+			LabelUuid:    labelUuid,
+		})
 	}
 
 	for annotationName, annotationValue := range deployment.Annotations {
@@ -157,6 +163,10 @@ func (d *Deployment) Obtain(k8s kmetav1.Object) {
 		})
 		d.DeploymentAnnotations = append(d.DeploymentAnnotations, DeploymentAnnotation{
 			DeploymentUuid: d.Uuid,
+			AnnotationUuid: annotationUuid,
+		})
+		d.ResourceAnnotations = append(d.ResourceAnnotations, ResourceAnnotation{
+			ResourceUuid:   d.Uuid,
 			AnnotationUuid: annotationUuid,
 		})
 	}
@@ -221,7 +231,9 @@ func (d *Deployment) Relations() []database.Relation {
 		database.HasMany(d.Owners, fk),
 		database.HasMany(d.DeploymentLabels, fk),
 		database.HasMany(d.Labels, database.WithoutCascadeDelete()),
+		database.HasMany(d.ResourceLabels, fk),
 		database.HasMany(d.DeploymentAnnotations, fk),
 		database.HasMany(d.Annotations, database.WithoutCascadeDelete()),
+		database.HasMany(d.ResourceAnnotations, fk),
 	}
 }

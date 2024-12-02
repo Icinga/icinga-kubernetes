@@ -33,12 +33,14 @@ type Job struct {
 	Yaml                    string
 	IcingaState             IcingaState
 	IcingaStateReason       string
-	Conditions              []JobCondition  `db:"-"`
-	Labels                  []Label         `db:"-"`
-	JobLabels               []JobLabel      `db:"-"`
-	Annotations             []Annotation    `db:"-"`
-	JobAnnotations          []JobAnnotation `db:"-"`
-	Owners                  []JobOwner      `db:"-"`
+	Conditions              []JobCondition       `db:"-"`
+	Labels                  []Label              `db:"-"`
+	JobLabels               []JobLabel           `db:"-"`
+	ResourceLabels          []ResourceLabel      `db:"-"`
+	Annotations             []Annotation         `db:"-"`
+	JobAnnotations          []JobAnnotation      `db:"-"`
+	ResourceAnnotations     []ResourceAnnotation `db:"-"`
+	Owners                  []JobOwner           `db:"-"`
 }
 
 type JobCondition struct {
@@ -161,6 +163,10 @@ func (j *Job) Obtain(k8s kmetav1.Object) {
 			JobUuid:   j.Uuid,
 			LabelUuid: labelUuid,
 		})
+		j.ResourceLabels = append(j.ResourceLabels, ResourceLabel{
+			ResourceUuid: j.Uuid,
+			LabelUuid:    labelUuid,
+		})
 	}
 
 	for annotationName, annotationValue := range job.Annotations {
@@ -172,6 +178,10 @@ func (j *Job) Obtain(k8s kmetav1.Object) {
 		})
 		j.JobAnnotations = append(j.JobAnnotations, JobAnnotation{
 			JobUuid:        j.Uuid,
+			AnnotationUuid: annotationUuid,
+		})
+		j.ResourceAnnotations = append(j.ResourceAnnotations, ResourceAnnotation{
+			ResourceUuid:   j.Uuid,
 			AnnotationUuid: annotationUuid,
 		})
 	}
@@ -272,6 +282,7 @@ func (j *Job) Relations() []database.Relation {
 		database.HasMany(j.Conditions, fk),
 		database.HasMany(j.Labels, database.WithoutCascadeDelete()),
 		database.HasMany(j.JobLabels, fk),
+		database.HasMany(j.ResourceLabels, fk),
 		database.HasMany(j.JobAnnotations, fk),
 		database.HasMany(j.Annotations, database.WithoutCascadeDelete()),
 		database.HasMany(j.Owners, fk),

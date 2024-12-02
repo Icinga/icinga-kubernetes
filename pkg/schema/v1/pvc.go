@@ -36,20 +36,22 @@ var persistentVolumeAccessModes = kpersistentVolumeAccessModes{
 
 type Pvc struct {
 	Meta
-	DesiredAccessModes Bitmask[kpersistentVolumeAccessModesSize]
-	ActualAccessModes  Bitmask[kpersistentVolumeAccessModesSize]
-	MinimumCapacity    sql.NullInt64
-	ActualCapacity     sql.NullInt64
-	Phase              string
-	VolumeName         sql.NullString
-	VolumeMode         string
-	StorageClass       sql.NullString
-	Yaml               string
-	Conditions         []PvcCondition  `db:"-"`
-	Labels             []Label         `db:"-"`
-	PvcLabels          []PvcLabel      `db:"-"`
-	Annotations        []Annotation    `db:"-"`
-	PvcAnnotations     []PvcAnnotation `db:"-"`
+	DesiredAccessModes  Bitmask[kpersistentVolumeAccessModesSize]
+	ActualAccessModes   Bitmask[kpersistentVolumeAccessModesSize]
+	MinimumCapacity     sql.NullInt64
+	ActualCapacity      sql.NullInt64
+	Phase               string
+	VolumeName          sql.NullString
+	VolumeMode          string
+	StorageClass        sql.NullString
+	Yaml                string
+	Conditions          []PvcCondition       `db:"-"`
+	Labels              []Label              `db:"-"`
+	PvcLabels           []PvcLabel           `db:"-"`
+	ResourceLabels      []ResourceLabel      `db:"-"`
+	Annotations         []Annotation         `db:"-"`
+	PvcAnnotations      []PvcAnnotation      `db:"-"`
+	ResourceAnnotations []ResourceAnnotation `db:"-"`
 }
 
 type PvcCondition struct {
@@ -129,6 +131,10 @@ func (p *Pvc) Obtain(k8s kmetav1.Object) {
 			PvcUuid:   p.Uuid,
 			LabelUuid: labelUuid,
 		})
+		p.ResourceLabels = append(p.ResourceLabels, ResourceLabel{
+			ResourceUuid: p.Uuid,
+			LabelUuid:    labelUuid,
+		})
 	}
 
 	for annotationName, annotationValue := range pvc.Annotations {
@@ -137,6 +143,10 @@ func (p *Pvc) Obtain(k8s kmetav1.Object) {
 			Uuid:  annotationUuid,
 			Name:  annotationName,
 			Value: annotationValue,
+		})
+		p.PvcAnnotations = append(p.PvcAnnotations, PvcAnnotation{
+			PvcUuid:        p.Uuid,
+			AnnotationUuid: annotationUuid,
 		})
 		p.PvcAnnotations = append(p.PvcAnnotations, PvcAnnotation{
 			PvcUuid:        p.Uuid,
@@ -158,5 +168,7 @@ func (p *Pvc) Relations() []database.Relation {
 		database.HasMany(p.Conditions, fk),
 		database.HasMany(p.PvcLabels, fk),
 		database.HasMany(p.Labels, database.WithoutCascadeDelete()),
+		database.HasMany(p.ResourceAnnotations, fk),
+		database.HasMany(p.ResourceLabels, fk),
 	}
 }

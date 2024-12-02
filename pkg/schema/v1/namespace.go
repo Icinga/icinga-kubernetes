@@ -18,8 +18,10 @@ type Namespace struct {
 	Conditions           []NamespaceCondition  `db:"-"`
 	Labels               []Label               `db:"-"`
 	NamespaceLabels      []NamespaceLabel      `db:"-"`
+	ResourceLabels       []ResourceLabel       `db:"-"`
 	Annotations          []Annotation          `db:"-"`
 	NamespaceAnnotations []NamespaceAnnotation `db:"-"`
+	ResourceAnnotations  []ResourceAnnotation  `db:"-"`
 }
 
 type NamespaceCondition struct {
@@ -74,6 +76,10 @@ func (n *Namespace) Obtain(k8s kmetav1.Object) {
 			NamespaceUuid: n.Uuid,
 			LabelUuid:     labelUuid,
 		})
+		n.ResourceLabels = append(n.ResourceLabels, ResourceLabel{
+			ResourceUuid: n.Uuid,
+			LabelUuid:    labelUuid,
+		})
 	}
 
 	for annotationName, annotationValue := range namespace.Annotations {
@@ -85,6 +91,10 @@ func (n *Namespace) Obtain(k8s kmetav1.Object) {
 		})
 		n.NamespaceAnnotations = append(n.NamespaceAnnotations, NamespaceAnnotation{
 			NamespaceUuid:  n.Uuid,
+			AnnotationUuid: annotationUuid,
+		})
+		n.ResourceAnnotations = append(n.ResourceAnnotations, ResourceAnnotation{
+			ResourceUuid:   n.Uuid,
 			AnnotationUuid: annotationUuid,
 		})
 	}
@@ -103,7 +113,9 @@ func (n *Namespace) Relations() []database.Relation {
 		database.HasMany(n.Conditions, fk),
 		database.HasMany(n.NamespaceLabels, fk),
 		database.HasMany(n.Labels, database.WithoutCascadeDelete()),
+		database.HasMany(n.ResourceLabels, fk),
 		database.HasMany(n.NamespaceAnnotations, fk),
 		database.HasMany(n.Annotations, database.WithoutCascadeDelete()),
+		database.HasMany(n.ResourceAnnotations, fk),
 	}
 }

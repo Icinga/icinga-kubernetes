@@ -38,8 +38,10 @@ type StatefulSet struct {
 	Owners                                          []StatefulSetOwner      `db:"-"`
 	Labels                                          []Label                 `db:"-"`
 	StatefulSetLabels                               []StatefulSetLabel      `db:"-"`
+	ResourceLabels                                  []ResourceLabel         `db:"-"`
 	Annotations                                     []Annotation            `db:"-"`
 	StatefulSetAnnotations                          []StatefulSetAnnotation `db:"-"`
+	ResourceAnnotations                             []ResourceAnnotation    `db:"-"`
 }
 
 type StatefulSetCondition struct {
@@ -158,6 +160,10 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object) {
 			StatefulSetUuid: s.Uuid,
 			LabelUuid:       labelUuid,
 		})
+		s.ResourceLabels = append(s.ResourceLabels, ResourceLabel{
+			ResourceUuid: s.Uuid,
+			LabelUuid:    labelUuid,
+		})
 	}
 
 	for annotationName, annotationValue := range statefulSet.Annotations {
@@ -170,6 +176,10 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object) {
 		s.StatefulSetAnnotations = append(s.StatefulSetAnnotations, StatefulSetAnnotation{
 			StatefulSetUuid: s.Uuid,
 			AnnotationUuid:  annotationUuid,
+		})
+		s.ResourceAnnotations = append(s.ResourceAnnotations, ResourceAnnotation{
+			ResourceUuid:   s.Uuid,
+			AnnotationUuid: annotationUuid,
 		})
 	}
 
@@ -220,7 +230,9 @@ func (s *StatefulSet) Relations() []database.Relation {
 		database.HasMany(s.Owners, fk),
 		database.HasMany(s.StatefulSetLabels, fk),
 		database.HasMany(s.Labels, database.WithoutCascadeDelete()),
+		database.HasMany(s.ResourceLabels, fk),
 		database.HasMany(s.StatefulSetAnnotations, fk),
 		database.HasMany(s.Annotations, database.WithoutCascadeDelete()),
+		database.HasMany(s.ResourceAnnotations, fk),
 	}
 }
