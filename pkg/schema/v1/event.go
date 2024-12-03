@@ -12,7 +12,7 @@ import (
 
 type Event struct {
 	Meta
-	ReferentUuid        types.UUID
+	ReferenceUuid       types.UUID
 	ReportingController sql.NullString
 	ReportingInstance   sql.NullString
 	Action              sql.NullString
@@ -37,7 +37,7 @@ func (e *Event) Obtain(k8s kmetav1.Object) {
 
 	event := k8s.(*keventsv1.Event)
 
-	e.ReferentUuid = EnsureUUID(event.Regarding.UID)
+	e.ReferenceUuid = EnsureUUID(event.Regarding.UID)
 	e.ReportingController = NewNullableString(event.ReportingController)
 	e.ReportingInstance = NewNullableString(event.ReportingInstance)
 	e.Action = NewNullableString(event.Action)
