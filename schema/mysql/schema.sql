@@ -1,6 +1,6 @@
 CREATE TABLE annotation (
   uuid binary(16) NOT NULL,
-  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   value mediumblob NOT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
@@ -13,7 +13,7 @@ CREATE TABLE resource_annotation (
 
 CREATE TABLE label (
   uuid binary(16) NOT NULL,
-  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   value varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
@@ -26,7 +26,7 @@ CREATE TABLE resource_label (
 
 CREATE TABLE config_map (
   uuid binary(16) NOT NULL,
-  namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  namespace varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
@@ -50,7 +50,7 @@ CREATE TABLE config_map_label (
 CREATE TABLE container (
   uuid binary(16) NOT NULL,
   pod_uuid binary(16) NOT NULL,
-  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   image varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   image_pull_policy enum('Always', 'Never', 'IfNotPresent') COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   cpu_limits bigint unsigned NULL DEFAULT NULL,
@@ -70,7 +70,7 @@ CREATE TABLE container (
 CREATE TABLE init_container (
   uuid binary(16) NOT NULL,
   pod_uuid binary(16) NOT NULL,
-  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   image varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   image_pull_policy enum('Always', 'Never', 'IfNotPresent') COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   cpu_limits bigint unsigned NULL DEFAULT NULL,
@@ -87,7 +87,7 @@ CREATE TABLE init_container (
 CREATE TABLE sidecar_container (
   uuid binary(16) NOT NULL,
   pod_uuid binary(16) NOT NULL,
-  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   image varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   image_pull_policy enum('Always', 'Never', 'IfNotPresent') COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   cpu_limits bigint unsigned NULL DEFAULT NULL,
@@ -123,7 +123,7 @@ CREATE TABLE container_log (
 CREATE TABLE container_mount (
   container_uuid binary(16) NOT NULL,
   pod_uuid binary(16) NOT NULL,
-  volume_name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  volume_name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   path varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   sub_path varchar(255) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   read_only enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -132,8 +132,8 @@ CREATE TABLE container_mount (
 
 CREATE TABLE cron_job (
   uuid binary(16) NOT NULL,
-  namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
-  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  namespace varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
   schedule varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -165,7 +165,7 @@ CREATE TABLE cron_job_label (
 
 CREATE TABLE daemon_set (
   uuid binary(16) NOT NULL,
-  namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  namespace varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
@@ -220,7 +220,7 @@ CREATE TABLE daemon_set_owner (
 
 CREATE TABLE deployment (
   uuid binary(16) NOT NULL,
-  namespace varchar(63) COLLATE utf8mb4_unicode_ci  NOT NULL,
+  namespace varchar(255) COLLATE utf8mb4_unicode_ci  NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
@@ -293,7 +293,7 @@ CREATE TABLE endpoint (
 
 CREATE TABLE endpoint_slice (
   uuid binary(16) NOT NULL,
-  namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  namespace varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
@@ -311,7 +311,7 @@ CREATE TABLE endpoint_slice_label (
 CREATE TABLE endpoint_target_ref (
   endpoint_slice_uuid binary(16) NOT NULL,
   kind enum('pod', 'node') COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
-  namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  namespace varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   api_version varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -322,7 +322,7 @@ CREATE TABLE endpoint_target_ref (
 CREATE TABLE event (
   uuid binary(16) NOT NULL,
   reference_uuid binary(16) NOT NULL,
-  namespace varchar(63) NOT NULL,
+  namespace varchar(255) NOT NULL,
   name varchar(270) NOT NULL,
   uid varchar(255) NOT NULL,
   resource_version varchar(255) NOT NULL,
@@ -333,7 +333,7 @@ CREATE TABLE event (
   note text NOT NULL,
   type varchar(255) NOT NULL,
   reference_kind varchar(255) NOT NULL,
-  reference_namespace varchar(63) NULL DEFAULT NULL,
+  reference_namespace varchar(255) NULL DEFAULT NULL,
   reference_name varchar(253) NOT NULL,
   first_seen bigint unsigned NOT NULL,
   last_seen bigint unsigned NOT NULL,
@@ -345,8 +345,8 @@ CREATE TABLE event (
 
 CREATE TABLE ingress (
   uuid binary(16) NOT NULL,
-  namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
-  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  namespace varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
   yaml mediumblob DEFAULT NULL,
@@ -405,8 +405,8 @@ CREATE TABLE ingress_tls (
 
 CREATE TABLE job (
   uuid binary(16) NOT NULL,
-  namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
-  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  namespace varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
   parallelism int unsigned NULL DEFAULT NULL,
@@ -464,8 +464,8 @@ CREATE TABLE job_owner (
 
 CREATE TABLE namespace (
   uuid binary(16) NOT NULL,
-  namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL, /* TODO: Remove. A namespace does not have a namespace. */
-  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  namespace varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL, /* TODO: Remove. A namespace does not have a namespace. */
+  name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
   phase enum('Active', 'Terminating') COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -498,7 +498,7 @@ CREATE TABLE namespace_label (
 
 CREATE TABLE node (
   uuid binary(16) NOT NULL,
-  namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  namespace varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
@@ -562,7 +562,7 @@ CREATE TABLE node_volume (
 
 CREATE TABLE persistent_volume (
   uuid binary(16) NOT NULL,
-  namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  namespace varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
@@ -603,7 +603,7 @@ CREATE TABLE persistent_volume_label (
 
 CREATE TABLE pod (
   uuid binary(16) NOT NULL,
-  namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  namespace varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
@@ -650,9 +650,9 @@ CREATE TABLE pod_label (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE pod_metrics (
-  namespace varchar(63) NOT NULL,
+  namespace varchar(255) NOT NULL,
   pod_name varchar(253) NOT NULL,
-  container_name varchar(63) NOT NULL,
+  container_name varchar(255) NOT NULL,
   timestamp bigint unsigned NOT NULL,
   duration bigint unsigned NOT NULL,
   cpu_usage float NOT NULL,
@@ -683,50 +683,51 @@ CREATE TABLE pod_pvc (
 
 CREATE TABLE pod_volume (
   pod_uuid binary(16) NOT NULL,
-  volume_name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  volume_name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   source longtext NOT NULL,
   PRIMARY KEY (pod_uuid, volume_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE prometheus_cluster_metric (
-    cluster_uuid binary(16) NOT NULL,
-    timestamp bigint NOT NULL,
-    category varchar(255) NOT NULL,
-    name varchar(255) NOT NULL,
-    value double NOT NULL,
-    PRIMARY KEY (cluster_uuid, timestamp, category, name)
+  cluster_uuid binary(16) NOT NULL,
+  timestamp bigint NOT NULL,
+  category varchar(255) NOT NULL,
+  name varchar(255) NOT NULL,
+  value double NOT NULL,
+  PRIMARY KEY (cluster_uuid, timestamp, category, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE prometheus_container_metric (
-    container_uuid binary(16) NOT NULL,
-    timestamp bigint NOT NULL,
-    category varchar(255) NOT NULL,
-    name varchar(255) NOT NULL,
-    value double NOT NULL,
-    PRIMARY KEY (container_uuid, timestamp, category, name)
+  container_uuid binary(16) NOT NULL,
+  timestamp bigint NOT NULL,
+  category varchar(255) NOT NULL,
+  name varchar(255) NOT NULL,
+  value double NOT NULL,
+  PRIMARY KEY (container_uuid, timestamp, category, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
 CREATE TABLE prometheus_node_metric (
-    node_uuid binary(16) NOT NULL,
-    timestamp bigint NOT NULL,
-    category varchar(255) NOT NULL,
-    name varchar(255) NOT NULL,
-    value double NOT NULL,
-    PRIMARY KEY (node_uuid, timestamp, category, name)
+  node_uuid binary(16) NOT NULL,
+  timestamp bigint NOT NULL,
+  category varchar(255) NOT NULL,
+  name varchar(255) NOT NULL,
+  value double NOT NULL,
+  PRIMARY KEY (node_uuid, timestamp, category, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE prometheus_pod_metric (
-    pod_uuid binary(16) NOT NULL,
-    timestamp bigint NOT NULL,
-    category varchar(255) NOT NULL,
-    name varchar(255) NOT NULL,
-    value double NOT NULL,
-    PRIMARY KEY (pod_uuid, timestamp, category, name)
+  pod_uuid binary(16) NOT NULL,
+  timestamp bigint NOT NULL,
+  category varchar(255) NOT NULL,
+  name varchar(255) NOT NULL,
+  value double NOT NULL,
+  PRIMARY KEY (pod_uuid, timestamp, category, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE pvc (
   uuid binary(16) NOT NULL,
-  namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  namespace varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
@@ -768,7 +769,7 @@ CREATE TABLE pvc_label (
 
 CREATE TABLE replica_set (
   uuid binary(16) NOT NULL,
-  namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  namespace varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
@@ -820,7 +821,7 @@ CREATE TABLE replica_set_owner (
 
 CREATE TABLE secret (
   uuid binary(16) NOT NULL,
-  namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  namespace varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
@@ -844,14 +845,14 @@ CREATE TABLE secret_label (
 
 CREATE TABLE selector (
   uuid binary(16) NOT NULL,
-  name varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   value varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE service (
   uuid binary(16) NOT NULL,
-  namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  namespace varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
@@ -916,7 +917,7 @@ CREATE TABLE service_selector (
 
 CREATE TABLE stateful_set (
   uuid binary(16) NOT NULL,
-  namespace varchar(63) COLLATE utf8mb4_unicode_ci NOT NULL,
+  namespace varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   resource_version varchar(255) NOT NULL,
