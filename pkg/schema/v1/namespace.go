@@ -47,8 +47,8 @@ func NewNamespace() Resource {
 	return &Namespace{}
 }
 
-func (n *Namespace) Obtain(k8s kmetav1.Object) {
-	n.ObtainMeta(k8s)
+func (n *Namespace) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
+	n.ObtainMeta(k8s, clusterUuid)
 
 	namespace := k8s.(*kcorev1.Namespace)
 

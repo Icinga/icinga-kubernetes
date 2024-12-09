@@ -73,8 +73,8 @@ func NewDaemonSet() Resource {
 	return &DaemonSet{}
 }
 
-func (d *DaemonSet) Obtain(k8s kmetav1.Object) {
-	d.ObtainMeta(k8s)
+func (d *DaemonSet) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
+	d.ObtainMeta(k8s, clusterUuid)
 
 	daemonSet := k8s.(*kappsv1.DaemonSet)
 
