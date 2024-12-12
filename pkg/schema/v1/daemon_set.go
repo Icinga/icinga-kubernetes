@@ -210,11 +210,11 @@ func (d *DaemonSet) Relations() []database.Relation {
 	return []database.Relation{
 		database.HasMany(d.Conditions, fk),
 		database.HasMany(d.Owners, fk),
-		database.HasMany(d.DaemonSetLabels, fk),
+		database.HasMany(d.ResourceLabels, database.WithForeignKey("resource_uuid")),
 		database.HasMany(d.Labels, database.WithoutCascadeDelete()),
-		database.HasMany(d.ResourceLabels, fk),
-		database.HasMany(d.DaemonSetAnnotations, fk),
+		database.HasMany(d.DaemonSetLabels, fk),
+		database.HasMany(d.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
 		database.HasMany(d.Annotations, database.WithoutCascadeDelete()),
-		database.HasMany(d.ResourceAnnotations, fk),
+		database.HasMany(d.DaemonSetAnnotations, fk),
 	}
 }

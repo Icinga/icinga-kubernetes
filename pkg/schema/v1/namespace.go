@@ -111,11 +111,11 @@ func (n *Namespace) Relations() []database.Relation {
 
 	return []database.Relation{
 		database.HasMany(n.Conditions, fk),
-		database.HasMany(n.NamespaceLabels, fk),
+		database.HasMany(n.ResourceLabels, database.WithForeignKey("resource_uuid")),
 		database.HasMany(n.Labels, database.WithoutCascadeDelete()),
-		database.HasMany(n.ResourceLabels, fk),
-		database.HasMany(n.NamespaceAnnotations, fk),
+		database.HasMany(n.NamespaceLabels, fk),
+		database.HasMany(n.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
 		database.HasMany(n.Annotations, database.WithoutCascadeDelete()),
-		database.HasMany(n.ResourceAnnotations, fk),
+		database.HasMany(n.NamespaceAnnotations, fk),
 	}
 }

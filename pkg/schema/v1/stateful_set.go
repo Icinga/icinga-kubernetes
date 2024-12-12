@@ -228,11 +228,11 @@ func (s *StatefulSet) Relations() []database.Relation {
 	return []database.Relation{
 		database.HasMany(s.Conditions, fk),
 		database.HasMany(s.Owners, fk),
-		database.HasMany(s.StatefulSetLabels, fk),
+		database.HasMany(s.ResourceLabels, database.WithForeignKey("resource_uuid")),
 		database.HasMany(s.Labels, database.WithoutCascadeDelete()),
-		database.HasMany(s.ResourceLabels, fk),
-		database.HasMany(s.StatefulSetAnnotations, fk),
+		database.HasMany(s.StatefulSetLabels, fk),
+		database.HasMany(s.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
 		database.HasMany(s.Annotations, database.WithoutCascadeDelete()),
-		database.HasMany(s.ResourceAnnotations, fk),
+		database.HasMany(s.StatefulSetAnnotations, fk),
 	}
 }

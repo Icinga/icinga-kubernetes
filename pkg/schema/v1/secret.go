@@ -89,11 +89,11 @@ func (s *Secret) Relations() []database.Relation {
 	fk := database.WithForeignKey("secret_uuid")
 
 	return []database.Relation{
+		database.HasMany(s.ResourceLabels, database.WithForeignKey("resource_uuid")),
 		database.HasMany(s.Labels, database.WithoutCascadeDelete()),
 		database.HasMany(s.SecretLabels, fk),
-		database.HasMany(s.ResourceLabels, fk),
-		database.HasMany(s.SecretAnnotations, fk),
+		database.HasMany(s.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
 		database.HasMany(s.Annotations, database.WithoutCascadeDelete()),
-		database.HasMany(s.ResourceAnnotations, fk),
+		database.HasMany(s.SecretAnnotations, fk),
 	}
 }

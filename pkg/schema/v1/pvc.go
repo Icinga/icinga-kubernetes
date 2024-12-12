@@ -166,9 +166,11 @@ func (p *Pvc) Relations() []database.Relation {
 
 	return []database.Relation{
 		database.HasMany(p.Conditions, fk),
-		database.HasMany(p.PvcLabels, fk),
+		database.HasMany(p.ResourceLabels, database.WithForeignKey("resource_uuid")),
 		database.HasMany(p.Labels, database.WithoutCascadeDelete()),
-		database.HasMany(p.ResourceAnnotations, fk),
-		database.HasMany(p.ResourceLabels, fk),
+		database.HasMany(p.PvcLabels, fk),
+		database.HasMany(p.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
+		database.HasMany(p.Annotations, database.WithoutCascadeDelete()),
+		database.HasMany(p.PvcAnnotations, fk),
 	}
 }

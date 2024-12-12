@@ -222,11 +222,11 @@ func (i *Ingress) Relations() []database.Relation {
 		database.HasMany(i.IngressBackendService, fk),
 		database.HasMany(i.IngressBackendResource, fk),
 		database.HasMany(i.IngressRule, fk),
+		database.HasMany(i.ResourceLabels, database.WithForeignKey("resource_uuid")),
 		database.HasMany(i.Labels, database.WithoutCascadeDelete()),
 		database.HasMany(i.IngressLabels, fk),
-		database.HasMany(i.ResourceLabels, fk),
-		database.HasMany(i.IngressAnnotations, fk),
+		database.HasMany(i.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
 		database.HasMany(i.Annotations, database.WithoutCascadeDelete()),
-		database.HasMany(i.ResourceAnnotations, fk),
+		database.HasMany(i.IngressAnnotations, fk),
 	}
 }

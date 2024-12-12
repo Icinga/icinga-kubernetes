@@ -261,12 +261,12 @@ func (n *Node) Relations() []database.Relation {
 	return []database.Relation{
 		database.HasMany(n.Conditions, fk),
 		database.HasMany(n.Volumes, fk),
-		database.HasMany(n.NodeLabels, fk),
+		database.HasMany(n.ResourceLabels, database.WithForeignKey("resource_uuid")),
 		database.HasMany(n.Labels, database.WithoutCascadeDelete()),
-		database.HasMany(n.ResourceLabels, fk),
-		database.HasMany(n.NodeAnnotations, fk),
+		database.HasMany(n.NodeLabels, fk),
+		database.HasMany(n.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
 		database.HasMany(n.Annotations, database.WithoutCascadeDelete()),
-		database.HasMany(n.ResourceAnnotations, fk),
+		database.HasMany(n.NodeAnnotations, fk),
 	}
 }
 

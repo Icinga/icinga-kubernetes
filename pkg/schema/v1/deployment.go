@@ -229,11 +229,11 @@ func (d *Deployment) Relations() []database.Relation {
 	return []database.Relation{
 		database.HasMany(d.Conditions, fk),
 		database.HasMany(d.Owners, fk),
-		database.HasMany(d.DeploymentLabels, fk),
+		database.HasMany(d.ResourceLabels, database.WithForeignKey("resource_uuid")),
 		database.HasMany(d.Labels, database.WithoutCascadeDelete()),
-		database.HasMany(d.ResourceLabels, fk),
-		database.HasMany(d.DeploymentAnnotations, fk),
+		database.HasMany(d.DeploymentLabels, fk),
+		database.HasMany(d.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
 		database.HasMany(d.Annotations, database.WithoutCascadeDelete()),
-		database.HasMany(d.ResourceAnnotations, fk),
+		database.HasMany(d.DeploymentAnnotations, fk),
 	}
 }
