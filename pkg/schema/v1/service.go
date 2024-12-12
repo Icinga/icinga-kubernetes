@@ -230,13 +230,13 @@ func (s *Service) Relations() []database.Relation {
 	return []database.Relation{
 		database.HasMany(s.Conditions, fk),
 		database.HasMany(s.Ports, fk),
-		database.HasMany(s.Labels, database.WithoutCascadeDelete()),
-		database.HasMany(s.ServiceLabels, fk),
-		database.HasMany(s.ResourceLabels, fk),
 		database.HasMany(s.Selectors, database.WithoutCascadeDelete()),
 		database.HasMany(s.ServiceSelectors, fk),
-		database.HasMany(s.ServiceAnnotations, fk),
+		database.HasMany(s.ResourceLabels, database.WithForeignKey("resource_uuid")),
+		database.HasMany(s.Labels, database.WithoutCascadeDelete()),
+		database.HasMany(s.ServiceLabels, fk),
+		database.HasMany(s.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
 		database.HasMany(s.Annotations, database.WithoutCascadeDelete()),
-		database.HasMany(s.ResourceAnnotations, fk),
+		database.HasMany(s.ServiceAnnotations, fk),
 	}
 }

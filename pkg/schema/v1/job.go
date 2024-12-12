@@ -280,11 +280,12 @@ func (j *Job) Relations() []database.Relation {
 
 	return []database.Relation{
 		database.HasMany(j.Conditions, fk),
+		database.HasMany(j.ResourceLabels, database.WithForeignKey("resource_uuid")),
 		database.HasMany(j.Labels, database.WithoutCascadeDelete()),
 		database.HasMany(j.JobLabels, fk),
-		database.HasMany(j.ResourceLabels, fk),
-		database.HasMany(j.JobAnnotations, fk),
+		database.HasMany(j.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
 		database.HasMany(j.Annotations, database.WithoutCascadeDelete()),
+		database.HasMany(j.JobAnnotations, fk),
 		database.HasMany(j.Owners, fk),
 	}
 }

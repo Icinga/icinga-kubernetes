@@ -211,11 +211,11 @@ func (r *ReplicaSet) Relations() []database.Relation {
 	return []database.Relation{
 		database.HasMany(r.Conditions, fk),
 		database.HasMany(r.Owners, fk),
-		database.HasMany(r.ReplicaSetLabels, fk),
+		database.HasMany(r.ResourceLabels, database.WithForeignKey("resource_uuid")),
 		database.HasMany(r.Labels, database.WithoutCascadeDelete()),
-		database.HasMany(r.ResourceLabels, fk),
-		database.HasMany(r.ReplicaSetAnnotations, fk),
+		database.HasMany(r.ReplicaSetLabels, fk),
+		database.HasMany(r.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
 		database.HasMany(r.Annotations, database.WithoutCascadeDelete()),
-		database.HasMany(r.ResourceAnnotations, fk),
+		database.HasMany(r.ReplicaSetAnnotations, fk),
 	}
 }

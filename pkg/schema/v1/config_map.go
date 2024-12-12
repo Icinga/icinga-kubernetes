@@ -86,11 +86,11 @@ func (c *ConfigMap) Relations() []database.Relation {
 	fk := database.WithForeignKey("config_map_uuid")
 
 	return []database.Relation{
+		database.HasMany(c.ResourceLabels, database.WithForeignKey("resource_uuid")),
 		database.HasMany(c.Labels, database.WithoutCascadeDelete()),
 		database.HasMany(c.ConfigMapLabels, fk),
-		database.HasMany(c.ResourceLabels, fk),
-		database.HasMany(c.ConfigMapAnnotations, fk),
+		database.HasMany(c.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
 		database.HasMany(c.Annotations, database.WithoutCascadeDelete()),
-		database.HasMany(c.ResourceAnnotations, fk),
+		database.HasMany(c.ConfigMapAnnotations, fk),
 	}
 }
