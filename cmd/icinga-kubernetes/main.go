@@ -30,8 +30,10 @@ import (
 	"github.com/spf13/pflag"
 	"golang.org/x/sync/errgroup"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/informers"
+	v2 "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	kclientcmd "k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
@@ -293,6 +295,10 @@ func main() {
 		})
 	}
 
+	g.Go(func() error {
+		return SyncServicePods(ctx, db, factory.Core().V1().Services(), factory.Core().V1().Pods())
+	})
+
 	if cfg.Prometheus.Url != "" {
 		promClient, err := promapi.NewClient(promapi.Config{Address: cfg.Prometheus.Url})
 		if err != nil {
@@ -439,7 +445,10 @@ func main() {
 		f := schemav1.NewServiceFactory(clientset)
 		s := syncv1.NewSync(db, factory.Core().V1().Services().Informer(), log.WithName("services"), f.NewService)
 
-		return s.Run(ctx)
+		return s.Run(
+			ctx,
+			syncv1.WithOnUpsert(com.ForwardBulk(cachev1.Multiplexers().Services().UpsertEvents().In())),
+		)
 	})
 
 	g.Go(func() error {
@@ -561,4 +570,106 @@ func dbHasSchema(db *database.Database, dbName string) (bool, error) {
 	defer func() { _ = rows.Close() }()
 
 	return rows.Next(), rows.Err()
+}
+
+func SyncServicePods(ctx context.Context, db *database.Database, serviceList v2.ServiceInformer, podList v2.PodInformer) error {
+	servicePods := make(chan any)
+
+	g, ctx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		return db.UpsertStreamed(ctx, servicePods)
+	})
+
+	g.Go(func() error {
+		ch := cachev1.Multiplexers().Pods().UpsertEvents().Out()
+		for {
+			select {
+			case pod, more := <-ch:
+				if !more {
+					return nil
+				}
+
+				services, err := serviceList.Lister().List(labels.NewSelector())
+				if err != nil {
+					return err
+				}
+
+				podLabels := make(labels.Set)
+				for _, label := range pod.(*schemav1.Pod).Labels {
+					podLabels[label.Name] = label.Value
+				}
+
+				for _, service := range services {
+					if len(service.Spec.Selector) == 0 {
+						continue
+					}
+
+					labelSelector := &v1.LabelSelector{MatchLabels: service.Spec.Selector}
+					selector, err := v1.LabelSelectorAsSelector(labelSelector)
+					if err != nil {
+						return err
+					}
+
+					if selector.Matches(podLabels) {
+						select {
+						case servicePods <- schemav1.ServicePod{
+							ServiceUuid: schemav1.EnsureUUID(service.UID),
+							PodUuid:     pod.(*schemav1.Pod).Uuid,
+						}:
+						case <-ctx.Done():
+							return ctx.Err()
+						}
+					}
+				}
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+	})
+
+	g.Go(func() error {
+		ch := cachev1.Multiplexers().Services().UpsertEvents().Out()
+		for {
+			select {
+			case service, more := <-ch:
+				if !more {
+					return nil
+				}
+
+				if len(service.(*schemav1.Service).Selectors) == 0 {
+					continue
+				}
+
+				labelSelector := &v1.LabelSelector{MatchLabels: map[string]string{}}
+				for _, selector := range service.(*schemav1.Service).Selectors {
+					labelSelector.MatchLabels[selector.Name] = selector.Value
+				}
+
+				selector, err := v1.LabelSelectorAsSelector(labelSelector)
+				if err != nil {
+					return err
+				}
+
+				pods, err := podList.Lister().List(selector)
+				if err != nil {
+					return err
+				}
+
+				for _, pod := range pods {
+					select {
+					case servicePods <- schemav1.ServicePod{
+						ServiceUuid: service.(*schemav1.Service).Uuid,
+						PodUuid:     schemav1.EnsureUUID(pod.UID),
+					}:
+					case <-ctx.Done():
+						return ctx.Err()
+					}
+				}
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+	})
+
+	return g.Wait()
 }
