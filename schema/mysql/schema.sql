@@ -708,38 +708,39 @@ CREATE TABLE pod_volume (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE prometheus_cluster_metric (
-    cluster_uuid binary(16) NOT NULL,
-    timestamp bigint NOT NULL,
-    category varchar(255) NOT NULL,
-    name varchar(255) NOT NULL,
-    value double NOT NULL,
-    PRIMARY KEY (cluster_uuid, timestamp, category, name)
+  cluster_uuid binary(16) NOT NULL,
+  timestamp bigint NOT NULL,
+  category varchar(255) NOT NULL,
+  name varchar(255) NOT NULL,
+  value double NOT NULL,
+  PRIMARY KEY (cluster_uuid, timestamp, category, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE prometheus_container_metric (
-    container_uuid binary(16) NOT NULL,
-    timestamp bigint NOT NULL,
-    category varchar(255) NOT NULL,
-    name varchar(255) NOT NULL,
-    value double NOT NULL,
-    PRIMARY KEY (container_uuid, timestamp, category, name)
+  container_uuid binary(16) NOT NULL,
+  timestamp bigint NOT NULL,
+  category varchar(255) NOT NULL,
+  name varchar(255) NOT NULL,
+  value double NOT NULL,
+  PRIMARY KEY (container_uuid, timestamp, category, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
 CREATE TABLE prometheus_node_metric (
-    node_uuid binary(16) NOT NULL,
-    timestamp bigint NOT NULL,
-    category varchar(255) NOT NULL,
-    name varchar(255) NOT NULL,
-    value double NOT NULL,
-    PRIMARY KEY (node_uuid, timestamp, category, name)
+  node_uuid binary(16) NOT NULL,
+  timestamp bigint NOT NULL,
+  category varchar(255) NOT NULL,
+  name varchar(255) NOT NULL,
+  value double NOT NULL,
+  PRIMARY KEY (node_uuid, timestamp, category, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE prometheus_pod_metric (
-    pod_uuid binary(16) NOT NULL,
-    timestamp bigint NOT NULL,
-    category varchar(255) NOT NULL,
-    name varchar(255) NOT NULL,
-    value double NOT NULL,
-    PRIMARY KEY (pod_uuid, timestamp, category, name)
+  pod_uuid binary(16) NOT NULL,
+  timestamp bigint NOT NULL,
+  category varchar(255) NOT NULL,
+  name varchar(255) NOT NULL,
+  value double NOT NULL,
+  PRIMARY KEY (pod_uuid, timestamp, category, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE pvc (
