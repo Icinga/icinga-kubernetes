@@ -14,11 +14,12 @@ var NameSpaceKubernetes = uuid.MustParse("3f249403-2bb0-428f-8e91-504d1fd7ddb6")
 
 type Resource interface {
 	kmetav1.Object
-	Obtain(k8s kmetav1.Object)
+	Obtain(k8s kmetav1.Object, clusterUuid types.UUID)
 }
 
 type Meta struct {
 	Uuid            types.UUID
+	ClusterUuid     types.UUID
 	Uid             ktypes.UID
 	Namespace       string
 	Name            string
@@ -26,8 +27,9 @@ type Meta struct {
 	Created         types.UnixMilli
 }
 
-func (m *Meta) ObtainMeta(k8s kmetav1.Object) {
+func (m *Meta) ObtainMeta(k8s kmetav1.Object, clusterUuid types.UUID) {
 	m.Uuid = EnsureUUID(k8s.GetUID())
+	m.ClusterUuid = clusterUuid
 	m.Uid = k8s.GetUID()
 	m.Namespace = k8s.GetNamespace()
 	m.Name = k8s.GetName()

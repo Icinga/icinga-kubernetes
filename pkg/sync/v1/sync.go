@@ -3,6 +3,7 @@ package v1
 import (
 	"context"
 	"github.com/go-logr/logr"
+	"github.com/icinga/icinga-kubernetes/pkg/cluster"
 	"github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
@@ -49,9 +50,13 @@ func (s *Sync) Run(ctx context.Context, features ...Feature) error {
 func (s *Sync) warmup(ctx context.Context, c *Controller) error {
 	g, ctx := errgroup.WithContext(ctx)
 
+	meta := &schemav1.Meta{ClusterUuid: cluster.ClusterUuidFromContext(ctx)}
+	query := s.db.BuildSelectStmt(s.factory(), meta) + ` WHERE cluster_uuid=:cluster_uuid`
+
 	entities, errs := s.db.YieldAll(ctx, func() (interface{}, error) {
 		return s.factory(), nil
-	}, s.db.BuildSelectStmt(s.factory(), &schemav1.Meta{}))
+	}, query, meta)
+
 	// Let errors from YieldAll() cancel the group.
 	com.ErrgroupReceive(ctx, g, errs)
 
@@ -80,7 +85,7 @@ func (s *Sync) warmup(ctx context.Context, c *Controller) error {
 func (s *Sync) sync(ctx context.Context, c *Controller, features ...Feature) error {
 	sink := NewSink(func(i *Item) interface{} {
 		entity := s.factory()
-		entity.Obtain(*i.Item)
+		entity.Obtain(*i.Item, cluster.ClusterUuidFromContext(ctx))
 
 		return entity
 	}, func(k interface{}) interface{} {

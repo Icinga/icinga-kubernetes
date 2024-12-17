@@ -33,8 +33,8 @@ func NewConfigMap() Resource {
 	return &ConfigMap{}
 }
 
-func (c *ConfigMap) Obtain(k8s kmetav1.Object) {
-	c.ObtainMeta(k8s)
+func (c *ConfigMap) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
+	c.ObtainMeta(k8s, clusterUuid)
 
 	configMap := k8s.(*kcorev1.ConfigMap)
 

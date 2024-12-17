@@ -83,8 +83,8 @@ func NewNode() Resource {
 	return &Node{}
 }
 
-func (n *Node) Obtain(k8s kmetav1.Object) {
-	n.ObtainMeta(k8s)
+func (n *Node) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
+	n.ObtainMeta(k8s, clusterUuid)
 
 	node := k8s.(*kcorev1.Node)
 

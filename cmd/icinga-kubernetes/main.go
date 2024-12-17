@@ -13,6 +13,7 @@ import (
 	"github.com/icinga/icinga-kubernetes/internal"
 	cachev1 "github.com/icinga/icinga-kubernetes/internal/cache/v1"
 	"github.com/icinga/icinga-kubernetes/pkg/backoff"
+	"github.com/icinga/icinga-kubernetes/pkg/cluster"
 	"github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/icinga/icinga-kubernetes/pkg/daemon"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
@@ -28,6 +29,7 @@ import (
 	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/spf13/pflag"
 	"golang.org/x/sync/errgroup"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -46,12 +48,14 @@ func main() {
 
 	var configLocation string
 	var showVersion bool
+	var clusterName string
 
 	klog.InitFlags(nil)
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 
 	pflag.BoolVar(&showVersion, "version", false, "print version and exit")
 	pflag.StringVar(&configLocation, "config", "./config.yml", "path to the config file")
+	pflag.StringVar(&clusterName, "cluster-name", "", "name of the current cluster")
 
 	loadingRules := kclientcmd.NewDefaultClientConfigLoadingRules()
 	loadingRules.DefaultClientConfig = &kclientcmd.DefaultClientConfig
@@ -199,7 +203,25 @@ func main() {
 		klog.Fatal("IGL_DATABASE: ", err)
 	}
 
-	if _, err := db.ExecContext(ctx, "DELETE FROM kubernetes_instance"); err != nil {
+	namespaceName := "kube-system"
+	ns, err := clientset.CoreV1().Namespaces().Get(context.TODO(), namespaceName, v1.GetOptions{})
+	if err != nil {
+		klog.Fatalf("Failed to retrieve namespace '%s' for cluster '%s': %v", namespaceName, clusterName, err)
+	}
+
+	clusterInstance := &schemav1.Cluster{
+		Uuid: schemav1.EnsureUUID(ns.UID),
+		Name: clusterName,
+	}
+
+	ctx = cluster.NewClusterUuidContext(ctx, clusterInstance.Uuid)
+
+	stmt, _ := db.BuildUpsertStmt(clusterInstance)
+	if _, err := db.NamedExecContext(ctx, stmt, clusterInstance); err != nil {
+		klog.Error(errors.Wrap(err, "can't update cluster"))
+	}
+
+	if _, err := db.ExecContext(ctx, "DELETE FROM kubernetes_instance WHERE cluster_uuid = ?", clusterInstance.Uuid); err != nil {
 		klog.Fatal(errors.Wrap(err, "can't delete instance"))
 	}
 	// ,omitempty
@@ -215,6 +237,7 @@ func main() {
 
 		instance := schemav1.Instance{
 			Uuid:                instanceId[:],
+			ClusterUuid:         clusterInstance.Uuid,
 			Version:             internal.Version.Version,
 			KubernetesVersion:   schemav1.NewNullableString(kubernetesVersion),
 			KubernetesHeartbeat: types.UnixMilli(kubernetesHeartbeat),
@@ -233,7 +256,7 @@ func main() {
 		}
 	}, periodic.Immediate()).Stop()
 
-	if err := internal.SyncNotificationsConfig(ctx, db2, &cfg.Notifications); err != nil {
+	if err := internal.SyncNotificationsConfig(ctx, db2, &cfg.Notifications, clusterInstance.Uuid); err != nil {
 		klog.Fatal(err)
 	}
 

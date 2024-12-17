@@ -71,8 +71,8 @@ func NewReplicaSet() Resource {
 	return &ReplicaSet{}
 }
 
-func (r *ReplicaSet) Obtain(k8s kmetav1.Object) {
-	r.ObtainMeta(k8s)
+func (r *ReplicaSet) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
+	r.ObtainMeta(k8s, clusterUuid)
 
 	replicaSet := k8s.(*kappsv1.ReplicaSet)
 

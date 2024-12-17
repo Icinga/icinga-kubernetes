@@ -74,8 +74,8 @@ func NewIngress() Resource {
 	return &Ingress{}
 }
 
-func (i *Ingress) Obtain(k8s kmetav1.Object) {
-	i.ObtainMeta(k8s)
+func (i *Ingress) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
+	i.ObtainMeta(k8s, clusterUuid)
 
 	ingress := k8s.(*networkingv1.Ingress)
 

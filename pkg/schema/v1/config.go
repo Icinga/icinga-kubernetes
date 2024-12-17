@@ -4,9 +4,10 @@ import "github.com/icinga/icinga-go-library/types"
 
 // Config represents a single key => value pair database config entry.
 type Config struct {
-	Key    ConfigKey
-	Value  string
-	Locked types.Bool
+	ClusterUuid types.UUID
+	Key         ConfigKey
+	Value       string
+	Locked      types.Bool
 }
 
 // ConfigKey represents the database config.Key enums.

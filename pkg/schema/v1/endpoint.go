@@ -54,8 +54,8 @@ func NewEndpointSlice() Resource {
 	return &EndpointSlice{}
 }
 
-func (e *EndpointSlice) Obtain(k8s kmetav1.Object) {
-	e.ObtainMeta(k8s)
+func (e *EndpointSlice) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
+	e.ObtainMeta(k8s, clusterUuid)
 
 	endpointSlice := k8s.(*kdiscoveryv1.EndpointSlice)
 
