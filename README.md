@@ -18,12 +18,17 @@ including the database, common setup approaches include the following:
 * Only the Icinga for Kubernetes daemon runs inside a Kubernetes cluster,
   requiring configuration for an external service to connect to the database outside the cluster.
 
-Please **note** that at the moment it is only possible to monitor one Kubernetes cluster per
-Icinga for Kubernetes installation.
-
 ![Icinga for Kubernetes Web Deployment](doc/res/icinga-kubernetes-web-deployment.png)
 ![Icinga for Kubernetes Web Replica Set](doc/res/icinga-kubernetes-web-replica-set.png)
 ![Icinga for Kubernetes Web Pod](doc/res/icinga-kubernetes-web-pod.png)
+
+## Multi-Cluster Support
+
+Icinga for Kubernetes supports multiple Kubernetes clusters by deploying several daemons,
+each connecting to a different cluster but writing data into the same database.
+The web interface accesses this database to display resource information and state,
+offering the flexibility to view aggregated data from all clusters or focus on a specific cluster.
+This setup ensures scalable monitoring and a unified view of resources across multiple Kubernetes environments.
 
 ## Vision and Roadmap
 
@@ -38,8 +43,6 @@ to enable powerful filtering through a relational model.
 
 Currently, Icinga for Kubernetes utilizes all available information from the Kubernetes API to
 determine the state of resources and clusters. In future versions, we plan to integrate metrics.
-Upcoming features will also include the use of Icinga Notifications for sending alerts and
-supporting multiple clusters.
 
 We welcome your ideas on what should be included in the baseline.
 Do not hesitate to share your key metrics, important thresholds,
