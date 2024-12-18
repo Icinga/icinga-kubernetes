@@ -1,6 +1,6 @@
 CREATE TABLE cluster (
   uuid binary(16) NOT NULL,
-  name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(255) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 

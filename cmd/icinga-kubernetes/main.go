@@ -211,7 +211,7 @@ func main() {
 
 	clusterInstance := &schemav1.Cluster{
 		Uuid: schemav1.EnsureUUID(ns.UID),
-		Name: clusterName,
+		Name: schemav1.NewNullableString(clusterName),
 	}
 
 	ctx = cluster.NewClusterUuidContext(ctx, clusterInstance.Uuid)
