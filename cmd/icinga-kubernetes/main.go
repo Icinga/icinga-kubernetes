@@ -15,6 +15,7 @@ import (
 	"github.com/icinga/icinga-kubernetes/internal"
 	cachev1 "github.com/icinga/icinga-kubernetes/internal/cache/v1"
 	"github.com/icinga/icinga-kubernetes/pkg/cluster"
+	"github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/icinga/icinga-kubernetes/pkg/daemon"
 	kdatabase "github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/metrics"
@@ -299,13 +300,13 @@ func main() {
 		return SyncServicePods(ctx, kdb, factory.Core().V1().Services(), factory.Core().V1().Pods())
 	})
 
-	err = metrics.SyncPrometheusConfig(ctx, db, &cfg.Prometheus)
+	err = internal.SyncPrometheusConfig(ctx, db, &cfg.Prometheus)
 	if err != nil {
 		klog.Error(errors.Wrap(err, "cannot sync prometheus config"))
 	}
 
 	if cfg.Prometheus.Url == "" {
-		err = metrics.AutoDetectPrometheus(ctx, clientset, &cfg.Prometheus)
+		err = internal.AutoDetectPrometheus(ctx, clientset, &cfg.Prometheus)
 		if err != nil {
 			klog.Error(errors.Wrap(err, "cannot auto-detect prometheus"))
 		}
@@ -316,8 +317,9 @@ func main() {
 
 		if cfg.Prometheus.Username != "" && cfg.Prometheus.Password != "" {
 			basicAuthTransport = &com.BasicAuthTransport{
-				Username: cfg.Prometheus.Username,
-				Password: cfg.Prometheus.Password,
+				RoundTripper: http.DefaultTransport,
+				Username:     cfg.Prometheus.Username,
+				Password:     cfg.Prometheus.Password,
 			}
 		}
 
