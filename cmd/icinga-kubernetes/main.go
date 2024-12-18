@@ -300,7 +300,7 @@ func main() {
 		return SyncServicePods(ctx, kdb, factory.Core().V1().Services(), factory.Core().V1().Pods())
 	})
 
-	err = internal.SyncPrometheusConfig(ctx, db, &cfg.Prometheus)
+	err = internal.SyncPrometheusConfig(ctx, db, &cfg.Prometheus, clusterInstance.Uuid)
 	if err != nil {
 		klog.Error(errors.Wrap(err, "cannot sync prometheus config"))
 	}
