@@ -103,7 +103,7 @@ func SyncNotificationsConfig(ctx context.Context, db *database.DB, config *notif
 			return nil
 		})
 		if err != nil {
-			return errors.Wrap(err, "cannot upsert Icinga Notifications config")
+			return errors.Wrap(err, "cannot retrieve Icinga Notifications config")
 		}
 	}
 
