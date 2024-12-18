@@ -317,7 +317,7 @@ func main() {
 		var basicAuthTransport http.RoundTripper
 
 		if cfg.Prometheus.Username != "" && cfg.Prometheus.Password != "" {
-			basicAuthTransport = &internal.BasicAuthTransport{
+			basicAuthTransport = &com.BasicAuthTransport{
 				Username: cfg.Prometheus.Username,
 				Password: cfg.Prometheus.Password,
 			}

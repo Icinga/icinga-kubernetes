@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/pkg/errors"
 	"io"
 	"k8s.io/klog/v2"
@@ -31,10 +32,10 @@ func NewClient(name string, config Config) (*Client, error) {
 
 	return &Client{
 		client: http.Client{
-			Transport: &basicAuthTransport{
+			Transport: &com.BasicAuthTransport{
 				RoundTripper: http.DefaultTransport,
-				username:     config.Username,
-				password:     config.Password,
+				Username:     config.Username,
+				Password:     config.Password,
 			},
 		},
 		userAgent:       name,
@@ -92,16 +93,4 @@ func (c *Client) Stream(ctx context.Context, entities <-chan any) error {
 			return ctx.Err()
 		}
 	}
-}
-
-type basicAuthTransport struct {
-	http.RoundTripper
-	username string
-	password string
-}
-
-func (t *basicAuthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	req.SetBasicAuth(t.username, t.password)
-
-	return t.RoundTripper.RoundTrip(req)
 }
