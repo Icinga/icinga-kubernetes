@@ -294,13 +294,13 @@ func main() {
 		})
 	}
 
-	err = metrics.SyncPrometheusConfig(ctx, db2, &cfg.Prometheus)
+	err = internal.SyncPrometheusConfig(ctx, db2, &cfg.Prometheus)
 	if err != nil {
 		klog.Error(errors.Wrap(err, "cannot sync prometheus config"))
 	}
 
 	if cfg.Prometheus.Url == "" {
-		err = metrics.AutoDetectPrometheus(ctx, clientset, &cfg.Prometheus)
+		err = internal.AutoDetectPrometheus(ctx, clientset, &cfg.Prometheus)
 		if err != nil {
 			klog.Error(errors.Wrap(err, "cannot auto-detect prometheus"))
 		}
@@ -311,8 +311,9 @@ func main() {
 
 		if cfg.Prometheus.Username != "" && cfg.Prometheus.Password != "" {
 			basicAuthTransport = &com.BasicAuthTransport{
-				Username: cfg.Prometheus.Username,
-				Password: cfg.Prometheus.Password,
+				RoundTripper: http.DefaultTransport,
+				Username:     cfg.Prometheus.Username,
+				Password:     cfg.Prometheus.Password,
 			}
 		}
 
