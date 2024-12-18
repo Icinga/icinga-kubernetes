@@ -16,19 +16,19 @@ import (
 	"strings"
 )
 
-func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *metrics.PrometheusConfig) error {
+func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *metrics.PrometheusConfig, clusterUuid types.UUID) error {
 	_true := types.Bool{Bool: true, Valid: true}
 
 	if config.Url != "" {
 		toDb := []schemav1.Config{
-			{Key: schemav1.ConfigKeyPrometheusUrl, Value: config.Url, Locked: _true},
+			{ClusterUuid: clusterUuid, Key: schemav1.ConfigKeyPrometheusUrl, Value: config.Url, Locked: _true},
 		}
 
 		if config.Username != "" {
 			toDb = append(
 				toDb,
-				schemav1.Config{Key: schemav1.ConfigKeyPrometheusUsername, Value: config.Username, Locked: _true},
-				schemav1.Config{Key: schemav1.ConfigKeyPrometheusPassword, Value: config.Password, Locked: _true},
+				schemav1.Config{ClusterUuid: clusterUuid, Key: schemav1.ConfigKeyPrometheusUsername, Value: config.Username, Locked: _true},
+				schemav1.Config{ClusterUuid: clusterUuid, Key: schemav1.ConfigKeyPrometheusPassword, Value: config.Password, Locked: _true},
 			)
 		}
 
@@ -36,9 +36,10 @@ func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *metrics.
 			if _, err := tx.ExecContext(
 				ctx,
 				fmt.Sprintf(
-					`DELETE FROM "%s" WHERE "key" LIKE ? AND "locked" = ?`,
+					`DELETE FROM "%s" WHERE "cluster_uuid" = ? AND "key" LIKE ? AND "locked" = ?`,
 					database.TableName(&schemav1.Config{}),
 				),
+				clusterUuid,
 				`prometheus.%`,
 				_true,
 			); err != nil {
@@ -60,9 +61,10 @@ func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *metrics.
 			if _, err := tx.ExecContext(
 				ctx,
 				fmt.Sprintf(
-					`DELETE FROM "%s" WHERE "key" LIKE ? AND "locked" = ?`,
+					`DELETE FROM "%s" WHERE "cluster_uuid" = ? AND "key" LIKE ? AND "locked" = ?`,
 					database.TableName(&schemav1.Config{}),
 				),
+				clusterUuid,
 				`prometheus.%`,
 				_true,
 			); err != nil {

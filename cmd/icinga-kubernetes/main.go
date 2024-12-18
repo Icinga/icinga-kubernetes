@@ -294,7 +294,7 @@ func main() {
 		})
 	}
 
-	err = internal.SyncPrometheusConfig(ctx, db2, &cfg.Prometheus)
+	err = internal.SyncPrometheusConfig(ctx, db2, &cfg.Prometheus, clusterInstance.Uuid)
 	if err != nil {
 		klog.Error(errors.Wrap(err, "cannot sync prometheus config"))
 	}
