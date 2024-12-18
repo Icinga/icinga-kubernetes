@@ -305,11 +305,9 @@ func main() {
 	}
 
 	if cfg.Prometheus.Url == "" {
-		if cfg.Prometheus.Url == "" {
-			err = metrics.AutoDetectPrometheus(ctx, clientset, &cfg.Prometheus)
-			if err != nil {
-				klog.Error(errors.Wrap(err, "cannot auto-detect prometheus"))
-			}
+		err = metrics.AutoDetectPrometheus(ctx, clientset, &cfg.Prometheus)
+		if err != nil {
+			klog.Error(errors.Wrap(err, "cannot auto-detect prometheus"))
 		}
 	}
 
