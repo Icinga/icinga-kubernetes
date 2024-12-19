@@ -920,6 +920,12 @@ CREATE TABLE service_label (
   PRIMARY KEY (service_uuid, label_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+CREATE TABLE service_pod (
+  service_uuid binary(16) NOT NULL,
+  pod_uuid binary(16) NOT NULL,
+  PRIMARY KEY (service_uuid, pod_uuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
 CREATE TABLE service_port (
   service_uuid binary(16) NOT NULL,
   name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,

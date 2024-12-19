@@ -18,6 +18,7 @@ type EventsMultiplexers interface {
 	Nodes() EventsMultiplexer
 	Pods() EventsMultiplexer
 	ReplicaSets() EventsMultiplexer
+	Services() EventsMultiplexer
 	StatefulSets() EventsMultiplexer
 	Run(context.Context) error
 }
@@ -59,6 +60,7 @@ type multiplexers struct {
 	nodes        events
 	pods         events
 	replicaSets  events
+	services     events
 	statefulSets events
 }
 
@@ -80,6 +82,10 @@ func (m multiplexers) Pods() EventsMultiplexer {
 
 func (m multiplexers) ReplicaSets() EventsMultiplexer {
 	return m.replicaSets
+}
+
+func (m multiplexers) Services() EventsMultiplexer {
+	return m.services
 }
 
 func (m multiplexers) StatefulSets() EventsMultiplexer {
@@ -110,6 +116,10 @@ func (m multiplexers) Run(ctx context.Context) error {
 	})
 
 	g.Go(func() error {
+		return m.services.Run(ctx)
+	})
+
+	g.Go(func() error {
 		return m.statefulSets.Run(ctx)
 	})
 
@@ -137,6 +147,10 @@ func init() {
 			deleteEvents: internal.NewChannelMux[any](),
 		},
 		replicaSets: events{
+			upsertEvents: internal.NewChannelMux[any](),
+			deleteEvents: internal.NewChannelMux[any](),
+		},
+		services: events{
 			upsertEvents: internal.NewChannelMux[any](),
 			deleteEvents: internal.NewChannelMux[any](),
 		},
