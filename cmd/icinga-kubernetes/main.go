@@ -43,7 +43,7 @@ import (
 	"time"
 )
 
-const expectedSchemaVersion = "0.2.0"
+const expectedSchemaVersion = "0.3.0"
 
 func main() {
 	runtime.ReallyCrash = true
