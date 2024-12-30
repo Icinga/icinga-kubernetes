@@ -1014,6 +1014,8 @@ CREATE TABLE config (
   `key` enum(
     'notifications.username',
     'notifications.password',
+    'notifications.url',
+    'notifications.kubernetes_web_url',
     'notifications.source_id',
     'prometheus.url',
     'prometheus.username',
