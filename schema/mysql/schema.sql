@@ -1009,6 +1009,13 @@ CREATE TABLE stateful_set_owner (
   PRIMARY KEY (stateful_set_uuid, owner_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+CREATE TABLE favorite (
+  resource_uuid binary(16) NOT NULL,
+  username varchar(255) NOT NULL,
+
+  PRIMARY KEY (resource_uuid, username)
+)ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
 CREATE TABLE kubernetes_instance (
   uuid binary(16) NOT NULL,
   cluster_uuid binary(16) NOT NULL,
