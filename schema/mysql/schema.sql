@@ -344,7 +344,7 @@ CREATE TABLE event (
   reason varchar(128) NOT NULL,
   note text NOT NULL,
   type varchar(255) NOT NULL,
-  reference_kind varchar(255) NOT NULL,
+  reference_kind varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   reference_namespace varchar(255) NULL DEFAULT NULL,
   reference_name varchar(253) NOT NULL,
   first_seen bigint unsigned NOT NULL,
