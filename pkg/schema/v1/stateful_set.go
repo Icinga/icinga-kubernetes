@@ -42,6 +42,7 @@ type StatefulSet struct {
 	Annotations                                     []Annotation            `db:"-"`
 	StatefulSetAnnotations                          []StatefulSetAnnotation `db:"-"`
 	ResourceAnnotations                             []ResourceAnnotation    `db:"-"`
+	Favorites                                       []Favorite              `db:"-"`
 }
 
 type StatefulSetCondition struct {
@@ -234,5 +235,6 @@ func (s *StatefulSet) Relations() []database.Relation {
 		database.HasMany(s.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
 		database.HasMany(s.Annotations, database.WithoutCascadeDelete()),
 		database.HasMany(s.StatefulSetAnnotations, fk),
+		database.HasMany(s.Favorites, database.WithForeignKey("resource_uuid")),
 	}
 }

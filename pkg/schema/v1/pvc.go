@@ -52,6 +52,7 @@ type Pvc struct {
 	Annotations         []Annotation         `db:"-"`
 	PvcAnnotations      []PvcAnnotation      `db:"-"`
 	ResourceAnnotations []ResourceAnnotation `db:"-"`
+	Favorites           []Favorite           `db:"-"`
 }
 
 type PvcCondition struct {
@@ -172,5 +173,6 @@ func (p *Pvc) Relations() []database.Relation {
 		database.HasMany(p.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
 		database.HasMany(p.Annotations, database.WithoutCascadeDelete()),
 		database.HasMany(p.PvcAnnotations, fk),
+		database.HasMany(p.Favorites, database.WithForeignKey("resource_uuid")),
 	}
 }
