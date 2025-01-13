@@ -246,6 +246,11 @@ func (n *Node) getIcingaState(node *kcorev1.Node) (IcingaState, string) {
 				reason = append(reason, fmt.Sprintf("Node %s network is not correctly configured", node.Name))
 			}
 		}
+
+		if condition.Status == kcorev1.ConditionFalse && condition.Type == kcorev1.NodeReady {
+			state = Critical
+			reason = append(reason, fmt.Sprintf("Node %s is not ready", node.Name))
+		}
 	}
 
 	if state != Ok {
