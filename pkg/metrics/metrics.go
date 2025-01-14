@@ -172,7 +172,7 @@ var (
 		},
 		{
 			"memory.usage",
-			`sum by (instance, namespace, pod) (container_memory_usage_bytes) / on () group_left() label_replace(node_memory_MemTotal_bytes, "instance", "$1", "node", "(.*)")`,
+			`sum by (instance, namespace, pod) (container_memory_usage_bytes) / on (instance) group_left () label_replace(sum by (node) (node_memory_MemTotal_bytes), "instance", "$1", "node", "(.*)")`,
 			"",
 		},
 		{
