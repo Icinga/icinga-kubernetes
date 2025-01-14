@@ -1018,11 +1018,10 @@ CREATE TABLE kubernetes_instance (
 CREATE TABLE config (
   cluster_uuid binary(16) NOT NULL,
   `key` enum(
+    'notifications.url',
     'notifications.username',
     'notifications.password',
-    'notifications.url',
     'notifications.kubernetes_web_url',
-    'notifications.source_id',
     'prometheus.url',
     'prometheus.username',
     'prometheus.password'

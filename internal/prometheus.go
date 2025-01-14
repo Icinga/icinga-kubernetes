@@ -143,7 +143,7 @@ func AutoDetectPrometheus(ctx context.Context, clientset *kubernetes.Clientset, 
 	}
 
 	if ip == "" {
-
+		return errors.New("no Prometheus found")
 	}
 
 	config.Url = fmt.Sprintf("http://%s:%d", ip, port)
