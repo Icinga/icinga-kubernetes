@@ -5,21 +5,20 @@ import (
 	"flag"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/google/uuid"
+	"github.com/icinga/icinga-go-library/backoff"
 	"github.com/icinga/icinga-go-library/config"
 	igldatabase "github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-go-library/periodic"
+	"github.com/icinga/icinga-go-library/retry"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/internal"
 	cachev1 "github.com/icinga/icinga-kubernetes/internal/cache/v1"
-	"github.com/icinga/icinga-kubernetes/pkg/backoff"
 	"github.com/icinga/icinga-kubernetes/pkg/cluster"
-	"github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/icinga/icinga-kubernetes/pkg/daemon"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/metrics"
 	"github.com/icinga/icinga-kubernetes/pkg/notifications"
-	"github.com/icinga/icinga-kubernetes/pkg/retry"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
 	syncv1 "github.com/icinga/icinga-kubernetes/pkg/sync/v1"
 	k8sMysql "github.com/icinga/icinga-kubernetes/schema/mysql"
@@ -71,7 +70,7 @@ func main() {
 	pflag.Parse()
 
 	if showVersion {
-		internal.Version.Print()
+		internal.Version.Print("Icinga Kubernetes")
 		os.Exit(0)
 	}
 
@@ -333,8 +332,8 @@ func main() {
 		if cfg.Notifications.Url != "" {
 			forwardForNotifications = append(
 				forwardForNotifications,
-				syncv1.WithOnUpsert(com.ForwardBulk(cachev1.Multiplexers().Nodes().UpsertEvents().In())),
-				syncv1.WithOnDelete(com.ForwardBulk(cachev1.Multiplexers().Nodes().DeleteEvents().In())),
+				syncv1.WithOnUpsert(database.ForwardBulk(cachev1.Multiplexers().Nodes().UpsertEvents().In())),
+				syncv1.WithOnDelete(database.ForwardBulk(cachev1.Multiplexers().Nodes().DeleteEvents().In())),
 			)
 		}
 
@@ -360,8 +359,8 @@ func main() {
 
 		return s.Run(
 			ctx,
-			syncv1.WithOnUpsert(com.ForwardBulk(cachev1.Multiplexers().Pods().UpsertEvents().In())),
-			syncv1.WithOnDelete(com.ForwardBulk(cachev1.Multiplexers().Pods().DeleteEvents().In())),
+			syncv1.WithOnUpsert(database.ForwardBulk(cachev1.Multiplexers().Pods().UpsertEvents().In())),
+			syncv1.WithOnDelete(database.ForwardBulk(cachev1.Multiplexers().Pods().DeleteEvents().In())),
 		)
 	})
 
@@ -374,8 +373,8 @@ func main() {
 		if cfg.Notifications.Url != "" {
 			forwardForNotifications = append(
 				forwardForNotifications,
-				syncv1.WithOnUpsert(com.ForwardBulk(cachev1.Multiplexers().Deployments().UpsertEvents().In())),
-				syncv1.WithOnDelete(com.ForwardBulk(cachev1.Multiplexers().Deployments().DeleteEvents().In())),
+				syncv1.WithOnUpsert(database.ForwardBulk(cachev1.Multiplexers().Deployments().UpsertEvents().In())),
+				syncv1.WithOnDelete(database.ForwardBulk(cachev1.Multiplexers().Deployments().DeleteEvents().In())),
 			)
 		}
 
@@ -393,8 +392,8 @@ func main() {
 		if cfg.Notifications.Url != "" {
 			forwardForNotifications = append(
 				forwardForNotifications,
-				syncv1.WithOnUpsert(com.ForwardBulk(cachev1.Multiplexers().DaemonSets().UpsertEvents().In())),
-				syncv1.WithOnDelete(com.ForwardBulk(cachev1.Multiplexers().DaemonSets().DeleteEvents().In())),
+				syncv1.WithOnUpsert(database.ForwardBulk(cachev1.Multiplexers().DaemonSets().UpsertEvents().In())),
+				syncv1.WithOnDelete(database.ForwardBulk(cachev1.Multiplexers().DaemonSets().DeleteEvents().In())),
 			)
 		}
 
@@ -412,8 +411,8 @@ func main() {
 		if cfg.Notifications.Url != "" {
 			forwardForNotifications = append(
 				forwardForNotifications,
-				syncv1.WithOnUpsert(com.ForwardBulk(cachev1.Multiplexers().ReplicaSets().UpsertEvents().In())),
-				syncv1.WithOnDelete(com.ForwardBulk(cachev1.Multiplexers().ReplicaSets().DeleteEvents().In())),
+				syncv1.WithOnUpsert(database.ForwardBulk(cachev1.Multiplexers().ReplicaSets().UpsertEvents().In())),
+				syncv1.WithOnDelete(database.ForwardBulk(cachev1.Multiplexers().ReplicaSets().DeleteEvents().In())),
 			)
 		}
 
@@ -431,8 +430,8 @@ func main() {
 		if cfg.Notifications.Url != "" {
 			forwardForNotifications = append(
 				forwardForNotifications,
-				syncv1.WithOnUpsert(com.ForwardBulk(cachev1.Multiplexers().StatefulSets().UpsertEvents().In())),
-				syncv1.WithOnDelete(com.ForwardBulk(cachev1.Multiplexers().StatefulSets().DeleteEvents().In())),
+				syncv1.WithOnUpsert(database.ForwardBulk(cachev1.Multiplexers().StatefulSets().UpsertEvents().In())),
+				syncv1.WithOnDelete(database.ForwardBulk(cachev1.Multiplexers().StatefulSets().DeleteEvents().In())),
 			)
 		}
 
@@ -447,7 +446,7 @@ func main() {
 
 		return s.Run(
 			ctx,
-			syncv1.WithOnUpsert(com.ForwardBulk(cachev1.Multiplexers().Services().UpsertEvents().In())),
+			syncv1.WithOnUpsert(database.ForwardBulk(cachev1.Multiplexers().Services().UpsertEvents().In())),
 		)
 	})
 
