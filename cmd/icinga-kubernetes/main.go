@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/icinga/icinga-go-library/backoff"
 	"github.com/icinga/icinga-go-library/config"
-	igldatabase "github.com/icinga/icinga-go-library/database"
+	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-go-library/periodic"
 	"github.com/icinga/icinga-go-library/retry"
@@ -16,7 +16,7 @@ import (
 	cachev1 "github.com/icinga/icinga-kubernetes/internal/cache/v1"
 	"github.com/icinga/icinga-kubernetes/pkg/cluster"
 	"github.com/icinga/icinga-kubernetes/pkg/daemon"
-	"github.com/icinga/icinga-kubernetes/pkg/database"
+	kdatabase "github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/metrics"
 	"github.com/icinga/icinga-kubernetes/pkg/notifications"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
@@ -102,7 +102,7 @@ func main() {
 	}
 
 	dbLog := log.WithName("database")
-	db, err := database.NewFromConfig(&cfg.Database, dbLog)
+	kdb, err := kdatabase.NewFromConfig(&cfg.Database, dbLog)
 	if err != nil {
 		klog.Fatal(err)
 	}
@@ -112,11 +112,11 @@ func main() {
 	// we need to tell systemd, that Icinga for Kubernetes finished starting up.
 	_ = sdnotify.Ready()
 
-	if !db.Connect() {
+	if !kdb.Connect() {
 		return
 	}
 
-	hasSchema, err := dbHasSchema(db, cfg.Database.Database)
+	hasSchema, err := dbHasSchema(kdb, cfg.Database.Database)
 	if err != nil {
 		klog.Fatal(err)
 	}
@@ -130,9 +130,9 @@ func main() {
 			ctx,
 			func(ctx context.Context) (err error) {
 				query := "SELECT version FROM kubernetes_schema ORDER BY id DESC LIMIT 1"
-				err = db.QueryRowxContext(ctx, query).Scan(&version)
+				err = kdb.QueryRowxContext(ctx, query).Scan(&version)
 				if err != nil {
-					err = database.CantPerformQuery(err, query)
+					err = kdatabase.CantPerformQuery(err, query)
 				}
 				return
 			},
@@ -147,8 +147,8 @@ func main() {
 			err = retry.WithBackoff(
 				ctx,
 				func(ctx context.Context) (err error) {
-					rows, err := db.Query(
-						db.Rebind("SELECT table_name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=?"),
+					rows, err := kdb.Query(
+						kdb.Rebind("SELECT table_name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=?"),
 						cfg.Database.Database,
 					)
 					if err != nil {
@@ -164,7 +164,7 @@ func main() {
 							klog.Fatal(err)
 						}
 
-						_, err := db.Exec("DROP TABLE " + tableName)
+						_, err := kdb.Exec("DROP TABLE " + tableName)
 						if err != nil {
 							klog.Fatal(err)
 						}
@@ -187,7 +187,7 @@ func main() {
 
 		for _, ddl := range strings.Split(k8sMysql.Schema, ";") {
 			if ddl = strings.TrimSpace(ddl); ddl != "" {
-				if _, err := db.Exec(ddl); err != nil {
+				if _, err := kdb.Exec(ddl); err != nil {
 					klog.Fatal(err)
 				}
 			}
@@ -199,7 +199,7 @@ func main() {
 		klog.Fatal(errors.Wrap(err, "can't configure logging"))
 	}
 
-	db2, err := igldatabase.NewDbFromConfig(&cfg.Database, logs.GetChildLogger("database"), igldatabase.RetryConnectorCallbacks{})
+	db, err := database.NewDbFromConfig(&cfg.Database, logs.GetChildLogger("database"), database.RetryConnectorCallbacks{})
 	if err != nil {
 		klog.Fatal("IGL_DATABASE: ", err)
 	}
@@ -217,12 +217,12 @@ func main() {
 
 	ctx = cluster.NewClusterUuidContext(ctx, clusterInstance.Uuid)
 
-	stmt, _ := db.BuildUpsertStmt(clusterInstance)
-	if _, err := db.NamedExecContext(ctx, stmt, clusterInstance); err != nil {
+	stmt, _ := kdb.BuildUpsertStmt(clusterInstance)
+	if _, err := kdb.NamedExecContext(ctx, stmt, clusterInstance); err != nil {
 		klog.Error(errors.Wrap(err, "can't update cluster"))
 	}
 
-	if _, err := db.ExecContext(ctx, "DELETE FROM kubernetes_instance WHERE cluster_uuid = ?", clusterInstance.Uuid); err != nil {
+	if _, err := kdb.ExecContext(ctx, "DELETE FROM kubernetes_instance WHERE cluster_uuid = ?", clusterInstance.Uuid); err != nil {
 		klog.Fatal(errors.Wrap(err, "can't delete instance"))
 	}
 	// ,omitempty
@@ -250,14 +250,14 @@ func main() {
 			Heartbeat: types.UnixMilli(tick.Time),
 		}
 
-		stmt, _ := db.BuildUpsertStmt(instance)
+		stmt, _ := kdb.BuildUpsertStmt(instance)
 
-		if _, err := db.NamedExecContext(ctx, stmt, instance); err != nil {
+		if _, err := kdb.NamedExecContext(ctx, stmt, instance); err != nil {
 			klog.Error(errors.Wrap(err, "can't update instance"))
 		}
 	}, periodic.Immediate()).Stop()
 
-	if err := internal.SyncNotificationsConfig(ctx, db2, &cfg.Notifications, clusterInstance.Uuid); err != nil {
+	if err := internal.SyncNotificationsConfig(ctx, db, &cfg.Notifications, clusterInstance.Uuid); err != nil {
 		klog.Fatal(err)
 	}
 
@@ -295,7 +295,7 @@ func main() {
 	}
 
 	g.Go(func() error {
-		return SyncServicePods(ctx, db, factory.Core().V1().Services(), factory.Core().V1().Pods())
+		return SyncServicePods(ctx, kdb, factory.Core().V1().Services(), factory.Core().V1().Pods())
 	})
 
 	if cfg.Prometheus.Url != "" {
@@ -305,7 +305,7 @@ func main() {
 		}
 
 		promApiClient := promv1.NewAPI(promClient)
-		promMetricSync := metrics.NewPromMetricSync(promApiClient, db2, logs.GetChildLogger("prometheus"))
+		promMetricSync := metrics.NewPromMetricSync(promApiClient, db, logs.GetChildLogger("prometheus"))
 
 		g.Go(func() error {
 			return promMetricSync.Nodes(ctx, factory.Core().V1().Nodes().Informer())
@@ -317,7 +317,7 @@ func main() {
 	}
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().Namespaces().Informer(), log.WithName("namespaces"), schemav1.NewNamespace)
+		s := syncv1.NewSync(kdb, factory.Core().V1().Namespaces().Informer(), log.WithName("namespaces"), schemav1.NewNamespace)
 
 		return s.Run(ctx)
 	})
@@ -326,14 +326,14 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().Nodes().Informer(), log.WithName("nodes"), schemav1.NewNode)
+		s := syncv1.NewSync(kdb, factory.Core().V1().Nodes().Informer(), log.WithName("nodes"), schemav1.NewNode)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
 			forwardForNotifications = append(
 				forwardForNotifications,
-				syncv1.WithOnUpsert(database.ForwardBulk(cachev1.Multiplexers().Nodes().UpsertEvents().In())),
-				syncv1.WithOnDelete(database.ForwardBulk(cachev1.Multiplexers().Nodes().DeleteEvents().In())),
+				syncv1.WithOnUpsert(kdatabase.ForwardBulk(cachev1.Multiplexers().Nodes().UpsertEvents().In())),
+				syncv1.WithOnDelete(kdatabase.ForwardBulk(cachev1.Multiplexers().Nodes().DeleteEvents().In())),
 			)
 		}
 
@@ -346,35 +346,35 @@ func main() {
 	g.Go(func() error {
 		schemav1.SyncContainers(
 			ctx,
-			db,
+			kdb,
 			g,
 			cachev1.Multiplexers().Pods().UpsertEvents().Out(),
 			cachev1.Multiplexers().Pods().DeleteEvents().Out(),
 		)
 
 		f := schemav1.NewPodFactory(clientset)
-		s := syncv1.NewSync(db, factory.Core().V1().Pods().Informer(), log.WithName("pods"), f.New)
+		s := syncv1.NewSync(kdb, factory.Core().V1().Pods().Informer(), log.WithName("pods"), f.New)
 
 		wg.Done()
 
 		return s.Run(
 			ctx,
-			syncv1.WithOnUpsert(database.ForwardBulk(cachev1.Multiplexers().Pods().UpsertEvents().In())),
-			syncv1.WithOnDelete(database.ForwardBulk(cachev1.Multiplexers().Pods().DeleteEvents().In())),
+			syncv1.WithOnUpsert(kdatabase.ForwardBulk(cachev1.Multiplexers().Pods().UpsertEvents().In())),
+			syncv1.WithOnDelete(kdatabase.ForwardBulk(cachev1.Multiplexers().Pods().DeleteEvents().In())),
 		)
 	})
 
 	wg.Add(1)
 	g.Go(func() error {
 		s := syncv1.NewSync(
-			db, factory.Apps().V1().Deployments().Informer(), log.WithName("deployments"), schemav1.NewDeployment)
+			kdb, factory.Apps().V1().Deployments().Informer(), log.WithName("deployments"), schemav1.NewDeployment)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
 			forwardForNotifications = append(
 				forwardForNotifications,
-				syncv1.WithOnUpsert(database.ForwardBulk(cachev1.Multiplexers().Deployments().UpsertEvents().In())),
-				syncv1.WithOnDelete(database.ForwardBulk(cachev1.Multiplexers().Deployments().DeleteEvents().In())),
+				syncv1.WithOnUpsert(kdatabase.ForwardBulk(cachev1.Multiplexers().Deployments().UpsertEvents().In())),
+				syncv1.WithOnDelete(kdatabase.ForwardBulk(cachev1.Multiplexers().Deployments().DeleteEvents().In())),
 			)
 		}
 
@@ -386,14 +386,14 @@ func main() {
 	wg.Add(1)
 	g.Go(func() error {
 		s := syncv1.NewSync(
-			db, factory.Apps().V1().DaemonSets().Informer(), log.WithName("daemon-sets"), schemav1.NewDaemonSet)
+			kdb, factory.Apps().V1().DaemonSets().Informer(), log.WithName("daemon-sets"), schemav1.NewDaemonSet)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
 			forwardForNotifications = append(
 				forwardForNotifications,
-				syncv1.WithOnUpsert(database.ForwardBulk(cachev1.Multiplexers().DaemonSets().UpsertEvents().In())),
-				syncv1.WithOnDelete(database.ForwardBulk(cachev1.Multiplexers().DaemonSets().DeleteEvents().In())),
+				syncv1.WithOnUpsert(kdatabase.ForwardBulk(cachev1.Multiplexers().DaemonSets().UpsertEvents().In())),
+				syncv1.WithOnDelete(kdatabase.ForwardBulk(cachev1.Multiplexers().DaemonSets().DeleteEvents().In())),
 			)
 		}
 
@@ -405,14 +405,14 @@ func main() {
 	wg.Add(1)
 	g.Go(func() error {
 		s := syncv1.NewSync(
-			db, factory.Apps().V1().ReplicaSets().Informer(), log.WithName("replica-sets"), schemav1.NewReplicaSet)
+			kdb, factory.Apps().V1().ReplicaSets().Informer(), log.WithName("replica-sets"), schemav1.NewReplicaSet)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
 			forwardForNotifications = append(
 				forwardForNotifications,
-				syncv1.WithOnUpsert(database.ForwardBulk(cachev1.Multiplexers().ReplicaSets().UpsertEvents().In())),
-				syncv1.WithOnDelete(database.ForwardBulk(cachev1.Multiplexers().ReplicaSets().DeleteEvents().In())),
+				syncv1.WithOnUpsert(kdatabase.ForwardBulk(cachev1.Multiplexers().ReplicaSets().UpsertEvents().In())),
+				syncv1.WithOnDelete(kdatabase.ForwardBulk(cachev1.Multiplexers().ReplicaSets().DeleteEvents().In())),
 			)
 		}
 
@@ -424,14 +424,14 @@ func main() {
 	wg.Add(1)
 	g.Go(func() error {
 		s := syncv1.NewSync(
-			db, factory.Apps().V1().StatefulSets().Informer(), log.WithName("stateful-sets"), schemav1.NewStatefulSet)
+			kdb, factory.Apps().V1().StatefulSets().Informer(), log.WithName("stateful-sets"), schemav1.NewStatefulSet)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
 			forwardForNotifications = append(
 				forwardForNotifications,
-				syncv1.WithOnUpsert(database.ForwardBulk(cachev1.Multiplexers().StatefulSets().UpsertEvents().In())),
-				syncv1.WithOnDelete(database.ForwardBulk(cachev1.Multiplexers().StatefulSets().DeleteEvents().In())),
+				syncv1.WithOnUpsert(kdatabase.ForwardBulk(cachev1.Multiplexers().StatefulSets().UpsertEvents().In())),
+				syncv1.WithOnDelete(kdatabase.ForwardBulk(cachev1.Multiplexers().StatefulSets().DeleteEvents().In())),
 			)
 		}
 
@@ -442,63 +442,63 @@ func main() {
 
 	g.Go(func() error {
 		f := schemav1.NewServiceFactory(clientset)
-		s := syncv1.NewSync(db, factory.Core().V1().Services().Informer(), log.WithName("services"), f.NewService)
+		s := syncv1.NewSync(kdb, factory.Core().V1().Services().Informer(), log.WithName("services"), f.NewService)
 
 		return s.Run(
 			ctx,
-			syncv1.WithOnUpsert(database.ForwardBulk(cachev1.Multiplexers().Services().UpsertEvents().In())),
+			syncv1.WithOnUpsert(kdatabase.ForwardBulk(cachev1.Multiplexers().Services().UpsertEvents().In())),
 		)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Discovery().V1().EndpointSlices().Informer(), log.WithName("endpoints"), schemav1.NewEndpointSlice)
+		s := syncv1.NewSync(kdb, factory.Discovery().V1().EndpointSlices().Informer(), log.WithName("endpoints"), schemav1.NewEndpointSlice)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().Secrets().Informer(), log.WithName("secrets"), schemav1.NewSecret)
+		s := syncv1.NewSync(kdb, factory.Core().V1().Secrets().Informer(), log.WithName("secrets"), schemav1.NewSecret)
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().ConfigMaps().Informer(), log.WithName("config-maps"), schemav1.NewConfigMap)
+		s := syncv1.NewSync(kdb, factory.Core().V1().ConfigMaps().Informer(), log.WithName("config-maps"), schemav1.NewConfigMap)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Events().V1().Events().Informer(), log.WithName("events"), schemav1.NewEvent)
+		s := syncv1.NewSync(kdb, factory.Events().V1().Events().Informer(), log.WithName("events"), schemav1.NewEvent)
 
 		return s.Run(ctx, syncv1.WithNoDelete(), syncv1.WithNoWarumup())
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().PersistentVolumeClaims().Informer(), log.WithName("pvcs"), schemav1.NewPvc)
+		s := syncv1.NewSync(kdb, factory.Core().V1().PersistentVolumeClaims().Informer(), log.WithName("pvcs"), schemav1.NewPvc)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().PersistentVolumes().Informer(), log.WithName("persistent-volumes"), schemav1.NewPersistentVolume)
+		s := syncv1.NewSync(kdb, factory.Core().V1().PersistentVolumes().Informer(), log.WithName("persistent-volumes"), schemav1.NewPersistentVolume)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Batch().V1().Jobs().Informer(), log.WithName("jobs"), schemav1.NewJob)
+		s := syncv1.NewSync(kdb, factory.Batch().V1().Jobs().Informer(), log.WithName("jobs"), schemav1.NewJob)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Batch().V1().CronJobs().Informer(), log.WithName("cron-jobs"), schemav1.NewCronJob)
+		s := syncv1.NewSync(kdb, factory.Batch().V1().CronJobs().Informer(), log.WithName("cron-jobs"), schemav1.NewCronJob)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Networking().V1().Ingresses().Informer(), log.WithName("ingresses"), schemav1.NewIngress)
+		s := syncv1.NewSync(kdb, factory.Networking().V1().Ingresses().Informer(), log.WithName("ingresses"), schemav1.NewIngress)
 
 		return s.Run(ctx)
 	})
@@ -512,7 +512,7 @@ func main() {
 	})
 
 	g.Go(func() error {
-		return db.PeriodicCleanup(ctx, database.CleanupStmt{
+		return kdb.PeriodicCleanup(ctx, kdatabase.CleanupStmt{
 			Table:  "event",
 			PK:     "uuid",
 			Column: "created",
@@ -520,7 +520,7 @@ func main() {
 	})
 
 	g.Go(func() error {
-		return db.PeriodicCleanup(ctx, database.CleanupStmt{
+		return kdb.PeriodicCleanup(ctx, kdatabase.CleanupStmt{
 			Table:  "prometheus_cluster_metric",
 			PK:     "(cluster_uuid, timestamp, category, name)",
 			Column: "timestamp",
@@ -528,7 +528,7 @@ func main() {
 	})
 
 	g.Go(func() error {
-		return db.PeriodicCleanup(ctx, database.CleanupStmt{
+		return kdb.PeriodicCleanup(ctx, kdatabase.CleanupStmt{
 			Table:  "prometheus_node_metric",
 			PK:     "(node_uuid, timestamp, category, name)",
 			Column: "timestamp",
@@ -536,7 +536,7 @@ func main() {
 	})
 
 	g.Go(func() error {
-		return db.PeriodicCleanup(ctx, database.CleanupStmt{
+		return kdb.PeriodicCleanup(ctx, kdatabase.CleanupStmt{
 			Table:  "prometheus_pod_metric",
 			PK:     "(pod_uuid, timestamp, category, name)",
 			Column: "timestamp",
@@ -544,7 +544,7 @@ func main() {
 	})
 
 	g.Go(func() error {
-		return db.PeriodicCleanup(ctx, database.CleanupStmt{
+		return kdb.PeriodicCleanup(ctx, kdatabase.CleanupStmt{
 			Table:  "prometheus_container_metric",
 			PK:     "(container_uuid, timestamp, category, name)",
 			Column: "timestamp",
@@ -557,7 +557,7 @@ func main() {
 }
 
 // dbHasSchema queries via db whether the database dbName has a table named "kubernetes_schema".
-func dbHasSchema(db *database.Database, dbName string) (bool, error) {
+func dbHasSchema(db *kdatabase.Database, dbName string) (bool, error) {
 	rows, err := db.Query(
 		db.Rebind("SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=? AND TABLE_NAME='kubernetes_schema'"),
 		dbName,
@@ -571,7 +571,7 @@ func dbHasSchema(db *database.Database, dbName string) (bool, error) {
 	return rows.Next(), rows.Err()
 }
 
-func SyncServicePods(ctx context.Context, db *database.Database, serviceList v2.ServiceInformer, podList v2.PodInformer) error {
+func SyncServicePods(ctx context.Context, db *kdatabase.Database, serviceList v2.ServiceInformer, podList v2.PodInformer) error {
 	servicePods := make(chan any)
 
 	g, ctx := errgroup.WithContext(ctx)
