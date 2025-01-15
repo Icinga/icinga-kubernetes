@@ -13,8 +13,9 @@ type PrometheusConfig struct {
 
 // Validate checks constraints in the supplied Prometheus configuration and returns an error if they are violated.
 func (c *PrometheusConfig) Validate() error {
-	if (c.Username == "") != (c.Password == "") {
+	if c.Url != "" && (c.Username == "") != (c.Password == "") {
 		return errors.New("both username and password must be provided")
 	}
+
 	return nil
 }
