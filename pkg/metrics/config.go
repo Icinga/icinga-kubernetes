@@ -6,7 +6,7 @@ import (
 
 // PrometheusConfig defines Prometheus configuration.
 type PrometheusConfig struct {
-	Url      string `yaml:"url"`
+	Url      string `yaml:"url" env:"URL"`
 	Insecure string `yaml:"insecure"`
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
