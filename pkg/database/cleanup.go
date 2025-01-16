@@ -8,7 +8,6 @@ import (
 	"github.com/icinga/icinga-go-library/periodic"
 	"github.com/icinga/icinga-go-library/retry"
 	"github.com/icinga/icinga-go-library/types"
-	"golang.org/x/sync/errgroup"
 	"time"
 )
 
@@ -107,8 +106,6 @@ type cleanupWhere struct {
 }
 
 func (db *Database) PeriodicCleanup(ctx context.Context, stmt CleanupStmt) error {
-	g, _ := errgroup.WithContext(ctx)
-
 	errs := make(chan error, 1)
 	defer close(errs)
 
@@ -129,7 +126,10 @@ func (db *Database) PeriodicCleanup(ctx context.Context, stmt CleanupStmt) error
 		}
 	}, periodic.Immediate()).Stop()
 
-	com.ErrgroupReceive(g, errs)
-
-	return g.Wait()
+	select {
+	case err := <-errs:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
