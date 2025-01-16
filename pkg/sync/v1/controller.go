@@ -14,7 +14,7 @@ import (
 type Controller struct {
 	informer cache.SharedIndexInformer
 	log      logr.Logger
-	queue    workqueue.RateLimitingInterface
+	queue    workqueue.TypedRateLimitingInterface[EventHandlerItem]
 }
 
 func NewController(
@@ -25,7 +25,9 @@ func NewController(
 	return &Controller{
 		informer: informer,
 		log:      log,
-		queue:    workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
+		queue: workqueue.NewTypedRateLimitingQueue[EventHandlerItem](
+			workqueue.DefaultTypedControllerRateLimiter[EventHandlerItem](),
+		),
 	}
 }
 
@@ -56,7 +58,7 @@ func (c *Controller) Stream(ctx context.Context, sink *Sink) error {
 }
 
 func (c *Controller) stream(ctx context.Context, sink *Sink) error {
-	var eventHandlerItem interface{}
+	var eventHandlerItem EventHandlerItem
 	var key string
 	var shutdown bool
 	for {
@@ -67,7 +69,7 @@ func (c *Controller) stream(ctx context.Context, sink *Sink) error {
 			return ctx.Err()
 		}
 
-		key = eventHandlerItem.(EventHandlerItem).KKey
+		key = eventHandlerItem.KKey
 
 		item, exists, err := c.informer.GetStore().GetByKey(key)
 		if err != nil {
@@ -88,8 +90,8 @@ func (c *Controller) stream(ctx context.Context, sink *Sink) error {
 
 		c.queue.Forget(eventHandlerItem)
 
-		if !exists || eventHandlerItem.(EventHandlerItem).Type == EventDelete {
-			if err := sink.Delete(ctx, eventHandlerItem.(EventHandlerItem).Id); err != nil {
+		if !exists || eventHandlerItem.Type == EventDelete {
+			if err := sink.Delete(ctx, eventHandlerItem.Id); err != nil {
 				return err
 			}
 		} else {

@@ -11,7 +11,7 @@ import (
 )
 
 type EventHandler struct {
-	queue workqueue.Interface
+	queue workqueue.TypedInterface[EventHandlerItem]
 	log   logr.Logger
 }
 
@@ -27,7 +27,7 @@ const EventAdd EventType = "ADDED"
 const EventUpdate EventType = "UPDATED"
 const EventDelete EventType = "DELETED"
 
-func NewEventHandler(queue workqueue.Interface, log logr.Logger) cache.ResourceEventHandler {
+func NewEventHandler(queue workqueue.TypedInterface[EventHandlerItem], log logr.Logger) cache.ResourceEventHandler {
 	return &EventHandler{queue: queue, log: log}
 }
 
