@@ -101,7 +101,7 @@ func main() {
 
 	if err = config.Load(&cfg, config.LoadOptions{
 		Flags:      glue,
-		EnvOptions: config.EnvOptions{Prefix: "IFK_"},
+		EnvOptions: config.EnvOptions{Prefix: "ICINGA_FOR_KUBERNETES_"},
 	}); err != nil {
 		klog.Fatal(errors.Wrap(err, "can't create configuration"))
 	}
