@@ -1,10 +1,10 @@
 package internal
 
 import (
-	"github.com/icinga/icinga-kubernetes/pkg/version"
+	"github.com/icinga/icinga-go-library/version"
 )
 
 // Version contains version and Git commit information.
 //
 // The placeholders are replaced on `git archive` using the `export-subst` attribute.
-var Version = version.Version("Icinga Kubernetes", "0.2.0", "$Format:%(describe)$", "$Format:%H$")
+var Version = version.Version("0.2.0", "$Format:%(describe)$", "$Format:%H$")

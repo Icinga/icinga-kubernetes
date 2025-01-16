@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"github.com/go-logr/logr"
 	"github.com/go-sql-driver/mysql"
-	"github.com/icinga/icinga-kubernetes/pkg/backoff"
-	"github.com/icinga/icinga-kubernetes/pkg/retry"
+	"github.com/icinga/icinga-go-library/backoff"
+	"github.com/icinga/icinga-go-library/retry"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
 	"time"
@@ -38,7 +38,7 @@ func (c RetryConnector) Connect(ctx context.Context) (driver.Conn, error) {
 		backoff.NewExponentialWithJitter(time.Millisecond*128, time.Minute*1),
 		retry.Settings{
 			Timeout: timeout,
-			OnError: func(_ time.Duration, _ uint64, err, lastErr error) {
+			OnRetryableError: func(_ time.Duration, _ uint64, err, lastErr error) {
 				if lastErr == nil || err.Error() != lastErr.Error() {
 					c.driver.Logger.Info("Can't connect to database. Retrying", "error", err)
 				}

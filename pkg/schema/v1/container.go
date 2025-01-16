@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/go-co-op/gocron"
+	"github.com/icinga/icinga-go-library/com"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"golang.org/x/sync/errgroup"
 	"io"
@@ -464,7 +464,7 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 	err := make(chan error, 1)
 	err <- warmup(ctx, db)
 	close(err)
-	com.ErrgroupReceive(ctx, g, err)
+	com.ErrgroupReceive(g, err)
 
 	// Use buffered channel here not to block the goroutines, as they can stream container ids
 	// from multiple pods concurrently.
@@ -507,7 +507,7 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 				entities, errs := db.YieldAll(ctx, func() (interface{}, error) {
 					return &Container{}, nil
 				}, query, meta)
-				com.ErrgroupReceive(ctx, g, errs)
+				com.ErrgroupReceive(g, errs)
 
 				g.Go(func() error {
 					defer runtime.HandleCrash()
@@ -597,7 +597,7 @@ func warmup(ctx context.Context, db *database.Database) error {
 	entities, errs := db.YieldAll(ctx, func() (interface{}, error) {
 		return &ContainerLog{}, nil
 	}, db.BuildSelectStmt(ContainerLog{}, ContainerLog{}))
-	com.ErrgroupReceive(ctx, g, errs)
+	com.ErrgroupReceive(g, errs)
 
 	g.Go(func() error {
 		defer runtime.HandleCrash()

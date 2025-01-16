@@ -1,7 +1,7 @@
 package database
 
 import (
-	"github.com/icinga/icinga-kubernetes/pkg/com"
+	"github.com/icinga/icinga-go-library/database"
 )
 
 type Feature func(*Features)
@@ -9,7 +9,7 @@ type Feature func(*Features)
 type Features struct {
 	blocking  bool
 	cascading bool
-	onSuccess com.ProcessBulk[any]
+	onSuccess database.OnSuccess[any]
 }
 
 func NewFeatures(features ...Feature) *Features {
@@ -33,7 +33,7 @@ func WithCascading() Feature {
 	}
 }
 
-func WithOnSuccess(fn com.ProcessBulk[any]) Feature {
+func WithOnSuccess(fn database.OnSuccess[any]) Feature {
 	return func(f *Features) {
 		f.onSuccess = fn
 	}

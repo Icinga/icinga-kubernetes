@@ -1,14 +1,14 @@
 package v1
 
-import "github.com/icinga/icinga-kubernetes/pkg/com"
+import "github.com/icinga/icinga-go-library/database"
 
 type Feature func(*Features)
 
 type Features struct {
 	noDelete bool
 	noWarmup bool
-	onDelete com.ProcessBulk[any]
-	onUpsert com.ProcessBulk[any]
+	onDelete database.OnSuccess[any]
+	onUpsert database.OnSuccess[any]
 }
 
 func NewFeatures(features ...Feature) *Features {
@@ -28,11 +28,11 @@ func (f *Features) NoWarmup() bool {
 	return f.noWarmup
 }
 
-func (f *Features) OnDelete() com.ProcessBulk[any] {
+func (f *Features) OnDelete() database.OnSuccess[any] {
 	return f.onDelete
 }
 
-func (f *Features) OnUpsert() com.ProcessBulk[any] {
+func (f *Features) OnUpsert() database.OnSuccess[any] {
 	return f.onUpsert
 }
 
@@ -48,13 +48,13 @@ func WithNoWarumup() Feature {
 	}
 }
 
-func WithOnDelete(fn com.ProcessBulk[any]) Feature {
+func WithOnDelete(fn database.OnSuccess[any]) Feature {
 	return func(f *Features) {
 		f.onDelete = fn
 	}
 }
 
-func WithOnUpsert(fn com.ProcessBulk[any]) Feature {
+func WithOnUpsert(fn database.OnSuccess[any]) Feature {
 	return func(f *Features) {
 		f.onUpsert = fn
 	}

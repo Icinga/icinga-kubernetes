@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"github.com/go-logr/logr"
 	"github.com/go-sql-driver/mysql"
+	"github.com/icinga/icinga-go-library/backoff"
+	"github.com/icinga/icinga-go-library/com"
 	"github.com/icinga/icinga-go-library/database"
+	"github.com/icinga/icinga-go-library/periodic"
+	"github.com/icinga/icinga-go-library/retry"
 	"github.com/icinga/icinga-go-library/strcase"
-	"github.com/icinga/icinga-kubernetes/pkg/backoff"
-	"github.com/icinga/icinga-kubernetes/pkg/com"
-	"github.com/icinga/icinga-kubernetes/pkg/periodic"
-	"github.com/icinga/icinga-kubernetes/pkg/retry"
 	"github.com/jmoiron/sqlx"
 	"github.com/jmoiron/sqlx/reflectx"
 	"github.com/pkg/errors"
@@ -634,7 +634,7 @@ func (db *Database) YieldAll(ctx context.Context, factoryFunc func() (interface{
 		return nil
 	})
 
-	return entities, com.WaitAsync(ctx, g)
+	return entities, com.WaitAsync(g)
 }
 
 func (db *Database) periodicLog(ctx context.Context, query string, counter *com.Counter) periodic.Stopper {

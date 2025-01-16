@@ -3,8 +3,8 @@ package v1
 import (
 	"context"
 	"github.com/go-logr/logr"
+	"github.com/icinga/icinga-go-library/com"
 	"github.com/icinga/icinga-kubernetes/pkg/cluster"
-	"github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
 	"golang.org/x/sync/errgroup"
@@ -58,7 +58,7 @@ func (s *Sync) warmup(ctx context.Context, c *Controller) error {
 	}, query, meta)
 
 	// Let errors from YieldAll() cancel the group.
-	com.ErrgroupReceive(ctx, g, errs)
+	com.ErrgroupReceive(g, errs)
 
 	g.Go(func() error {
 		defer runtime.HandleCrash()
