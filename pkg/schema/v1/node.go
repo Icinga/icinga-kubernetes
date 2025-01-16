@@ -230,26 +230,36 @@ func (n *Node) getIcingaState(node *kcorev1.Node) (IcingaState, string) {
 	var reason []string
 
 	for _, condition := range node.Status.Conditions {
-		if condition.Status == kcorev1.ConditionTrue {
-			switch condition.Type {
-			case kcorev1.NodeDiskPressure:
+		switch condition.Type {
+		case kcorev1.NodeDiskPressure:
+			if condition.Status == kcorev1.ConditionTrue {
 				state = Critical
 				reason = append(reason, fmt.Sprintf("Node %s is running out of disk space", node.Name))
-			case kcorev1.NodeMemoryPressure:
+			}
+		case kcorev1.NodeMemoryPressure:
+			if condition.Status == kcorev1.ConditionTrue {
 				state = Critical
 				reason = append(reason, fmt.Sprintf("Node %s is running out of available memory", node.Name))
-			case kcorev1.NodePIDPressure:
+			}
+		case kcorev1.NodePIDPressure:
+			if condition.Status == kcorev1.ConditionTrue {
 				state = Critical
 				reason = append(reason, fmt.Sprintf("Node %s is running out of process IDs", node.Name))
-			case kcorev1.NodeNetworkUnavailable:
+			}
+		case kcorev1.NodeNetworkUnavailable:
+			if condition.Status == kcorev1.ConditionTrue {
 				state = Critical
 				reason = append(reason, fmt.Sprintf("Node %s network is not correctly configured", node.Name))
 			}
-		}
-
-		if condition.Status == kcorev1.ConditionFalse && condition.Type == kcorev1.NodeReady {
-			state = Critical
-			reason = append(reason, fmt.Sprintf("Node %s is not ready", node.Name))
+		case kcorev1.NodeReady:
+			switch condition.Status {
+			case kcorev1.ConditionFalse:
+				state = Critical
+				reason = append(reason, fmt.Sprintf("Node %s has 'NodeReady' condition 'false'", node.Name))
+			case kcorev1.ConditionUnknown:
+				state = Unknown
+				reason = append(reason, fmt.Sprintf("Node %s has 'NodeReady' condition 'unknown'", node.Name))
+			}
 		}
 	}
 
@@ -277,7 +287,7 @@ func (n *Node) Relations() []database.Relation {
 
 func getNodeConditionStatus(node *kcorev1.Node, conditionType kcorev1.NodeConditionType) bool {
 	for _, condition := range node.Status.Conditions {
-		if condition.Type == conditionType {
+		if condition.Type == conditionType && condition.Status == kcorev1.ConditionTrue {
 			return true
 		}
 	}
