@@ -37,6 +37,8 @@ func (c *Config) Validate() error {
 }
 
 // ConfigFlagGlue provides a glue struct for the CLI config flag.
+//
+// ConfigFlagGlue implements the [github.com/icinga/icinga-go-library/config.Flags] interface.
 type ConfigFlagGlue struct {
 	// Config is the path to the config file
 	Config string
