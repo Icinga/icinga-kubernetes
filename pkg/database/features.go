@@ -1,7 +1,7 @@
 package database
 
 import (
-	"context"
+	"github.com/icinga/icinga-go-library/database"
 )
 
 type Feature func(*Features)
@@ -9,7 +9,7 @@ type Feature func(*Features)
 type Features struct {
 	blocking  bool
 	cascading bool
-	onSuccess ProcessBulk[any]
+	onSuccess database.OnSuccess[any]
 }
 
 func NewFeatures(features ...Feature) *Features {
@@ -33,24 +33,8 @@ func WithCascading() Feature {
 	}
 }
 
-func WithOnSuccess(fn ProcessBulk[any]) Feature {
+func WithOnSuccess(fn database.OnSuccess[any]) Feature {
 	return func(f *Features) {
 		f.onSuccess = fn
-	}
-}
-
-type ProcessBulk[T any] func(ctx context.Context, bulk []T) (err error)
-
-func ForwardBulk[T any](ch chan<- T) ProcessBulk[T] {
-	return func(ctx context.Context, rows []T) error {
-		for _, row := range rows {
-			select {
-			case ch <- row:
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		}
-
-		return nil
 	}
 }
