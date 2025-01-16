@@ -349,7 +349,7 @@ func (p *Pod) getIcingaState(pod *kcorev1.Pod) (IcingaState, string) {
 		state, reasons := collectContainerStates(p)
 
 		return state, fmt.Sprintf(
-			"Pod %s/%s has failed as all its containers have been termianted and will not be restarted.\n%s",
+			"Pod %s/%s has failed as all its containers have been terminated and will not be restarted.\n%s",
 			pod.Namespace,
 			pod.Name,
 			reasons)
