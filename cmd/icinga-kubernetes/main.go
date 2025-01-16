@@ -57,7 +57,12 @@ func main() {
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 
 	pflag.BoolVar(&showVersion, "version", false, "print version and exit")
-	pflag.StringVar(&glue.Config, "config", daemon.DefaultConfigPath, "path to the config file")
+	pflag.StringVar(
+		&glue.Config,
+		"config",
+		daemon.DefaultConfigPath,
+		fmt.Sprintf("path to the config file (default: %s)", daemon.DefaultConfigPath),
+	)
 	pflag.StringVar(&clusterName, "cluster-name", "", "name of the current cluster")
 
 	loadingRules := kclientcmd.NewDefaultClientConfigLoadingRules()
