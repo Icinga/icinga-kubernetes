@@ -60,7 +60,7 @@ func main() {
 	pflag.StringVar(
 		&glue.Config,
 		"config",
-		daemon.DefaultConfigPath,
+		"",
 		fmt.Sprintf("path to the config file (default: %s)", daemon.DefaultConfigPath),
 	)
 	pflag.StringVar(&clusterName, "cluster-name", "", "name of the current cluster")
