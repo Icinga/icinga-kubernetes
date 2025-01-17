@@ -1011,7 +1011,7 @@ CREATE TABLE stateful_set_owner (
 
 CREATE TABLE favorite (
   resource_uuid binary(16) NOT NULL,
-  username varchar(255) NOT NULL,
+  username varchar(254) COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (resource_uuid, username)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
