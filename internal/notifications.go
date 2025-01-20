@@ -77,7 +77,7 @@ func SyncNotificationsConfig(ctx context.Context, db *database.DB, config *notif
 				return errors.Wrap(err, "cannot delete Icinga Notifications config")
 			}
 
-			rows, err := db.QueryxContext(ctx, db.BuildSelectStmt(&schemav1.Config{}, &schemav1.Config{}))
+			rows, err := tx.QueryxContext(ctx, db.BuildSelectStmt(&schemav1.Config{}, &schemav1.Config{}))
 			if err != nil {
 				return errors.Wrap(err, "cannot fetch Icinga Notifications config from DB")
 			}
@@ -103,7 +103,7 @@ func SyncNotificationsConfig(ctx context.Context, db *database.DB, config *notif
 			return nil
 		})
 		if err != nil {
-			return errors.Wrap(err, "cannot upsert Icinga Notifications config")
+			return errors.Wrap(err, "cannot retrieve Icinga Notifications config")
 		}
 	}
 

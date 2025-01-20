@@ -16,6 +16,7 @@ import (
 	"github.com/icinga/icinga-kubernetes/internal"
 	cachev1 "github.com/icinga/icinga-kubernetes/internal/cache/v1"
 	"github.com/icinga/icinga-kubernetes/pkg/cluster"
+	"github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/icinga/icinga-kubernetes/pkg/daemon"
 	kdatabase "github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/metrics"
@@ -37,6 +38,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	kclientcmd "k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -301,10 +303,35 @@ func main() {
 		return SyncServicePods(ctx, kdb, factory.Core().V1().Services(), factory.Core().V1().Pods())
 	})
 
-	if cfg.Prometheus.Url != "" {
-		promClient, err := promapi.NewClient(promapi.Config{Address: cfg.Prometheus.Url})
+	err = internal.SyncPrometheusConfig(ctx, db, &cfg.Prometheus, clusterInstance.Uuid)
+	if err != nil {
+		klog.Error(errors.Wrap(err, "cannot sync prometheus config"))
+	}
+
+	if cfg.Prometheus.Url == "" {
+		err = internal.AutoDetectPrometheus(ctx, clientset, &cfg.Prometheus)
 		if err != nil {
-			klog.Fatal(errors.Wrap(err, "error creating promClient"))
+			klog.Error(errors.Wrap(err, "cannot auto-detect prometheus"))
+		}
+	}
+
+	if cfg.Prometheus.Url != "" {
+		var basicAuthTransport http.RoundTripper
+
+		if cfg.Prometheus.Username != "" && cfg.Prometheus.Password != "" {
+			basicAuthTransport = &com.BasicAuthTransport{
+				RoundTripper: http.DefaultTransport,
+				Username:     cfg.Prometheus.Username,
+				Password:     cfg.Prometheus.Password,
+			}
+		}
+
+		promClient, err := promapi.NewClient(promapi.Config{
+			Address:      cfg.Prometheus.Url,
+			RoundTripper: basicAuthTransport,
+		})
+		if err != nil {
+			klog.Fatal(errors.Wrap(err, "error creating Prometheus client"))
 		}
 
 		promApiClient := promv1.NewAPI(promClient)
