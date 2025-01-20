@@ -86,7 +86,7 @@ func NewFromConfig(c *database.Config, log logr.Logger) (*Database, error) {
 			"connect_timeout":   {"60"},
 			"binary_parameters": {"yes"},
 
-			// Host and port can alternatively be specified in the query string. lib/pq can't parse the connection URI
+			// Host and port can alternatively be specified in the query string. lib/pq cannot parse the connection URI
 			// if a Unix domain socket path is specified in the host part of the URI, therefore always use the query
 			// string. See also https://github.com/lib/pq/issues/796
 			"host": {c.Host},
@@ -103,7 +103,7 @@ func NewFromConfig(c *database.Config, log logr.Logger) (*Database, error) {
 
 	db, err := sqlx.Open("icinga-"+c.Type, dsn)
 	if err != nil {
-		return nil, errors.Wrap(err, "can't open database")
+		return nil, errors.Wrap(err, "cannot open database")
 	}
 
 	db.SetMaxIdleConns(c.Options.MaxConnections / 3)
@@ -236,7 +236,7 @@ func (db *Database) BulkExec(
 
 		for b := range bulk {
 			if err := sem.Acquire(ctx, n); err != nil {
-				return errors.Wrap(err, "can't acquire semaphore")
+				return errors.Wrap(err, "cannot acquire semaphore")
 			}
 
 			g.Go(func(b []interface{}) func() error {
@@ -248,7 +248,7 @@ func (db *Database) BulkExec(
 						func(context.Context) error {
 							stmt, args, err := sqlx.In(query, b)
 							if err != nil {
-								return errors.Wrapf(err, "can't build placeholders for %q", query)
+								return errors.Wrapf(err, "cannot build placeholders for %q", query)
 							}
 
 							stmt = db.Rebind(stmt)
@@ -284,7 +284,7 @@ func (db *Database) BulkExec(
 func (db *Database) Connect() bool {
 	db.log.Info("Connecting to database")
 	if err := db.Ping(); err != nil {
-		db.log.Error(errors.WithStack(err), "Can't connect to database")
+		db.log.Error(errors.WithStack(err), "cannot connect to database")
 
 		return false
 	}
@@ -322,7 +322,7 @@ func (db *Database) NamedBulkExec(
 				}
 
 				if err := sem.Acquire(ctx, 1); err != nil {
-					return errors.Wrap(err, "can't acquire semaphore")
+					return errors.Wrap(err, "cannot acquire semaphore")
 				}
 
 				g.Go(func(b []interface{}) func() error {
@@ -498,7 +498,7 @@ func (db *Database) UpsertStreamed(
 ) error {
 	first, forward, err := com.CopyFirst(ctx, entities)
 	if first == nil {
-		return errors.Wrap(err, "can't copy first entity")
+		return errors.Wrap(err, "cannot copy first entity")
 	}
 
 	sem := db.GetSemaphoreForTable(TableName(first))
@@ -616,11 +616,11 @@ func (db *Database) YieldAll(ctx context.Context, factoryFunc func() (interface{
 		for rows.Next() {
 			e, err := factoryFunc()
 			if err != nil {
-				return errors.Wrap(err, "can't create entity")
+				return errors.Wrap(err, "cannot create entity")
 			}
 
 			if err = rows.StructScan(e); err != nil {
-				return errors.Wrapf(err, "can't store query result into a %T: %s", e, query)
+				return errors.Wrapf(err, "cannot store query result into a %T: %s", e, query)
 			}
 
 			select {

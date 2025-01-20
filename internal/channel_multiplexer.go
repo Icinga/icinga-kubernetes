@@ -21,7 +21,7 @@ type ChannelMultiplexer[T any] interface {
 	AddOut(chan T)
 
 	// Run starts multiplexing of all input channels to all output channels.
-	// Once run is called, can't be modified and will panic.
+	// Once run is called, cannot be modified and will panic.
 	Run(context.Context) error
 }
 

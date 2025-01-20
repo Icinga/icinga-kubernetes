@@ -85,7 +85,7 @@ func main() {
 					" a kubeconfig file with cluster access configured")
 		}
 
-		klog.Fatal(errors.Wrap(err, "can't configure Kubernetes client"))
+		klog.Fatal(errors.Wrap(err, "cannot configure Kubernetes client"))
 	}
 
 	clientset, err := kubernetes.NewForConfig(kconfig)
@@ -99,7 +99,7 @@ func main() {
 	var cfg daemon.Config
 	err = config.FromYAMLFile(configLocation, &cfg)
 	if err != nil {
-		klog.Fatal(errors.Wrap(err, "can't create configuration"))
+		klog.Fatal(errors.Wrap(err, "cannot create configuration"))
 	}
 
 	dbLog := log.WithName("database")
@@ -199,7 +199,7 @@ func main() {
 
 	logs, err := logging.NewLoggingFromConfig("Icinga Kubernetes", cfg.Logging)
 	if err != nil {
-		klog.Fatal(errors.Wrap(err, "can't configure logging"))
+		klog.Fatal(errors.Wrap(err, "cannot configure logging"))
 	}
 
 	db, err := database.NewDbFromConfig(&cfg.Database, logs.GetChildLogger("database"), database.RetryConnectorCallbacks{})
@@ -222,11 +222,11 @@ func main() {
 
 	stmt, _ := kdb.BuildUpsertStmt(clusterInstance)
 	if _, err := kdb.NamedExecContext(ctx, stmt, clusterInstance); err != nil {
-		klog.Error(errors.Wrap(err, "can't update cluster"))
+		klog.Error(errors.Wrap(err, "cannot update cluster"))
 	}
 
 	if _, err := kdb.ExecContext(ctx, "DELETE FROM kubernetes_instance WHERE cluster_uuid = ?", clusterInstance.Uuid); err != nil {
-		klog.Fatal(errors.Wrap(err, "can't delete instance"))
+		klog.Fatal(errors.Wrap(err, "cannot delete instance"))
 	}
 	// ,omitempty
 	var kubernetesVersion string
@@ -256,7 +256,7 @@ func main() {
 		stmt, _ := kdb.BuildUpsertStmt(instance)
 
 		if _, err := kdb.NamedExecContext(ctx, stmt, instance); err != nil {
-			klog.Error(errors.Wrap(err, "can't update instance"))
+			klog.Error(errors.Wrap(err, "cannot update instance"))
 		}
 	}, periodic.Immediate()).Stop()
 

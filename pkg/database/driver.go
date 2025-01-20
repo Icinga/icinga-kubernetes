@@ -40,7 +40,7 @@ func (c RetryConnector) Connect(ctx context.Context) (driver.Conn, error) {
 			Timeout: timeout,
 			OnRetryableError: func(_ time.Duration, _ uint64, err, lastErr error) {
 				if lastErr == nil || err.Error() != lastErr.Error() {
-					c.driver.Logger.Info("Can't connect to database. Retrying", "error", err)
+					c.driver.Logger.Info("Cannot connect to database. Retrying", "error", err)
 				}
 			},
 			OnSuccess: func(elapsed time.Duration, attempt uint64, _ error) {
@@ -51,7 +51,7 @@ func (c RetryConnector) Connect(ctx context.Context) (driver.Conn, error) {
 				}
 			},
 		},
-	), "can't connect to database")
+	), "cannot connect to database")
 	return conn, err
 }
 

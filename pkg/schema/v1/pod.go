@@ -338,7 +338,7 @@ func (p *Pod) getIcingaState(pod *kcorev1.Pod) (IcingaState, string) {
 
 	if podConditions[kcorev1.PodScheduled].Status == kcorev1.ConditionFalse {
 		return Critical, fmt.Sprintf(
-			"Pod %s/%s can't be scheduled: %s: %s.",
+			"Pod %s/%s cannot be scheduled: %s: %s.",
 			pod.Namespace,
 			pod.Name,
 			podConditions[kcorev1.PodScheduled].Reason,

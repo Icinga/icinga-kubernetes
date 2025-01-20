@@ -365,7 +365,7 @@ func (pms *PromMetricSync) run(
 						Timeout: retry.DefaultTimeout,
 						OnRetryableError: func(_ time.Duration, _ uint64, err, lastErr error) {
 							if lastErr == nil || err.Error() != lastErr.Error() {
-								pms.logger.Warnw("Can't execute prometheus query. Retrying", zap.Error(err))
+								pms.logger.Warnw("Cannot execute prometheus query. Retrying", zap.Error(err))
 							}
 						},
 						OnSuccess: func(elapsed time.Duration, attempt uint64, lastErr error) {
@@ -512,7 +512,7 @@ func (pms *PromMetricSync) Pods(ctx context.Context, informer kcache.SharedIndex
 				obj, exists, err := informer.GetStore().GetByKey(
 					kcache.NewObjectName(string(res.Metric["namespace"]), string(res.Metric["pod"])).String())
 				if err != nil {
-					//return errors.Wrap(err, "can't get pod from store")
+					//return errors.Wrap(err, "cannot get pod from store")
 					return nil
 				}
 				if !exists {
