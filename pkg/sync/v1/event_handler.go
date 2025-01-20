@@ -46,7 +46,7 @@ func (e *EventHandler) OnDelete(obj interface{}) {
 func (e *EventHandler) enqueue(_type EventType, obj interface{}, keyFunc cache.KeyFunc) {
 	key, err := keyFunc(obj)
 	if err != nil {
-		e.log.Error(err, "Can't make key")
+		e.log.Error(err, "cannot make key")
 
 		return
 	}

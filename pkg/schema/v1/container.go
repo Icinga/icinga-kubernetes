@@ -412,7 +412,7 @@ func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStat
 			if status.LastTerminationState.Terminated != nil &&
 				status.LastTerminationState.Terminated.Reason == ErrImagePullBackOff {
 				return Critical, fmt.Sprintf(
-					"Container %s can't start. %s.",
+					"Container %s cannot start. %s.",
 					container.Name,
 					ContainerStateReasonAndMassage{
 						status.LastTerminationState.Terminated.Reason,
@@ -420,12 +420,12 @@ func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStat
 					})
 			}
 
-			return Warning, fmt.Sprintf("Container %s is waiting to start as its image can't be pulled: %s.",
+			return Warning, fmt.Sprintf("Container %s is waiting to start as its image cannot be pulled: %s.",
 				container.Name, status.State.Waiting.Message)
 		}
 
 		return Critical, fmt.Sprintf(
-			"Container %s can't start. %s.",
+			"Container %s cannot start. %s.",
 			container.Name,
 			ContainerStateReasonAndMassage{
 				status.State.Waiting.Reason,

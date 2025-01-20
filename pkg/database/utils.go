@@ -14,7 +14,7 @@ import (
 
 // CantPerformQuery wraps the given error with the specified query that cannot be executed.
 func CantPerformQuery(err error, q string) error {
-	return errors.Wrapf(err, "can't perform %q", q)
+	return errors.Wrapf(err, "cannot perform %q", q)
 }
 
 func IsUnixAddr(host string) bool {
