@@ -33,6 +33,7 @@ type PersistentVolume struct {
 	Annotations                 []Annotation                 `db:"-"`
 	PersistentVolumeAnnotations []PersistentVolumeAnnotation `db:"-"`
 	ResourceAnnotations         []PersistentVolumeAnnotation `db:"-"`
+	Favorites                   []Favorite                   `db:"-"`
 }
 
 type PersistentVolumeClaimRef struct {
@@ -147,5 +148,6 @@ func (p *PersistentVolume) Relations() []database.Relation {
 		database.HasMany(p.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
 		database.HasMany(p.Annotations, database.WithoutCascadeDelete()),
 		database.HasMany(p.PersistentVolumeAnnotations, fk),
+		database.HasMany(p.Favorites, database.WithForeignKey("resource_uuid")),
 	}
 }

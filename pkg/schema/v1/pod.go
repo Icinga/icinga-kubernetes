@@ -53,6 +53,7 @@ type Pod struct {
 	ResourceAnnotations []ResourceAnnotation `db:"-"`
 	Pvcs                []PodPvc             `db:"-"`
 	Volumes             []PodVolume          `db:"-"`
+	Favorites           []Favorite           `db:"-"`
 	factory             *PodFactory
 }
 
@@ -459,6 +460,7 @@ func (p *Pod) Relations() []database.Relation {
 		database.HasMany(p.PodAnnotations, fk),
 		database.HasMany(p.Pvcs, fk),
 		database.HasMany(p.Volumes, fk),
+		database.HasMany(p.Favorites, database.WithForeignKey("resource_uuid")),
 	}
 }
 
