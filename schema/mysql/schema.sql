@@ -1011,8 +1011,10 @@ CREATE TABLE stateful_set_owner (
 
 CREATE TABLE favorite (
   resource_uuid binary(16) NOT NULL,
+  kind varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   username varchar(254) COLLATE utf8mb4_unicode_ci NOT NULL,
-  PRIMARY KEY (resource_uuid, username)
+  PRIMARY KEY (resource_uuid, username),
+  INDEX idx_favorite_username (username, kind) COMMENT 'Favorites filtered by username and kind'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE kubernetes_instance (
