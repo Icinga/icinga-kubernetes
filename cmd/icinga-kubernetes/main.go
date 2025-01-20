@@ -154,7 +154,9 @@ func main() {
 					if err != nil {
 						klog.Fatal(err)
 					}
-					defer rows.Close()
+					defer func() {
+						_ = rows.Close()
+					}()
 
 					dbLog.Info("Dropping schema")
 
