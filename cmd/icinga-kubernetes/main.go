@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/google/uuid"
 	"github.com/icinga/icinga-go-library/backoff"
@@ -166,7 +167,7 @@ func main() {
 							klog.Fatal(err)
 						}
 
-						_, err := kdb.Exec("DROP TABLE " + tableName)
+						_, err := kdb.Exec(fmt.Sprintf(`DROP TABLE %s`, tableName))
 						if err != nil {
 							klog.Fatal(err)
 						}
