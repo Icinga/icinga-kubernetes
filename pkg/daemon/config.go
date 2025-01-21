@@ -7,8 +7,8 @@ import (
 	"github.com/icinga/icinga-kubernetes/pkg/notifications"
 )
 
-// DefaultConfigPath specifies the default location of Icinga DB's config.yml for package installations.
-// const DefaultConfigPath = "/etc/icinga-kubernetes/config.yml"
+// DefaultConfigPath specifies the default location of Icinga for Kubernetes's config.yml
+// if not set via command line flag.
 const DefaultConfigPath = "./config.yml"
 
 // Config defines Icinga Kubernetes config.
