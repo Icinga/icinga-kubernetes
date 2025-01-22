@@ -54,3 +54,46 @@ Defined in the `prometheus` section of the configuration file.
 |----------|----------------------------------------------------------------------------------------------------------------------------|
 | url      | **Optional.** Prometheus server URL. If not set, metric synchronization is disabled.                                       |
 | insecure | **Optional.** Skip the TLS/SSL certificate verification. Can be set to 'true' or 'false'. If not set, defaults to 'false'. |
+| Option | Description                                                                          |
+|--------|--------------------------------------------------------------------------------------|
+| url    | **Optional.** Prometheus server URL. If not set, metric synchronization is disabled. |
+
+# Configuration via Environment Variables
+
+**All** environment variables are prefixed with `ICINGA_FOR_KUBERNETES_`.
+The database type would therefore be `ICINGA_FOR_KUBERNETES_DATABASE_TYPE`.
+The configurations set by environment variables override the ones set by YAML.
+
+## Database Configuration
+
+| Env               | Description                                                       |
+|-------------------|-------------------------------------------------------------------|
+| DATABASE_TYPE     | **Optional.** Only `mysql` is supported yet which is the default. |
+| DATABASE_HOST     | **Required.** Database host or absolute Unix socket path.         |
+| DATABASE_PORT     | **Optional.** Database port. By default, the MySQL port.          |
+| DATABASE_DATABASE | **Required.** Database name.                                      |
+| DATABASE_USER     | **Required.** Database username.                                  |
+| DATABASE_PASSWORD | **Optional.** Database password.                                  |
+
+## Logging Configuration
+
+| Env              | Description                                                                                                                                                              |
+|------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| LOGGING_LEVEL    | **Optional.** Default logging level. Can be set to `fatal`, `error`, `warn`, `info` or `debug`. If not set, defaults to `info`.                                          |
+| LOGGING_OUTPUT   | **Optional.** Logging output. Can be set to `console` (stderr) or `systemd-journald`. If not set, logs to systemd-journald when running under systemd, otherwise stderr. |
+| LOGGING_INTERVAL | **Optional.** Interval for periodic logging defined as duration string. Valid units are `ms`, `s`, `m`, `h`. Defaults to `20s`.                                          |
+
+## Notifications Configuration
+
+| Env                              | Description                                                                                           |
+|----------------------------------|-------------------------------------------------------------------------------------------------------|
+| NOTIFICATIONS_URL                | **Optional.** Icinga Notifications daemon URL. If not set, notifications are disabled                 |
+| NOTIFICATIONS_USERNAME           | **Optional.** Username for authenticating the Icinga for Kubernetes source in Icinga Notifications.   |
+| NOTIFICATIONS_PASSWORD           | **Optional.** Password for authenticating the Icinga for Kubernetes source in Icinga Notifications.   |
+| NOTIFICATIONS_KUBERNETES_WEB_URL | **Optional.** The base URL of Icinga for Kubernetes Web used in generated Icinga Notification events. |
+
+## Prometheus Configuration
+
+| Env            | Description                                                                          |
+|----------------|--------------------------------------------------------------------------------------|
+| PROMETHEUS_URL | **Optional.** Prometheus server URL. If not set, metric synchronization is disabled. |
