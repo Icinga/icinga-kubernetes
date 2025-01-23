@@ -310,6 +310,19 @@ func main() {
 		return SyncServicePods(ctx, kdb, factory.Core().V1().Services(), factory.Core().V1().Pods())
 	})
 
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	go func() {
+		ch := cachev1.Multiplexers().Services().UpsertEvents().Out()
+		for range ticker.C {
+			err := UpdateServiceIcingaState(ctx, kdb, ch)
+			if err != nil {
+				klog.Error(errors.Wrap(err, "can't update service status"))
+			}
+		}
+	}()
+
 	err = internal.SyncPrometheusConfig(ctx, db, &cfg.Prometheus, clusterInstance.Uuid)
 	if err != nil {
 		klog.Error(errors.Wrap(err, "cannot sync prometheus config"))
@@ -701,6 +714,32 @@ func SyncServicePods(ctx context.Context, db *kdatabase.Database, serviceList v2
 					case <-ctx.Done():
 						return ctx.Err()
 					}
+				}
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+	})
+
+	return g.Wait()
+}
+
+func UpdateServiceIcingaState(ctx context.Context, db *kdatabase.Database, ch <-chan any) error {
+	g, ctx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		for {
+			select {
+			case service, more := <-ch:
+				if !more {
+					return nil
+				}
+
+				serviceState, reason := schemav1.GetIcingaState(db, service.(*schemav1.Service).Uuid)
+
+				query := `UPDATE service SET icinga_state = ?, icinga_state_reason = ? WHERE uuid = ?`
+				_, err := db.ExecContext(ctx, query, serviceState, reason, service.(*schemav1.Service).Uuid)
+				if err != nil {
+					return err
 				}
 			case <-ctx.Done():
 				return ctx.Err()
