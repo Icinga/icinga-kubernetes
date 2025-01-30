@@ -29,6 +29,8 @@ each connecting to a different cluster but writing data into the same database.
 The web interface accesses this database to display resource information and state,
 offering the flexibility to view aggregated data from all clusters or focus on a specific cluster.
 This setup ensures scalable monitoring and a unified view of resources across multiple Kubernetes environments.
+To monitor multiple clusters you have to 
+[run multiple service instances of Icinga for Kubernetes](03-Configuration.md#multiple-clusters).
 
 ## Vision and Roadmap
 
