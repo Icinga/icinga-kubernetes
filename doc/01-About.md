@@ -24,11 +24,21 @@ including the database, common setup approaches include the following:
 
 ## Multi-Cluster Support
 
-Icinga for Kubernetes supports multiple Kubernetes clusters by deploying several daemons,
-each connecting to a different cluster but writing data into the same database.
-The web interface accesses this database to display resource information and state,
-offering the flexibility to view aggregated data from all clusters or focus on a specific cluster.
-This setup ensures scalable monitoring and a unified view of resources across multiple Kubernetes environments.
+Icinga for Kubernetes provides two approaches for monitoring multiple Kubernetes clusters.
+
+**Option 1**: The Icinga for Kubernetes daemons are installed directly within each Kubernetes cluster.
+Each daemon connects to a central database - which resides outside the clusters - through an external service.
+This database serves as the unified data source for all monitored clusters. The web interface is also hosted
+outside the clusters, allowing for an aggregated view of resources from all clusters or a focused view on a
+specific cluster. This architecture ensures monitoring is handled locally within the clusters while centralizing
+data storage and visualization outside.
+
+**Option 2**: All components, including the Icinga for Kubernetes daemons and the web interface, operate entirely
+outside the Kubernetes clusters. Instead of being deployed within the clusters, multiple systemd service instances
+are started on an external system, with each instance connecting to a different cluster.
+
+More about multi-cluster support can be found under
+[Configuration](03-Configuration.md#multi-cluster-support-using-systemd-instantiated-services).
 
 ## Vision and Roadmap
 
