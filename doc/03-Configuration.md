@@ -48,15 +48,14 @@ Defined in the `notifications` section of the configuration file.
 
 Connection configuration for a Prometheus instance that collects metrics from your Kubernetes cluster,
 from which Icinga for Kubernetes [synchronizes predefined metrics](01-About.md#metric-sync) to display charts in the UI.
-Defined in the `prometheus` section of the configuration file.
+Defined in the `prometheus` section of the configuration file. If one of username or password is set, both must be set.
 
 | Option   | Description                                                                                                                |
 |----------|----------------------------------------------------------------------------------------------------------------------------|
 | url      | **Optional.** Prometheus server URL. If not set, metric synchronization is disabled.                                       |
 | insecure | **Optional.** Skip the TLS/SSL certificate verification. Can be set to 'true' or 'false'. If not set, defaults to 'false'. |
-| Option | Description                                                                          |
-|--------|--------------------------------------------------------------------------------------|
-| url    | **Optional.** Prometheus server URL. If not set, metric synchronization is disabled. |
+| username | **Optional.** Prometheus username.                                                                                         |
+| password | **Optional.** Prometheus password.                                                                                         |
 
 # Configuration via Environment Variables
 
@@ -94,6 +93,9 @@ The configurations set by environment variables override the ones set by YAML.
 
 ## Prometheus Configuration
 
-| Env            | Description                                                                          |
-|----------------|--------------------------------------------------------------------------------------|
-| PROMETHEUS_URL | **Optional.** Prometheus server URL. If not set, metric synchronization is disabled. |
+| Env                 | Description                                                                                                                |
+|---------------------|----------------------------------------------------------------------------------------------------------------------------|
+| PROMETHEUS_URL      | **Optional.** Prometheus server URL. If not set, metric synchronization is disabled.                                       |
+| PROMETHEUS_INSECURE | **Optional.** Skip the TLS/SSL certificate verification. Can be set to 'true' or 'false'. If not set, defaults to 'false'. |
+| PROMETHEUS_USERNAME | **Optional.** Prometheus username.                                                                                         |
+| PROMETHEUS_PASSWORD | **Optional.** Prometheus password.                                                                                         |
