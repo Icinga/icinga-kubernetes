@@ -7,8 +7,8 @@ import (
 // PrometheusConfig defines Prometheus configuration.
 type PrometheusConfig struct {
 	Url      string `yaml:"url" env:"URL"`
-	Username string `yaml:"username"`
-	Password string `yaml:"password"`
+	Username string `yaml:"username" env:"USERNAME"`
+	Password string `yaml:"password" env:"PASSWORD"`
 }
 
 // Validate checks constraints in the supplied Prometheus configuration and returns an error if they are violated.
