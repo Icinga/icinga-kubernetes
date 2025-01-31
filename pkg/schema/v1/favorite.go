@@ -6,4 +6,5 @@ type Favorite struct {
 	ResourceUuid types.UUID
 	Kind         string
 	Username     string
+	Priority     int
 }
