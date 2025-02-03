@@ -1014,9 +1014,10 @@ CREATE TABLE favorite (
   kind varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   username varchar(254) COLLATE utf8mb4_unicode_ci NOT NULL,
   priority int unsigned,
-  PRIMARY KEY (resource_uuid, username),
-  INDEX idx_favorite_username (username, kind) COMMENT 'Favorites filtered by username and kind'
+  PRIMARY KEY (resource_uuid, username)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE INDEX idx_favorite_username ON favorite(username, kind) COMMENT 'Favorites filtered by username and kind';
 
 CREATE TABLE kubernetes_instance (
   uuid binary(16) NOT NULL,
