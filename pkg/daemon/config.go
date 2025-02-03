@@ -7,12 +7,16 @@ import (
 	"github.com/icinga/icinga-kubernetes/pkg/notifications"
 )
 
+// DefaultConfigPath specifies the default location of Icinga for Kubernetes's config.yml
+// if not set via command line flag.
+const DefaultConfigPath = "./config.yml"
+
 // Config defines Icinga Kubernetes config.
 type Config struct {
-	Database      database.Config          `yaml:"database"`
-	Logging       logging.Config           `yaml:"logging"`
-	Notifications notifications.Config     `yaml:"notifications"`
-	Prometheus    metrics.PrometheusConfig `yaml:"prometheus"`
+	Database      database.Config          `yaml:"database" envPrefix:"DATABASE_"`
+	Logging       logging.Config           `yaml:"logging" envPrefix:"LOGGING_"`
+	Notifications notifications.Config     `yaml:"notifications" envPrefix:"NOTIFICATIONS_"`
+	Prometheus    metrics.PrometheusConfig `yaml:"prometheus" envPrefix:"PROMETHEUS_"`
 }
 
 // Validate checks constraints in the supplied configuration and returns an error if they are violated.
@@ -30,4 +34,27 @@ func (c *Config) Validate() error {
 	}
 
 	return c.Notifications.Validate()
+}
+
+// ConfigFlagGlue provides a glue struct for the CLI config flag.
+//
+// ConfigFlagGlue implements the [github.com/icinga/icinga-go-library/config.Flags] interface.
+type ConfigFlagGlue struct {
+	// Config is the path to the config file
+	Config string
+}
+
+// GetConfigPath retrieves the path to the configuration file.
+// It returns the path specified via the command line, or DefaultConfigPath if none is provided.
+func (f ConfigFlagGlue) GetConfigPath() string {
+	if f.Config == "" {
+		return DefaultConfigPath
+	}
+
+	return f.Config
+}
+
+// IsExplicitConfigPath indicates whether the configuration file path was explicitly set.
+func (f ConfigFlagGlue) IsExplicitConfigPath() bool {
+	return f.Config != ""
 }
