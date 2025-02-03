@@ -22,12 +22,9 @@ type CleanupStmt struct {
 func (stmt *CleanupStmt) Build(driverName string, limit uint64) string {
 	switch driverName {
 	case MySQL, "mysql":
-		return fmt.Sprintf(`DELETE FROM %[1]s WHERE %[2]s < :time
-ORDER BY %[2]s LIMIT %[3]d`, stmt.Table, stmt.Column, limit)
+		return fmt.Sprintf(`DELETE FROM %[1]s WHERE %[2]s < :time LIMIT %[3]d`, stmt.Table, stmt.Column, limit)
 	case PostgreSQL, "postgres":
-		return fmt.Sprintf(`WITH rows AS (
-SELECT %[1]s FROM %[2]s WHERE %[3]s < :time ORDER BY %[3]s LIMIT %[4]d
-)
+		return fmt.Sprintf(`WITH rows AS (SELECT %[1]s FROM %[2]s WHERE %[3]s < :time LIMIT %[4]d)
 DELETE FROM %[2]s WHERE %[1]s IN (SELECT %[1]s FROM rows)`, stmt.PK, stmt.Table, stmt.Column, limit)
 	default:
 		panic(fmt.Sprintf("invalid database type %s", driverName))
