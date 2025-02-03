@@ -352,8 +352,10 @@ CREATE TABLE event (
   count int unsigned NOT NULL,
   yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
-  PRIMARY KEY (uuid)
+  PRIMARY KEY (uuid),
+  INDEX idx_event_created (created) COMMENT 'Filter for deleting old events'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
 
 CREATE TABLE ingress (
   uuid binary(16) NOT NULL,
