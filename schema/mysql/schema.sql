@@ -713,7 +713,8 @@ CREATE TABLE prometheus_cluster_metric (
   category varchar(255) NOT NULL,
   name varchar(255) NOT NULL,
   value double NOT NULL,
-  PRIMARY KEY (cluster_uuid, timestamp, category, name)
+  PRIMARY KEY (cluster_uuid, timestamp, category, name),
+  INDEX idx_prometheus_cluster_metric_timestamp (timestamp) COMMENT 'Filter for deleting old cluster metrics'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE prometheus_container_metric (
@@ -722,7 +723,8 @@ CREATE TABLE prometheus_container_metric (
   category varchar(255) NOT NULL,
   name varchar(255) NOT NULL,
   value double NOT NULL,
-  PRIMARY KEY (container_uuid, timestamp, category, name)
+  PRIMARY KEY (container_uuid, timestamp, category, name),
+  INDEX idx_prometheus_container_metric_timestamp (timestamp) COMMENT 'Filter for deleting old container metrics'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE prometheus_node_metric (
@@ -731,7 +733,8 @@ CREATE TABLE prometheus_node_metric (
   category varchar(255) NOT NULL,
   name varchar(255) NOT NULL,
   value double NOT NULL,
-  PRIMARY KEY (node_uuid, timestamp, category, name)
+  PRIMARY KEY (node_uuid, timestamp, category, name),
+  INDEX idx_prometheus_node_metric_timestamp (timestamp) COMMENT 'Filter for deleting old node metrics'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE prometheus_pod_metric (
@@ -740,7 +743,8 @@ CREATE TABLE prometheus_pod_metric (
   category varchar(255) NOT NULL,
   name varchar(255) NOT NULL,
   value double NOT NULL,
-  PRIMARY KEY (pod_uuid, timestamp, category, name)
+  PRIMARY KEY (pod_uuid, timestamp, category, name),
+  INDEX idx_prometheus_pod_metric_timestamp (timestamp) COMMENT 'Filter for deleting old pod metrics'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE pvc (
