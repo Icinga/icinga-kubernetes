@@ -36,6 +36,7 @@ type ReplicaSet struct {
 	Annotations           []Annotation           `db:"-"`
 	ReplicaSetAnnotations []ReplicaSetAnnotation `db:"-"`
 	ResourceAnnotations   []ResourceAnnotation   `db:"-"`
+	Favorites             []Favorite             `db:"-"`
 }
 
 type ReplicaSetCondition struct {
@@ -217,5 +218,6 @@ func (r *ReplicaSet) Relations() []database.Relation {
 		database.HasMany(r.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
 		database.HasMany(r.Annotations, database.WithoutCascadeDelete()),
 		database.HasMany(r.ReplicaSetAnnotations, fk),
+		database.HasMany(r.Favorites, database.WithForeignKey("resource_uuid")),
 	}
 }
