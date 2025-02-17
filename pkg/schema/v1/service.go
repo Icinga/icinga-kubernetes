@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"context"
 	"database/sql"
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
@@ -10,13 +11,8 @@ import (
 	kruntime "k8s.io/apimachinery/pkg/runtime"
 	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
-	"k8s.io/client-go/kubernetes"
 	"strings"
 )
-
-type ServiceFactory struct {
-	clientset *kubernetes.Clientset
-}
 
 type Service struct {
 	Meta
@@ -47,6 +43,7 @@ type Service struct {
 	ResourceAnnotations           []ResourceAnnotation `db:"-"`
 	ServicePods                   []ServicePod         `db:"-"`
 	factory                       *ServiceFactory
+	ctx                           context.Context
 }
 
 type ServiceSelector struct {
@@ -89,14 +86,11 @@ type ServicePod struct {
 	PodUuid     types.UUID
 }
 
-func NewServiceFactory(clientset *kubernetes.Clientset) *ServiceFactory {
-	return &ServiceFactory{
-		clientset: clientset,
-	}
-}
-
 func (f *ServiceFactory) NewService() Resource {
-	return &Service{factory: f}
+	return &Service{
+		factory: f,
+		ctx:     f.ctx,
+	}
 }
 
 func (s *Service) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {

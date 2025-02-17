@@ -471,7 +471,7 @@ func main() {
 	})
 
 	g.Go(func() error {
-		f := schemav1.NewServiceFactory(clientset)
+		f := schemav1.NewServiceFactory(clientset, kdb, ctx)
 		s := syncv1.NewSync(kdb, factory.Core().V1().Services().Informer(), log.WithName("services"), f.NewService)
 
 		return s.Run(
@@ -528,7 +528,8 @@ func main() {
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Networking().V1().Ingresses().Informer(), log.WithName("ingresses"), schemav1.NewIngress)
+		serviceFactory := schemav1.NewServiceFactory(clientset, kdb, ctx)
+		s := syncv1.NewSync(kdb, factory.Networking().V1().Ingresses().Informer(), log.WithName("ingresses"), schemav1.NewIngress(serviceFactory, ctx))
 
 		return s.Run(ctx)
 	})

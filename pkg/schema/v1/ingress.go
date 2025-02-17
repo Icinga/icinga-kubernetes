@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"context"
 	"database/sql"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
@@ -25,6 +26,8 @@ type Ingress struct {
 	Annotations            []Annotation             `db:"-"`
 	IngressAnnotations     []IngressAnnotation      `db:"-"`
 	ResourceAnnotations    []ResourceAnnotation     `db:"-"`
+	serviceFactory         *ServiceFactory
+	ctx                    context.Context
 }
 
 type IngressTls struct {
@@ -70,8 +73,13 @@ type IngressAnnotation struct {
 	AnnotationUuid types.UUID
 }
 
-func NewIngress() Resource {
-	return &Ingress{}
+func NewIngress(serviceFactory *ServiceFactory, ctx context.Context) func() Resource {
+	return func() Resource {
+		return &Ingress{
+			serviceFactory: serviceFactory,
+			ctx:            ctx,
+		}
+	}
 }
 
 func (i *Ingress) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
@@ -127,7 +135,13 @@ func (i *Ingress) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			pathType := string(*ruleValue.PathType)
 			if ruleValue.Backend.Service != nil {
 				ingressRuleUuid := NewUUID(i.Uuid, rules.Host+ruleValue.Path+ruleValue.Backend.Service.Name)
-				serviceUuid := NewUUID(ingressRuleUuid, ruleValue.Backend.Service.Name)
+
+				// Use the serviceFactory to fetch the service UUID
+				serviceUuid, err := i.serviceFactory.GetServiceUUID(i.ctx, i.Namespace, ruleValue.Backend.Service.Name)
+				if err != nil {
+					continue
+				}
+
 				i.IngressBackendService = append(i.IngressBackendService, IngressBackendService{
 					ServiceUuid:       serviceUuid,
 					IngressUuid:       i.Uuid,
