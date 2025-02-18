@@ -44,7 +44,7 @@ func (c RetryConnector) Connect(ctx context.Context) (driver.Conn, error) {
 				}
 			},
 			OnSuccess: func(elapsed time.Duration, attempt uint64, _ error) {
-				if attempt > 0 {
+				if attempt > 1 {
 					c.driver.Logger.Info("Reconnected to database")
 					// c.driver.Logger.Info(1, "Reconnected to database",
 					// 	zap.Duration("after", elapsed), zap.Uint64("attempts", attempt+1))
