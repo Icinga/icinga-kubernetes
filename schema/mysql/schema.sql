@@ -1029,6 +1029,7 @@ CREATE TABLE config (
     'notifications.password',
     'notifications.kubernetes_web_url',
     'prometheus.url',
+    'prometheus.insecure',
     'prometheus.username',
     'prometheus.password'
     ) COLLATE utf8mb4_unicode_ci NOT NULL,

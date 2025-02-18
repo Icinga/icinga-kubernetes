@@ -19,6 +19,7 @@ const (
 	ConfigKeyNotificationsUrl              ConfigKey = "notifications.url"
 	ConfigKeyNotificationsKubernetesWebUrl ConfigKey = "notifications.kubernetes_web_url"
 	ConfigKeyPrometheusUrl                 ConfigKey = "prometheus.url"
+	ConfigKeyPrometheusInsecure            ConfigKey = "prometheus.insecure"
 	ConfigKeyPrometheusUsername            ConfigKey = "prometheus.username"
 	ConfigKeyPrometheusPassword            ConfigKey = "prometheus.password"
 )

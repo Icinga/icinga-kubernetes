@@ -24,6 +24,13 @@ func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *metrics.
 			{ClusterUuid: clusterUuid, Key: schemav1.ConfigKeyPrometheusUrl, Value: config.Url, Locked: _true},
 		}
 
+		if config.Insecure != "" {
+			toDb = append(
+				toDb,
+				schemav1.Config{ClusterUuid: clusterUuid, Key: schemav1.ConfigKeyPrometheusInsecure, Value: config.Insecure, Locked: _true},
+			)
+		}
+
 		if config.Username != "" {
 			toDb = append(
 				toDb,
@@ -85,6 +92,8 @@ func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *metrics.
 				switch r.Key {
 				case schemav1.ConfigKeyPrometheusUrl:
 					config.Url = r.Value
+				case schemav1.ConfigKeyPrometheusInsecure:
+					config.Insecure = r.Value
 				case schemav1.ConfigKeyPrometheusUsername:
 					config.Username = r.Value
 				case schemav1.ConfigKeyPrometheusPassword:
