@@ -48,13 +48,13 @@ func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *metrics.
 
 			stmt, _ := db.BuildUpsertStmt(schemav1.Config{})
 			if _, err := tx.NamedExecContext(ctx, stmt, toDb); err != nil {
-				return errors.Wrap(err, "cannot insert Prometheus config")
+				return errors.Wrap(err, "cannot upsert Prometheus config")
 			}
 
 			return nil
 		})
 		if err != nil {
-			return errors.Wrap(err, "cannot upsert Prometheus config")
+			return errors.Wrap(err, "transaction failed")
 		}
 	} else {
 		err := db.ExecTx(ctx, func(ctx context.Context, tx *sqlx.Tx) error {
