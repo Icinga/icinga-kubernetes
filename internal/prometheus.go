@@ -46,7 +46,7 @@ func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *metrics.
 				return errors.Wrap(err, "cannot delete Prometheus config")
 			}
 
-			stmt, _ := db.BuildInsertStmt(schemav1.Config{})
+			stmt, _ := db.BuildUpsertStmt(schemav1.Config{})
 			if _, err := tx.NamedExecContext(ctx, stmt, toDb); err != nil {
 				return errors.Wrap(err, "cannot insert Prometheus config")
 			}
