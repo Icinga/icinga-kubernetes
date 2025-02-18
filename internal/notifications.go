@@ -52,7 +52,7 @@ func SyncNotificationsConfig(ctx context.Context, db *database.DB, config *notif
 				return errors.Wrap(err, "cannot delete Icinga Notifications config")
 			}
 
-			stmt, _ := db.BuildInsertStmt(schemav1.Config{})
+			stmt, _ := db.BuildUpsertStmt(schemav1.Config{})
 			if _, err := tx.NamedExecContext(ctx, stmt, toDb); err != nil {
 				return errors.Wrap(err, "cannot insert Icinga Notifications config")
 			}
