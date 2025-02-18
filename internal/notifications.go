@@ -54,13 +54,13 @@ func SyncNotificationsConfig(ctx context.Context, db *database.DB, config *notif
 
 			stmt, _ := db.BuildUpsertStmt(schemav1.Config{})
 			if _, err := tx.NamedExecContext(ctx, stmt, toDb); err != nil {
-				return errors.Wrap(err, "cannot insert Icinga Notifications config")
+				return errors.Wrap(err, "cannot upsert Icinga Notifications config")
 			}
 
 			return nil
 		})
 		if err != nil {
-			return errors.Wrap(err, "cannot upsert Icinga Notifications config")
+			return errors.Wrap(err, "transaction failed")
 		}
 	} else {
 		err := db.ExecTx(ctx, func(ctx context.Context, tx *sqlx.Tx) error {
