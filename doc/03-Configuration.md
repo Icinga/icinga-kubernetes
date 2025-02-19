@@ -29,6 +29,7 @@ Connection configuration for a Prometheus instance that collects metrics from yo
 from which Icinga for Kubernetes [synchronizes predefined metrics](01-About.md#metric-sync) to display charts in the UI.
 Defined in the `prometheus` section of the configuration file.
 
-| Option | Description                                                                          |
-|--------|--------------------------------------------------------------------------------------|
-| url    | **Optional.** Prometheus server URL. If not set, metric synchronization is disabled. |
+| Option   | Description                                                                                                                |
+|----------|----------------------------------------------------------------------------------------------------------------------------|
+| url      | **Optional.** Prometheus server URL. If not set, metric synchronization is disabled.                                       |
+| insecure | **Optional.** Skip the TLS/SSL certificate verification. Can be set to 'true' or 'false'. If not set, defaults to 'false'. |
