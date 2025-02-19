@@ -38,7 +38,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	kclientcmd "k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
-	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -316,14 +315,15 @@ func main() {
 	}
 
 	if cfg.Prometheus.Url != "" {
-		var basicAuthTransport http.RoundTripper
+		basicAuthTransport := &com.BasicAuthTransport{}
 
-		if cfg.Prometheus.Username != "" && cfg.Prometheus.Password != "" {
-			basicAuthTransport = &com.BasicAuthTransport{
-				RoundTripper: http.DefaultTransport,
-				Username:     cfg.Prometheus.Username,
-				Password:     cfg.Prometheus.Password,
-			}
+		if cfg.Prometheus.Insecure == "true" {
+			basicAuthTransport.Insecure = true
+		}
+
+		if cfg.Prometheus.Username != "" {
+			basicAuthTransport.Username = cfg.Prometheus.Username
+			basicAuthTransport.Password = cfg.Prometheus.Password
 		}
 
 		promClient, err := promapi.NewClient(promapi.Config{
