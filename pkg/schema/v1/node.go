@@ -50,6 +50,7 @@ type Node struct {
 	Annotations             []Annotation         `db:"-"`
 	NodeAnnotations         []NodeAnnotation     `db:"-"`
 	ResourceAnnotations     []ResourceAnnotation `db:"-"`
+	Favorites               []Favorite           `db:"-"`
 }
 
 type NodeCondition struct {
@@ -282,6 +283,7 @@ func (n *Node) Relations() []database.Relation {
 		database.HasMany(n.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
 		database.HasMany(n.Annotations, database.WithoutCascadeDelete()),
 		database.HasMany(n.NodeAnnotations, fk),
+		database.HasMany(n.Favorites, database.WithForeignKey("resource_uuid")),
 	}
 }
 

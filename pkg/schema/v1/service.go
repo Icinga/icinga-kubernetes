@@ -46,6 +46,7 @@ type Service struct {
 	ServiceAnnotations            []ServiceAnnotation  `db:"-"`
 	ResourceAnnotations           []ResourceAnnotation `db:"-"`
 	ServicePods                   []ServicePod         `db:"-"`
+	Favorites                     []Favorite           `db:"-"`
 	factory                       *ServiceFactory
 }
 
@@ -257,5 +258,6 @@ func (s *Service) Relations() []database.Relation {
 		database.HasMany(s.ServiceAnnotations, fk),
 		database.HasMany(s.ResourceAnnotations, fk),
 		database.HasMany(s.ServicePods, fk),
+		database.HasMany(s.Favorites, database.WithForeignKey("resource_uuid")),
 	}
 }
