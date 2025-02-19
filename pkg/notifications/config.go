@@ -8,10 +8,10 @@ import (
 
 type Config struct {
 	// If URL is the empty string, notifications are disabled.
-	Url              string `yaml:"url"`
-	Username         string `yaml:"username"`
-	Password         string `yaml:"password"`
-	KubernetesWebUrl string `yaml:"kubernetes_web_url" default:"http://localhost/icingaweb2/kubernetes"`
+	Url              string `yaml:"url" env:"URL"`
+	Username         string `yaml:"username" env:"USERNAME"`
+	Password         string `yaml:"password" env:"PASSWORD"`
+	KubernetesWebUrl string `yaml:"kubernetes_web_url" env:"KUBERNETES_WEB_URL" default:"http://localhost/icingaweb2/kubernetes"`
 }
 
 // Validate checks constraints in the supplied configuration and returns an error if they are violated.
