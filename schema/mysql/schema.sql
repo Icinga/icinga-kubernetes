@@ -154,6 +154,8 @@ CREATE TABLE cron_job (
   active int unsigned NOT NULL,
   last_schedule_time bigint unsigned NULL DEFAULT NULL,
   last_successful_time bigint unsigned NULL DEFAULT NULL,
+  icinga_state enum('unknown', 'ok', 'warning', 'critical') COLLATE utf8mb4_unicode_ci NOT NULL,
+  icinga_state_reason text NOT NULL,
   yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (uuid)
@@ -893,6 +895,8 @@ CREATE TABLE service (
   load_balancer_class varchar(255) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   internal_traffic_policy enum('Cluster', 'Local') COLLATE utf8mb4_unicode_ci NOT NULL,
   yaml mediumblob DEFAULT NULL,
+  icinga_state enum('unknown', 'ok', 'warning', 'critical') COLLATE utf8mb4_unicode_ci NOT NULL,
+  icinga_state_reason text NOT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
