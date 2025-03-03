@@ -38,6 +38,7 @@ type DaemonSet struct {
 	Annotations            []Annotation          `db:"-"`
 	DaemonSetAnnotations   []DaemonSetAnnotation `db:"-"`
 	ResourceAnnotations    []ResourceAnnotation  `db:"-"`
+	Favorites              []Favorite            `db:"-"`
 }
 
 type DaemonSetCondition struct {
@@ -216,5 +217,6 @@ func (d *DaemonSet) Relations() []database.Relation {
 		database.HasMany(d.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
 		database.HasMany(d.Annotations, database.WithoutCascadeDelete()),
 		database.HasMany(d.DaemonSetAnnotations, fk),
+		database.HasMany(d.Favorites, database.WithForeignKey("resource_uuid")),
 	}
 }

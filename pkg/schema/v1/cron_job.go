@@ -31,6 +31,7 @@ type CronJob struct {
 	Annotations                []Annotation         `db:"-"`
 	CronJobAnnotations         []CronJobAnnotation  `db:"-"`
 	ResourceAnnotations        []ResourceAnnotation `db:"-"`
+	Favorites                  []Favorite           `db:"-"`
 }
 
 type CronJobLabel struct {
@@ -129,5 +130,6 @@ func (c *CronJob) Relations() []database.Relation {
 		database.HasMany(c.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
 		database.HasMany(c.Annotations, database.WithoutCascadeDelete()),
 		database.HasMany(c.CronJobAnnotations, fk),
+		database.HasMany(c.Favorites, database.WithForeignKey("resource_uuid")),
 	}
 }

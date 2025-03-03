@@ -40,6 +40,7 @@ type Deployment struct {
 	Annotations             []Annotation           `db:"-"`
 	DeploymentAnnotations   []DeploymentAnnotation `db:"-"`
 	ResourceAnnotations     []ResourceAnnotation   `db:"-"`
+	Favorites               []Favorite             `db:"-"`
 }
 
 type DeploymentCondition struct {
@@ -235,5 +236,6 @@ func (d *Deployment) Relations() []database.Relation {
 		database.HasMany(d.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
 		database.HasMany(d.Annotations, database.WithoutCascadeDelete()),
 		database.HasMany(d.DeploymentAnnotations, fk),
+		database.HasMany(d.Favorites, database.WithForeignKey("resource_uuid")),
 	}
 }

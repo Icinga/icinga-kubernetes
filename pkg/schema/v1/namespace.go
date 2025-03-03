@@ -22,6 +22,7 @@ type Namespace struct {
 	Annotations          []Annotation          `db:"-"`
 	NamespaceAnnotations []NamespaceAnnotation `db:"-"`
 	ResourceAnnotations  []ResourceAnnotation  `db:"-"`
+	Favorites            []Favorite            `db:"-"`
 }
 
 type NamespaceCondition struct {
@@ -117,5 +118,6 @@ func (n *Namespace) Relations() []database.Relation {
 		database.HasMany(n.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
 		database.HasMany(n.Annotations, database.WithoutCascadeDelete()),
 		database.HasMany(n.NamespaceAnnotations, fk),
+		database.HasMany(n.Favorites, database.WithForeignKey("resource_uuid")),
 	}
 }
