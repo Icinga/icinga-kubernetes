@@ -41,6 +41,7 @@ type Job struct {
 	JobAnnotations          []JobAnnotation      `db:"-"`
 	ResourceAnnotations     []ResourceAnnotation `db:"-"`
 	Owners                  []JobOwner           `db:"-"`
+	Favorites               []Favorite           `db:"-"`
 }
 
 type JobCondition struct {
@@ -287,5 +288,6 @@ func (j *Job) Relations() []database.Relation {
 		database.HasMany(j.Annotations, database.WithoutCascadeDelete()),
 		database.HasMany(j.JobAnnotations, fk),
 		database.HasMany(j.Owners, fk),
+		database.HasMany(j.Favorites, database.WithForeignKey("resource_uuid")),
 	}
 }

@@ -25,6 +25,7 @@ type Ingress struct {
 	Annotations            []Annotation             `db:"-"`
 	IngressAnnotations     []IngressAnnotation      `db:"-"`
 	ResourceAnnotations    []ResourceAnnotation     `db:"-"`
+	Favorites              []Favorite               `db:"-"`
 }
 
 type IngressTls struct {
@@ -228,5 +229,6 @@ func (i *Ingress) Relations() []database.Relation {
 		database.HasMany(i.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
 		database.HasMany(i.Annotations, database.WithoutCascadeDelete()),
 		database.HasMany(i.IngressAnnotations, fk),
+		database.HasMany(i.Favorites, database.WithForeignKey("resource_uuid")),
 	}
 }
