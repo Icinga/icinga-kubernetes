@@ -1,13 +1,13 @@
 module github.com/icinga/icinga-kubernetes
 
-go 1.22.0
+go 1.23.0
 
 require (
 	github.com/go-co-op/gocron v1.37.0
 	github.com/go-logr/logr v1.4.2
-	github.com/go-sql-driver/mysql v1.8.1
+	github.com/go-sql-driver/mysql v1.9.2
 	github.com/google/uuid v1.6.0
-	github.com/icinga/icinga-go-library v0.3.2-0.20241118194934-1a19cd696d37
+	github.com/icinga/icinga-go-library v0.6.4-0.20250519095646-5a1c5090f238
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/lib/pq v1.10.9
 	github.com/okzk/sdnotify v0.0.0-20240725214427-1c1fdd37c5ac
@@ -17,7 +17,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	go.uber.org/zap v1.27.0
 	golang.org/x/exp v0.0.0-20240909161429-701f63a606c0
-	golang.org/x/sync v0.9.0
+	golang.org/x/sync v0.14.0
 	k8s.io/api v0.31.1
 	k8s.io/apimachinery v0.31.1
 	k8s.io/client-go v0.31.1
@@ -27,7 +27,7 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
-	github.com/caarlos0/env/v11 v11.2.2 // indirect
+	github.com/caarlos0/env/v11 v11.3.1 // indirect
 	github.com/creasty/defaults v1.8.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/emicklei/go-restful/v3 v3.12.1 // indirect

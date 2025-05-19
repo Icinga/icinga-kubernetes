@@ -49,7 +49,7 @@ const expectedSchemaVersion = "0.2.0"
 func main() {
 	runtime.ReallyCrash = true
 
-	var configLocation string
+	var glue daemon.ConfigFlagGlue
 	var showVersion bool
 	var clusterName string
 
@@ -57,7 +57,12 @@ func main() {
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 
 	pflag.BoolVar(&showVersion, "version", false, "print version and exit")
-	pflag.StringVar(&configLocation, "config", "./config.yml", "path to the config file")
+	pflag.StringVar(
+		&glue.Config,
+		"config",
+		"",
+		fmt.Sprintf("path to the config file (default: %s)", daemon.DefaultConfigPath),
+	)
 	pflag.StringVar(&clusterName, "cluster-name", "", "name of the current cluster")
 
 	loadingRules := kclientcmd.NewDefaultClientConfigLoadingRules()
@@ -98,9 +103,12 @@ func main() {
 	log := klog.NewKlogr()
 
 	var cfg daemon.Config
-	err = config.FromYAMLFile(configLocation, &cfg)
-	if err != nil {
-		klog.Fatal(errors.Wrap(err, "cannot create configuration"))
+
+	if err = config.Load(&cfg, config.LoadOptions{
+		Flags:      glue,
+		EnvOptions: config.EnvOptions{Prefix: "ICINGA_FOR_KUBERNETES_"},
+	}); err != nil {
+		klog.Fatal(errors.Wrap(err, "can't create configuration"))
 	}
 
 	dbLog := log.WithName("database")
