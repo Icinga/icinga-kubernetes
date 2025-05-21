@@ -7,6 +7,7 @@ import (
 	"github.com/icinga/icinga-go-library/driver"
 	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-kubernetes/internal"
+	"github.com/icinga/icinga-kubernetes/pkg/contracts"
 	"github.com/icinga/icinga-kubernetes/pkg/schema"
 	"github.com/icinga/icinga-kubernetes/pkg/sync"
 	"github.com/okzk/sdnotify"
@@ -15,6 +16,7 @@ import (
 	kinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	kclientcmd "k8s.io/client-go/tools/clientcmd"
+	"time"
 )
 
 func main() {
@@ -85,10 +87,25 @@ func main() {
 		).Run(ctx)
 	})
 
+	podUpserts := make(chan contracts.KUpsert)
+	podDeletes := make(chan contracts.KDelete)
 	g.Go(func() error {
+		defer close(podUpserts)
+		defer close(podDeletes)
+
 		return sync.NewSync(
 			db, schema.NewPod, informers.Core().V1().Pods().Informer(), logs.GetChildLogger("Pods"),
-		).Run(ctx)
+		).Run(
+			ctx, sync.WithForwardUpserts(podUpserts), sync.WithForwardDeletes(podDeletes),
+		)
+	})
+
+	g.Go(func() error {
+		return sync.NewContainerLogSync(
+			k, db, logs.GetChildLogger("ContainerLogs"), time.Second*15,
+		).Run(
+			ctx, podUpserts, podDeletes,
+		)
 	})
 
 	if err := g.Wait(); err != nil {

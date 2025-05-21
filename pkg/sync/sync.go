@@ -15,7 +15,7 @@ import (
 )
 
 type Sync interface {
-	Run(context.Context) error
+	Run(context.Context, ...syncOption) error
 }
 
 type sync struct {
@@ -39,7 +39,7 @@ func NewSync(
 	}
 }
 
-func (s *sync) Run(ctx context.Context) error {
+func (s *sync) Run(ctx context.Context, options ...syncOption) error {
 	s.logger.Info("Starting sync")
 
 	s.logger.Debug("Warming up")
@@ -65,57 +65,77 @@ func (s *sync) Run(ctx context.Context) error {
 
 	s.logger.Debug("Finished warming up")
 
-	upserts := make(chan database.Entity)
-	defer close(upserts)
+	syncOpts := newSyncOptions(options...)
 
-	for _, ch := range []<-chan contracts.KUpsert{changes.Adds(), changes.Updates()} {
-		ch := ch
+	kupsertsMux := NewChannelMux(changes.Adds(), changes.Updates())
+	kupserts := kupsertsMux.Out()
 
-		g.Go(func() error {
-			for {
-				select {
-				case kupsert, more := <-ch:
-					if !more {
-						return nil
-					}
-
-					entity := s.factory()
-					entity.SetID(kupsert.ID())
-					entity.SetCanonicalName(kupsert.GetCanonicalName())
-					entity.Obtain(kupsert.KObject())
-
-					select {
-					case upserts <- entity:
-						s.logger.Debugw(
-							fmt.Sprintf("Sync: Upserted %s", kupsert.GetCanonicalName()),
-							zap.String("id", kupsert.ID().String()))
-					case <-ctx.Done():
-						return ctx.Err()
-					}
-				case <-ctx.Done():
-					return ctx.Err()
-				}
-			}
-		})
+	if syncOpts.forwardUpserts != nil {
+		kupsertsMux.AddOut(syncOpts.forwardUpserts)
 	}
 
 	g.Go(func() error {
-		return s.db.UpsertStreamed(ctx, upserts)
+		return kupsertsMux.Run(ctx)
 	})
 
-	deletes := make(chan any)
-	defer close(deletes)
+	databaseUpserts := make(chan database.Entity)
+	defer close(databaseUpserts)
 
 	g.Go(func() error {
 		for {
 			select {
-			case kdelete, more := <-changes.Deletes():
+			case kupsert, more := <-kupserts:
+				if !more {
+					return nil
+				}
+
+				entity := s.factory()
+				entity.SetID(kupsert.ID())
+				entity.SetCanonicalName(kupsert.GetCanonicalName())
+				entity.Obtain(kupsert.KObject())
+
+				select {
+				case databaseUpserts <- entity:
+					s.logger.Debugw(
+						fmt.Sprintf("Sync: Upserted %s", kupsert.GetCanonicalName()),
+						zap.String("id", kupsert.ID().String()))
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+	})
+
+	g.Go(func() error {
+		return s.db.UpsertStreamed(ctx, databaseUpserts)
+	})
+
+	kdeletesMux := NewChannelMux(changes.Deletes())
+	kdeletes := kdeletesMux.Out()
+
+	if syncOpts.forwardDeletes != nil {
+		kdeletesMux.AddOut(syncOpts.forwardDeletes)
+	}
+
+	g.Go(func() error {
+		return kdeletesMux.Run(ctx)
+	})
+
+	databaseDeletes := make(chan any)
+	g.Go(func() error {
+		defer close(databaseDeletes)
+
+		for {
+			select {
+			case kdelete, more := <-kdeletes:
 				if !more {
 					return nil
 				}
 
 				select {
-				case deletes <- kdelete.ID():
+				case databaseDeletes <- kdelete.ID():
 					s.logger.Debugw(
 						fmt.Sprintf("Sync: Deleted %s", kdelete.GetCanonicalName()),
 						zap.String("id", kdelete.ID().String()))
@@ -129,7 +149,7 @@ func (s *sync) Run(ctx context.Context) error {
 	})
 
 	g.Go(func() error {
-		return s.db.DeleteStreamed(ctx, s.factory(), deletes)
+		return s.db.DeleteStreamed(ctx, s.factory(), databaseDeletes)
 	})
 
 	g.Go(func() error {
