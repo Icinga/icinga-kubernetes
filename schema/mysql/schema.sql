@@ -1062,4 +1062,4 @@ CREATE TABLE kubernetes_schema (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 INSERT INTO kubernetes_schema (version, timestamp, success, reason)
-VALUES ('0.2.0', UNIX_TIMESTAMP() * 1000, 'y', 'Initial import');
+VALUES ('0.3.0', UNIX_TIMESTAMP() * 1000, 'y', 'Initial import');
