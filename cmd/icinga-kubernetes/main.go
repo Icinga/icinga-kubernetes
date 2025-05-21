@@ -310,18 +310,28 @@ func main() {
 		return SyncServicePods(ctx, kdb, factory.Core().V1().Services(), factory.Core().V1().Pods())
 	})
 
-	ticker := time.NewTicker(1 * time.Minute)
-	defer ticker.Stop()
+	g.Go(func() error {
+		factory.WaitForCacheSync(ctx.Done())
+		errs := make(chan error, 1)
+		defer close(errs)
 
-	go func() {
-		ch := cachev1.Multiplexers().Services().UpsertEvents().Out()
-		for range ticker.C {
-			err := UpdateServiceIcingaState(ctx, kdb, ch)
+		periodic.Start(ctx, 5*time.Minute, func(_ periodic.Tick) {
+			err := UpdateServiceIcingaState(ctx, kdb, factory)
 			if err != nil {
-				klog.Error(errors.Wrap(err, "can't update service status"))
+				select {
+				case errs <- err:
+				case <-ctx.Done():
+				}
 			}
+		}, periodic.Immediate()).Stop()
+
+		select {
+		case err := <-errs:
+			return err
+		case <-ctx.Done():
+			return ctx.Err()
 		}
-	}()
+	})
 
 	err = internal.SyncPrometheusConfig(ctx, db, &cfg.Prometheus, clusterInstance.Uuid)
 	if err != nil {
@@ -743,28 +753,33 @@ func SyncServicePods(ctx context.Context, db *kdatabase.Database, serviceList v2
 	return g.Wait()
 }
 
-func UpdateServiceIcingaState(ctx context.Context, db *kdatabase.Database, ch <-chan any) error {
-	g, ctx := errgroup.WithContext(ctx)
-	g.Go(func() error {
-		for {
-			select {
-			case service, more := <-ch:
-				if !more {
-					return nil
-				}
+func UpdateServiceIcingaState(ctx context.Context, db *kdatabase.Database, factory informers.SharedInformerFactory) error {
+	kservices, err := factory.Core().V1().Services().Lister().List(labels.NewSelector())
+	if err != nil {
+		return errors.Wrap(err, "failed to list services")
+	}
 
-				serviceState, reason := schemav1.GetIcingaState(db, service.(*schemav1.Service).Uuid)
-
-				query := `UPDATE service SET icinga_state = ?, icinga_state_reason = ? WHERE uuid = ?`
-				_, err := db.ExecContext(ctx, query, serviceState, reason, service.(*schemav1.Service).Uuid)
-				if err != nil {
-					return err
-				}
-			case <-ctx.Done():
-				return ctx.Err()
-			}
+	for _, kservice := range kservices {
+		if len(kservice.Spec.Selector) == 0 {
+			continue
 		}
-	})
 
-	return g.Wait()
+		kpods, err := factory.Core().V1().Pods().Lister().List(labels.SelectorFromSet(kservice.Spec.Selector))
+		if err != nil {
+			return errors.Wrapf(err, "failed to list pods for service %s", kservice.Name)
+		}
+
+		for _, kpod := range kpods {
+			pod := schemav1.Pod{}
+			pod.Obtain(kpod, cluster.ClusterUuidFromContext(ctx))
+			// ...
+			// query := `UPDATE service SET icinga_state = ?, icinga_state_reason = ? WHERE uuid = ?`
+			// _, err := db.ExecContext(ctx, query, serviceState, reason, schemav1.EnsureUUID(kservice.UID))
+			// if err != nil {
+			// 	return errors.Wrapf(err, "failed to update state for service %s", kservice.Name)
+			// }
+		}
+	}
+
+	return nil
 }

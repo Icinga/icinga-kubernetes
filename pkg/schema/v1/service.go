@@ -2,7 +2,6 @@ package v1
 
 import (
 	"database/sql"
-	"fmt"
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
@@ -12,7 +11,6 @@ import (
 	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/klog/v2"
 	"strings"
 )
 
@@ -244,68 +242,6 @@ func (s *Service) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kcorev1.SchemeGroupVersion)
 	output, _ := kruntime.Encode(codec, service)
 	s.Yaml = string(output)
-}
-
-func GetIcingaState(db *database.Database, serviceUuid types.UUID) (IcingaState, string) {
-	countQuery := `SELECT COUNT(*) FROM service_pod WHERE service_uuid = ?`
-
-	var podCount int
-	err := db.QueryRow(countQuery, serviceUuid).Scan(&podCount)
-	if err != nil {
-		return Unknown, "Failed to count associated pods."
-	}
-
-	if podCount == 0 {
-		return Unknown, "No pods associated with this service."
-	}
-
-	query := `SELECT p.icinga_state FROM pod p INNER JOIN service_pod sp ON sp.pod_uuid = p.uuid WHERE sp.service_uuid = ?`
-
-	rows, err := db.Query(query, serviceUuid)
-	if err != nil {
-		return Unknown, "Failed to query pod states."
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-
-	var (
-		allOk                 = true
-		allCritical           = true
-		atLeastOnePodOk       bool
-		atLeastOnePodCritical bool
-	)
-
-	for rows.Next() {
-		var icingaState string
-		if err := rows.Scan(&icingaState); err != nil {
-			klog.Errorf("Failed to scan pod state for service %s: %v", serviceUuid, err)
-			continue
-		}
-
-		switch icingaState {
-		case "ok":
-			atLeastOnePodOk = true
-			allCritical = false
-		case "critical":
-			atLeastOnePodCritical = true
-			allOk = false
-		default: // warning, pending, or unknown
-			atLeastOnePodCritical = true
-			allOk = false
-			allCritical = false
-		}
-	}
-
-	if allOk {
-		return Ok, "All associated pods are running."
-	} else if allCritical {
-		return Critical, "None of the associated pods are running."
-	} else if atLeastOnePodOk && atLeastOnePodCritical {
-		return Warning, "Some associated pods are not running."
-	}
-
-	return Unknown, fmt.Sprintf("Service: %s has an unknown state.", serviceUuid)
 }
 
 func (s *Service) Relations() []database.Relation {
