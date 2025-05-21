@@ -1,4 +1,5 @@
 <!-- {% if index %} -->
+
 # Installing Icinga for Kubernetes
 
 ![Icinga for Kubernetes](res/icinga-kubernetes-installation.png)
@@ -62,31 +63,85 @@ Icinga for Kubernetes installs its configuration file to `/etc/icinga-kubernetes
 pre-populating most of the settings for a local setup. Before running Icinga for Kubernetes,
 adjust the database credentials and, if necessary, the connection configuration.
 The configuration file explains general settings.
-All available settings can be found under [Configuration](03-Configuration.md).
+All available settings can be found under [Configuration](03-Configuration.md#configuration-via-yaml-file).
+
+The `icinga-kubernetes` package automatically installs the required systemd unit files to run Icinga for Kubernetes.
+The service instances are configured via environment files in `/etc/icinga-kubernetes`.
+More about the configuration via environment files can be found under
+[Configuration](03-Configuration.md#managing-instances-with-environment-files).
+
+To connect to a Kubernetes cluster, a locally accessible
+[kubeconfig](https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/) file is needed.
+
+If you're only planning to monitor a single Kubernetes cluster, you can simply edit
+`/etc/icinga-kubernetes/default.env`.
+This file serves as the configuration for your Icinga for Kubernetes default instance. It contains all the necessary
+parameters to connect to your Kubernetes cluster, such as the `KUBECONFIG` variable pointing to your kubeconfig file.
+More about the `default.env` file can be found under [Configuration](03-Configuration.md#default-environment).
+
+##### Configuring multiple Instances of Icinga for Kubernetes for Multi-Cluster Support
+
+If you're planning to monitor multiple Kubernetes clusters, you can add additional environment files.
+
+**Add a new Instance**:
+
+1. Create a new environment file in `/etc/icinga-kubernetes`. The file name will be the instance name for the
+   systemd service. For example `test-cluster.env` will start the service instance `icinga-kubernetes@test-cluster`.
+2. Set the `KUBECONFIG` environment variable to configure how Icinga for Kubernetes can connect to the cluster.
+3. Set the `ICINGA_FOR_KUBERNETES_CLUSTER_NAME` environment variable to configure the cluster name. If the environment
+   variable is not set the cluster name will be the environment file's name.
+4. You can add additional environment variables to override the `config.yml`
+   ([Available environment variables](03-Configuration.md#configuration-via-environment-variables)).
+5. Reload the systemd daemon with `systemctl daemon-reload` to recognize the new cluster configs.
+
+An example `test-cluster.env` file could look like the following:
+
+```bash
+KUBECONFIG=$HOME/.kube/config
+ICINGA_FOR_KUBERNETES_CLUSTER_NAME="Test Cluster"
+ICINGA_FOR_KUBERNETES_PROMETHEUS_URL=http://localhost:9090
+```
+
+**Remove Instance**:
+
+1. If running, stop the service instance manually. For `test-cluster` it would be
+   `systemctl stop icinga-kubernetes@test-cluster`.
+2. Remove the corresponding environment file from `/etc/icinga-kubernetes`.
+3. Reload the systemd daemon with `systemctl daemon-reload` to make sure the daemon forgets the file.
+
+!!! Warning
+
+    If you stop the service without removing the environment file, the instance will restart when the service is
+    restarted.
+
+    If you remove the environment file without stopping the instance, the instance will try to restart and
+    fail when the service is restarted.
+
+You can also explicitly define which environment files should be used to start service instances. For this,
+you can adjust the `/etc/default/icinga-kubernetes` file.
+More about the this can be found under [Configuration](03-Configuration.md#service-configuration).
 
 ##### Running Icinga for Kubernetes
 
-The `icinga-kubernetes` package automatically installs the required systemd unit files to run Icinga for Kubernetes.
-To connect to a Kubernetes cluster, a locally accessible
-[kubeconfig](https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/) file is needed.
-You can specify which kubeconfig file to use by setting the `KUBECONFIG` environment variable for
-the Icinga for Kubernetes systemd service.
-To do this, run `systemctl edit icinga-kubernetes` and add the following:
-
-```bash
-[Service]
-Environment="KUBECONFIG=..."
-```
-
-Please run the following command to enable and start the Icinga for Kubernetes service:
+After configuring, please run the following command to enable and start all configured Icinga for Kubernetes
+service instances:
 
 ```bash
 systemctl enable --now icinga-kubernetes
 ```
 
+##### Stopping Icinga for Kubernetes
+
+The following command will stop all running Icinga for Kubernetes services instances:
+
+```bash
+systemctl stop icinga-kubernetes
+```
+
 #### Using a Container
 
-Before running Icinga for Kubernetes, create a local `config.yml` using [the sample configuration](../config.example.yml)
+Before running Icinga for Kubernetes, create a local `config.yml`
+using [the sample configuration](../config.example.yml)
 adjust the database credentials and, if necessary, the connection configuration.
 The configuration file explains general settings.
 All available settings can be found under [Configuration](03-Configuration.md).
@@ -125,7 +180,8 @@ go build -o icinga-kubernetes cmd/icinga-kubernetes/main.go
 
 ##### Configuring Icinga for Kubernetes
 
-Before running Icinga for Kubernetes, create a local `config.yml` using [the sample configuration](../config.example.yml)
+Before running Icinga for Kubernetes, create a local `config.yml`
+using [the sample configuration](../config.example.yml)
 adjust the database credentials and, if necessary, the connection configuration.
 The configuration file explains general settings.
 All available settings can be found under [Configuration](03-Configuration.md).
