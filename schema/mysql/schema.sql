@@ -154,6 +154,8 @@ CREATE TABLE cron_job (
   active int unsigned NOT NULL,
   last_schedule_time bigint unsigned NULL DEFAULT NULL,
   last_successful_time bigint unsigned NULL DEFAULT NULL,
+  icinga_state enum('unknown', 'ok', 'warning', 'critical') COLLATE utf8mb4_unicode_ci NOT NULL,
+  icinga_state_reason text NOT NULL,
   yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (uuid)

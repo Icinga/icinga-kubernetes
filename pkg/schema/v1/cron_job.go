@@ -2,6 +2,7 @@ package v1
 
 import (
 	"database/sql"
+	"fmt"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	kbatchv1 "k8s.io/api/batch/v1"
@@ -10,6 +11,7 @@ import (
 	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"strings"
+	"time"
 )
 
 type CronJob struct {
@@ -25,6 +27,8 @@ type CronJob struct {
 	LastScheduleTime           types.UnixMilli
 	LastSuccessfulTime         types.UnixMilli
 	Yaml                       string
+	IcingaState                IcingaState
+	IcingaStateReason          string
 	Labels                     []Label              `db:"-"`
 	CronJobLabels              []CronJobLabel       `db:"-"`
 	ResourceLabels             []ResourceLabel      `db:"-"`
@@ -79,6 +83,8 @@ func (c *CronJob) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		c.LastSuccessfulTime = types.UnixMilli(cronJob.Status.LastSuccessfulTime.Time)
 	}
 
+	c.IcingaState, c.IcingaStateReason = c.getIcingaState()
+
 	for labelName, labelValue := range cronJob.Labels {
 		labelUuid := NewUUID(c.Uuid, strings.ToLower(labelName+":"+labelValue))
 		c.Labels = append(c.Labels, Label{
@@ -118,6 +124,40 @@ func (c *CronJob) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kbatchv1.SchemeGroupVersion)
 	output, _ := kruntime.Encode(codec, cronJob)
 	c.Yaml = string(output)
+}
+
+func (c *CronJob) getIcingaState() (IcingaState, string) {
+	now := time.Now()
+
+	if c.LastScheduleTime.Time().IsZero() {
+		return Warning, fmt.Sprintf("CronJob %s has never been scheduled.", c.Name)
+	}
+
+	if c.LastSuccessfulTime.Time().IsZero() {
+		return Critical, fmt.Sprintf("CronJob %s has never completed successfully.", c.Name)
+	}
+
+	if c.StartingDeadlineSeconds.Valid {
+		deadlineDuration := time.Duration(c.StartingDeadlineSeconds.Int64) * time.Second
+		deadline := c.LastScheduleTime.Time().Add(deadlineDuration)
+
+		if now.After(deadline) {
+			return Critical, fmt.Sprintf("CronJob %s missed its starting deadline. Last scheduled at %v, deadline was %v.",
+				c.Name, c.LastScheduleTime.Time().Format(time.RFC3339), deadline.Format(time.RFC3339))
+		}
+	}
+
+	if c.LastScheduleTime.Time().After(c.LastSuccessfulTime.Time()) {
+		return Warning, fmt.Sprintf("CronJob %s has recent schedules without success. Last successful run: %v, last scheduled: %v.",
+			c.Name, c.LastSuccessfulTime.Time().Format(time.RFC3339), c.LastScheduleTime.Time().Format(time.RFC3339))
+	}
+
+	if c.Suspend.Valid && c.Suspend.Bool {
+		return Warning, fmt.Sprintf("CronJob %s is currently suspended.", c.Name)
+	}
+
+	return Ok, fmt.Sprintf("CronJob %s is operating normally. Last successful run: %v.",
+		c.Name, c.LastSuccessfulTime.Time().Format(time.RFC3339))
 }
 
 func (c *CronJob) Relations() []database.Relation {
