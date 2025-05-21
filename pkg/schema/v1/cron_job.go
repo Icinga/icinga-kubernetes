@@ -130,33 +130,34 @@ func (c *CronJob) getIcingaState() (IcingaState, string) {
 	now := time.Now()
 
 	if c.LastScheduleTime.Time().IsZero() {
-		return Warning, fmt.Sprintf("CronJob %s was never scheduled.", c.Name)
+		return Warning, fmt.Sprintf("CronJob %s has never been scheduled.", c.Name)
 	}
 
 	if c.LastSuccessfulTime.Time().IsZero() {
-		return Critical, fmt.Sprintf("CronJob %s has never succeeded.", c.Name)
+		return Critical, fmt.Sprintf("CronJob %s has never completed successfully.", c.Name)
 	}
 
 	if c.StartingDeadlineSeconds.Valid {
 		deadlineDuration := time.Duration(c.StartingDeadlineSeconds.Int64) * time.Second
-
 		deadline := c.LastScheduleTime.Time().Add(deadlineDuration)
 
 		if now.After(deadline) {
-			return Critical, fmt.Sprintf("CronJob %s missed its starting deadline. Last schedule time was %v, deadline was %v.", c.Name, c.LastScheduleTime.Time().UnixMilli(), deadline.UnixMilli())
+			return Critical, fmt.Sprintf("CronJob %s missed its starting deadline. Last scheduled at %v, deadline was %v.",
+				c.Name, c.LastScheduleTime.Time().Format(time.RFC3339), deadline.Format(time.RFC3339))
 		}
 	}
 
 	if c.LastScheduleTime.Time().After(c.LastSuccessfulTime.Time()) {
-		return Warning, fmt.Sprintf("CronJob %s has recent schedules without success. Last success: %v, Last schedule: %v.",
-			c.Name, c.LastSuccessfulTime.Time(), c.LastScheduleTime.Time())
+		return Warning, fmt.Sprintf("CronJob %s has recent schedules without success. Last successful run: %v, last scheduled: %v.",
+			c.Name, c.LastSuccessfulTime.Time().Format(time.RFC3339), c.LastScheduleTime.Time().Format(time.RFC3339))
 	}
 
 	if c.Suspend.Valid && c.Suspend.Bool {
 		return Warning, fmt.Sprintf("CronJob %s is currently suspended.", c.Name)
 	}
 
-	return Ok, fmt.Sprintf("CronJob %s is functioning normally. Last success: %v.", c.Name, c.LastSuccessfulTime.Time())
+	return Ok, fmt.Sprintf("CronJob %s is operating normally. Last successful run: %v.",
+		c.Name, c.LastSuccessfulTime.Time().Format(time.RFC3339))
 }
 
 func (c *CronJob) Relations() []database.Relation {
