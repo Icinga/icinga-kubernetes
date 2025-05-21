@@ -35,8 +35,6 @@ type Service struct {
 	LoadBalancerClass             sql.NullString
 	InternalTrafficPolicy         string
 	Yaml                          string
-	IcingaState                   IcingaState
-	IcingaStateReason             string
 	Selectors                     []Selector           `db:"-"`
 	ServiceSelectors              []ServiceSelector    `db:"-"`
 	Ports                         []ServicePort        `db:"-"`

@@ -310,29 +310,6 @@ func main() {
 		return SyncServicePods(ctx, kdb, factory.Core().V1().Services(), factory.Core().V1().Pods())
 	})
 
-	g.Go(func() error {
-		factory.WaitForCacheSync(ctx.Done())
-		errs := make(chan error, 1)
-		defer close(errs)
-
-		periodic.Start(ctx, 5*time.Minute, func(_ periodic.Tick) {
-			err := UpdateServiceIcingaState(ctx, kdb, factory)
-			if err != nil {
-				select {
-				case errs <- err:
-				case <-ctx.Done():
-				}
-			}
-		}, periodic.Immediate()).Stop()
-
-		select {
-		case err := <-errs:
-			return err
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	})
-
 	err = internal.SyncPrometheusConfig(ctx, db, &cfg.Prometheus, clusterInstance.Uuid)
 	if err != nil {
 		klog.Error(errors.Wrap(err, "cannot sync prometheus config"))
@@ -751,35 +728,4 @@ func SyncServicePods(ctx context.Context, db *kdatabase.Database, serviceList v2
 	})
 
 	return g.Wait()
-}
-
-func UpdateServiceIcingaState(ctx context.Context, db *kdatabase.Database, factory informers.SharedInformerFactory) error {
-	kservices, err := factory.Core().V1().Services().Lister().List(labels.NewSelector())
-	if err != nil {
-		return errors.Wrap(err, "failed to list services")
-	}
-
-	for _, kservice := range kservices {
-		if len(kservice.Spec.Selector) == 0 {
-			continue
-		}
-
-		kpods, err := factory.Core().V1().Pods().Lister().List(labels.SelectorFromSet(kservice.Spec.Selector))
-		if err != nil {
-			return errors.Wrapf(err, "failed to list pods for service %s", kservice.Name)
-		}
-
-		for _, kpod := range kpods {
-			pod := schemav1.Pod{}
-			pod.Obtain(kpod, cluster.ClusterUuidFromContext(ctx))
-			// ...
-			// query := `UPDATE service SET icinga_state = ?, icinga_state_reason = ? WHERE uuid = ?`
-			// _, err := db.ExecContext(ctx, query, serviceState, reason, schemav1.EnsureUUID(kservice.UID))
-			// if err != nil {
-			// 	return errors.Wrapf(err, "failed to update state for service %s", kservice.Name)
-			// }
-		}
-	}
-
-	return nil
 }
