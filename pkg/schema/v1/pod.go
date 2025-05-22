@@ -347,7 +347,7 @@ func (p *Pod) getIcingaState(pod *kcorev1.Pod) (IcingaState, string) {
 	}
 
 	if pod.Status.Phase == kcorev1.PodFailed {
-		state, reasons := collectContainerStates(p)
+		state, reasons, _ := collectContainerStates(p)
 
 		return state, fmt.Sprintf(
 			"Pod %s/%s has failed as all its containers have been terminated and will not be restarted.\n%s",
@@ -365,60 +365,22 @@ func (p *Pod) getIcingaState(pod *kcorev1.Pod) (IcingaState, string) {
 		podConditions[kcorev1.ContainersReady].Status == kcorev1.ConditionFalse ||
 		podConditions[kcorev1.PodReady].Status == kcorev1.ConditionFalse {
 
-		state, reasons := collectContainerStates(p)
+		state, reasons, _ := collectContainerStates(p)
 
 		return state, fmt.Sprintf("%s/%s is %s.\n%s", pod.Namespace, pod.Name, state, reasons)
 	}
 
-	var notRunning int
-	state := Ok
-	reasons := make([]string, 0, len(p.InitContainers)+len(p.SidecarContainers)+len(p.Containers))
-
-	for _, c := range p.InitContainers {
-		if c.IcingaState != Ok {
-			state = max(state, c.IcingaState)
-			notRunning++
-		}
-
-		reasons = append(reasons, fmt.Sprintf(
-			"[%s] %s", strings.ToUpper(c.IcingaState.String()), c.IcingaStateReason))
-	}
-
-	for _, c := range p.SidecarContainers {
-		if c.IcingaState != Ok {
-			state = max(state, c.IcingaState)
-			notRunning++
-		}
-
-		reasons = append(reasons, fmt.Sprintf(
-			"[%s] %s", strings.ToUpper(c.IcingaState.String()), c.IcingaStateReason))
-	}
-
-	for _, c := range p.Containers {
-		if c.IcingaState != Ok {
-			state = max(state, c.IcingaState)
-			notRunning++
-		}
-
-		reasons = append(reasons, fmt.Sprintf(
-			"[%s] %s", strings.ToUpper(c.IcingaState.String()), c.IcingaStateReason))
-	}
-
-	if len(reasons) == 1 {
-		// Remove square brackets state information.
-		_, reason, _ := strings.Cut(reasons[0], " ")
-
-		return state, reason
-	}
+	state, reasons, notRunning := collectContainerStates(p)
 
 	return state, fmt.Sprintf(
 		"Pod %s/%s is %s with %d out of %d containers running.\n%s",
 		pod.Namespace,
 		pod.Name,
 		state,
-		len(p.Containers)-notRunning,
-		len(p.Containers),
-		strings.Join(reasons, "\n"))
+		len(p.Containers)+len(p.SidecarContainers)-notRunning,
+		len(p.Containers)+len(p.SidecarContainers),
+		reasons,
+	)
 }
 
 func NewContainers[T any](
@@ -506,34 +468,40 @@ func removeTrailingWhitespaceAndFullStop(input string) string {
 	return trimmed
 }
 
-func collectContainerStates(pod *Pod) (IcingaState, string) {
+func collectContainerStates(pod *Pod) (IcingaState, string, int) {
 	state := Ok
 	reasons := make([]string, 0, len(pod.Containers)+len(pod.SidecarContainers)+len(pod.InitContainers))
+	notRunning := 0
 
 	for _, c := range pod.InitContainers {
-		state = max(state, c.IcingaState)
+		if c.IcingaState != Ok {
+			state = max(state, c.IcingaState)
+			notRunning++
+		}
+
 		reasons = append(reasons, fmt.Sprintf(
 			"[%s] %s", strings.ToUpper(c.IcingaState.String()), c.IcingaStateReason))
 	}
 
 	for _, c := range pod.SidecarContainers {
-		state = max(state, c.IcingaState)
+		if c.IcingaState != Ok {
+			state = max(state, c.IcingaState)
+			notRunning++
+		}
+
 		reasons = append(reasons, fmt.Sprintf(
 			"[%s] %s", strings.ToUpper(c.IcingaState.String()), c.IcingaStateReason))
 	}
 
 	for _, c := range pod.Containers {
-		state = max(state, c.IcingaState)
+		if c.IcingaState != Ok {
+			state = max(state, c.IcingaState)
+			notRunning++
+		}
+
 		reasons = append(reasons, fmt.Sprintf(
 			"[%s] %s", strings.ToUpper(c.IcingaState.String()), c.IcingaStateReason))
 	}
 
-	if len(reasons) == 1 {
-		// Remove square brackets state information.
-		_, reason, _ := strings.Cut(reasons[0], " ")
-
-		return state, reason
-	}
-
-	return state, strings.Join(reasons, "\n")
+	return state, strings.Join(reasons, "\n"), notRunning
 }
