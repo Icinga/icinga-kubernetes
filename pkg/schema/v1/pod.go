@@ -367,7 +367,7 @@ func (p *Pod) getIcingaState(pod *kcorev1.Pod) (IcingaState, string) {
 
 		state, reasons, _ := collectContainerStates(p)
 
-		return state, fmt.Sprintf("%s/%s is %s.\n%s", pod.Namespace, pod.Name, state, reasons)
+		return state, fmt.Sprintf("Pod %s/%s is %s.\n%s", pod.Namespace, pod.Name, state, reasons)
 	}
 
 	state, reasons, notRunning := collectContainerStates(p)
