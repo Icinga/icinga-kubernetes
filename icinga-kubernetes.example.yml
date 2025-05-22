@@ -82,7 +82,7 @@ spec:
   serviceAccountName: icinga-for-kubernetes
   containers:
     - name: icinga-for-kubernetes
-      image: icinga/icinga-kubernetes:edge
+      image: icinga/icinga-kubernetes
       volumeMounts:
         - name: config-volume
           mountPath: /config.yml
