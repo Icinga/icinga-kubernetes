@@ -7,4 +7,4 @@ import (
 // Version contains version and Git commit information.
 //
 // The placeholders are replaced on `git archive` using the `export-subst` attribute.
-var Version = version.Version("0.2.0", "$Format:%(describe)$", "$Format:%H$")
+var Version = version.Version("0.3.0", "$Format:%(describe)$", "$Format:%H$")
