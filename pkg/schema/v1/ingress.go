@@ -91,16 +91,6 @@ func (i *Ingress) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	}
 
 	if ingress.Spec.DefaultBackend != nil {
-		if ingress.Spec.DefaultBackend.Service != nil {
-			serviceUuid := NewUUID(i.Uuid, ingress.Spec.DefaultBackend.Service.Name+ingress.Spec.DefaultBackend.Service.Port.Name)
-			i.IngressBackendService = append(i.IngressBackendService, IngressBackendService{
-				ServiceUuid:       serviceUuid,
-				IngressUuid:       i.Uuid,
-				ServiceName:       ingress.Spec.DefaultBackend.Service.Name,
-				ServicePortName:   ingress.Spec.DefaultBackend.Service.Port.Name,
-				ServicePortNumber: ingress.Spec.DefaultBackend.Service.Port.Number,
-			})
-		}
 		if ingress.Spec.DefaultBackend.Resource != nil {
 			resourceUuid := NewUUID(i.Uuid, ingress.Spec.DefaultBackend.Resource.Kind+ingress.Spec.DefaultBackend.Resource.Name)
 			var apiGroup sql.NullString
@@ -126,26 +116,7 @@ func (i *Ingress) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		for _, ruleValue := range rules.IngressRuleValue.HTTP.Paths {
 			// It is safe to use the pointer directly here.
 			pathType := string(*ruleValue.PathType)
-			if ruleValue.Backend.Service != nil {
-				ingressRuleUuid := NewUUID(i.Uuid, rules.Host+ruleValue.Path+ruleValue.Backend.Service.Name)
-				serviceUuid := NewUUID(ingressRuleUuid, ruleValue.Backend.Service.Name)
-				i.IngressBackendService = append(i.IngressBackendService, IngressBackendService{
-					ServiceUuid:       serviceUuid,
-					IngressUuid:       i.Uuid,
-					IngressRuleUuid:   ingressRuleUuid,
-					ServiceName:       ruleValue.Backend.Service.Name,
-					ServicePortName:   ruleValue.Backend.Service.Port.Name,
-					ServicePortNumber: ruleValue.Backend.Service.Port.Number,
-				})
-				i.IngressRule = append(i.IngressRule, IngressRule{
-					Uuid:        ingressRuleUuid,
-					BackendUuid: serviceUuid,
-					IngressUuid: i.Uuid,
-					Host:        NewNullableString(rules.Host),
-					Path:        NewNullableString(ruleValue.Path),
-					PathType:    pathType,
-				})
-			} else if ruleValue.Backend.Resource != nil {
+			if ruleValue.Backend.Resource != nil {
 				ingressRuleUuid := NewUUID(i.Uuid, rules.Host+ruleValue.Path+ruleValue.Backend.Resource.Name)
 				resourceUuid := NewUUID(ingressRuleUuid, ruleValue.Backend.Resource.Name)
 				var apiGroup sql.NullString
