@@ -223,6 +223,10 @@ func main() {
 		klog.Fatal("IGL_DATABASE: ", err)
 	}
 
+	if clusterName == "" {
+		clusterName = os.Getenv("ICINGA_FOR_KUBERNETES_CLUSTER_NAME")
+	}
+
 	namespaceName := "kube-system"
 	ns, err := clientset.CoreV1().Namespaces().Get(context.TODO(), namespaceName, v1.GetOptions{})
 	if err != nil {
