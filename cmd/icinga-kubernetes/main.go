@@ -4,6 +4,11 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os"
+	"strings"
+	"sync"
+	"time"
+
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/google/uuid"
 	"github.com/icinga/icinga-go-library/backoff"
@@ -38,10 +43,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	kclientcmd "k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
-	"os"
-	"strings"
-	"sync"
-	"time"
 )
 
 const expectedSchemaVersion = "0.3.0"
@@ -94,10 +95,16 @@ func main() {
 		klog.Fatal(errors.Wrap(err, "cannot configure Kubernetes client"))
 	}
 
+	if serverName, ok := os.LookupEnv("KUBERNETES_SERVER"); ok {
+		kconfig.Host = serverName
+	}
+
 	clientset, err := kubernetes.NewForConfig(kconfig)
 	if err != nil {
 		klog.Fatal(err)
 	}
+
+	klog.Infof("Conntected to %s", kconfig.Host)
 
 	factory := informers.NewSharedInformerFactory(clientset, 0)
 	log := klog.NewKlogr()
