@@ -3,6 +3,14 @@ package database
 import (
 	"context"
 	"fmt"
+	"net"
+	"net/url"
+	"reflect"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/go-logr/logr"
 	"github.com/go-sql-driver/mysql"
 	"github.com/icinga/icinga-go-library/backoff"
@@ -17,13 +25,6 @@ import (
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 	"k8s.io/apimachinery/pkg/util/runtime"
-	"net"
-	"net/url"
-	"reflect"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
 )
 
 var registerDriversOnce sync.Once
@@ -611,7 +612,7 @@ func (db *Database) YieldAll(ctx context.Context, factoryFunc func() (interface{
 			return CantPerformQuery(err, query)
 		}
 
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		for rows.Next() {
 			e, err := factoryFunc()

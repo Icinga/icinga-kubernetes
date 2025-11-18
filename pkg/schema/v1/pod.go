@@ -3,6 +3,10 @@ package v1
 import (
 	"database/sql"
 	"fmt"
+	"net/url"
+	"strings"
+	"time"
+
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
@@ -14,9 +18,6 @@ import (
 	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	ktypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
-	"net/url"
-	"strings"
-	"time"
 )
 
 type PodFactory struct {
@@ -291,15 +292,19 @@ func (p *Pod) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 
 func (p *Pod) MarshalEvent() (notifications.Event, error) {
 	return notifications.Event{
-		Name:     p.Namespace + "/" + p.Name,
-		Severity: p.IcingaState.ToSeverity(),
-		Message:  p.IcingaStateReason,
-		URL:      &url.URL{Path: "/pod", RawQuery: fmt.Sprintf("id=%s", p.Uuid)},
+		Uuid:        p.Uuid,
+		ClusterUuid: p.ClusterUuid,
+		Kind:        "pod",
+		Name:        p.Namespace + "/" + p.Name,
+		Severity:    p.IcingaState.ToSeverity(),
+		Message:     p.IcingaStateReason,
+		URL:         &url.URL{Path: "/pod", RawQuery: fmt.Sprintf("id=%s", p.Uuid)},
 		Tags: map[string]string{
-			"uuid":      p.Uuid.String(),
-			"name":      p.Name,
-			"namespace": p.Namespace,
-			"resource":  "pod",
+			"uuid":         p.Uuid.String(),
+			"cluster_uuid": p.ClusterUuid.String(),
+			"name":         p.Name,
+			"namespace":    p.Namespace,
+			"resource":     "pod",
 		},
 	}, nil
 }

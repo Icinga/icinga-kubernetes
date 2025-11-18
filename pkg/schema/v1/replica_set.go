@@ -2,6 +2,9 @@ package v1
 
 import (
 	"fmt"
+	"net/url"
+	"strings"
+
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
@@ -13,8 +16,6 @@ import (
 	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	ktypes "k8s.io/apimachinery/pkg/types"
-	"net/url"
-	"strings"
 )
 
 type ReplicaSet struct {
@@ -168,15 +169,19 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 
 func (r *ReplicaSet) MarshalEvent() (notifications.Event, error) {
 	return notifications.Event{
-		Name:     r.Namespace + "/" + r.Name,
-		Severity: r.IcingaState.ToSeverity(),
-		Message:  r.IcingaStateReason,
-		URL:      &url.URL{Path: "/replicaset", RawQuery: fmt.Sprintf("id=%s", r.Uuid)},
+		Uuid:        r.Uuid,
+		ClusterUuid: r.ClusterUuid,
+		Kind:        "replica_set",
+		Name:        r.Namespace + "/" + r.Name,
+		Severity:    r.IcingaState.ToSeverity(),
+		Message:     r.IcingaStateReason,
+		URL:         &url.URL{Path: "/replicaset", RawQuery: fmt.Sprintf("id=%s", r.Uuid)},
 		Tags: map[string]string{
-			"uuid":      r.Uuid.String(),
-			"name":      r.Name,
-			"namespace": r.Namespace,
-			"resource":  "replica_set",
+			"uuid":         r.Uuid.String(),
+			"cluster_uuid": r.ClusterUuid.String(),
+			"name":         r.Name,
+			"namespace":    r.Namespace,
+			"resource":     "replica_set",
 		},
 	}, nil
 }

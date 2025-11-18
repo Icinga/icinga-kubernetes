@@ -2,6 +2,9 @@ package v1
 
 import (
 	"fmt"
+	"net/url"
+	"strings"
+
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
@@ -12,8 +15,6 @@ import (
 	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	ktypes "k8s.io/apimachinery/pkg/types"
-	"net/url"
-	"strings"
 )
 
 type StatefulSet struct {
@@ -193,15 +194,19 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 
 func (s *StatefulSet) MarshalEvent() (notifications.Event, error) {
 	return notifications.Event{
-		Name:     s.Namespace + "/" + s.Name,
-		Severity: s.IcingaState.ToSeverity(),
-		Message:  s.IcingaStateReason,
-		URL:      &url.URL{Path: "/statefulset", RawQuery: fmt.Sprintf("id=%s", s.Uuid)},
+		Uuid:        s.Uuid,
+		ClusterUuid: s.ClusterUuid,
+		Kind:        "stateful_set",
+		Name:        s.Namespace + "/" + s.Name,
+		Severity:    s.IcingaState.ToSeverity(),
+		Message:     s.IcingaStateReason,
+		URL:         &url.URL{Path: "/statefulset", RawQuery: fmt.Sprintf("id=%s", s.Uuid)},
 		Tags: map[string]string{
-			"uuid":      s.Uuid.String(),
-			"name":      s.Name,
-			"namespace": s.Namespace,
-			"resource":  "stateful_set",
+			"uuid":         s.Uuid.String(),
+			"cluster_uuid": s.ClusterUuid.String(),
+			"name":         s.Name,
+			"namespace":    s.Namespace,
+			"resource":     "stateful_set",
 		},
 	}, nil
 }

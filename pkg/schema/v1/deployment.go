@@ -2,6 +2,9 @@ package v1
 
 import (
 	"fmt"
+	"net/url"
+	"strings"
+
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
@@ -13,8 +16,6 @@ import (
 	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	ktypes "k8s.io/apimachinery/pkg/types"
-	"net/url"
-	"strings"
 )
 
 type Deployment struct {
@@ -181,15 +182,19 @@ func (d *Deployment) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 
 func (d *Deployment) MarshalEvent() (notifications.Event, error) {
 	return notifications.Event{
-		Name:     d.Namespace + "/" + d.Name,
-		Severity: d.IcingaState.ToSeverity(),
-		Message:  d.IcingaStateReason,
-		URL:      &url.URL{Path: "/deployment", RawQuery: fmt.Sprintf("id=%s", d.Uuid)},
+		Uuid:        d.Uuid,
+		ClusterUuid: d.ClusterUuid,
+		Kind:        "deployment",
+		Name:        d.Namespace + "/" + d.Name,
+		Severity:    d.IcingaState.ToSeverity(),
+		Message:     d.IcingaStateReason,
+		URL:         &url.URL{Path: "/deployment", RawQuery: fmt.Sprintf("id=%s", d.Uuid)},
 		Tags: map[string]string{
-			"uuid":      d.Uuid.String(),
-			"name":      d.Name,
-			"namespace": d.Namespace,
-			"resource":  "deployment",
+			"uuid":         d.Uuid.String(),
+			"cluster_uuid": d.ClusterUuid.String(),
+			"name":         d.Name,
+			"namespace":    d.Namespace,
+			"resource":     "deployment",
 		},
 	}, nil
 }

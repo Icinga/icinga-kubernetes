@@ -287,7 +287,7 @@ func main() {
 	if cfg.Notifications.Url != "" {
 		klog.Infof("Sending notifications to %s", cfg.Notifications.Url)
 
-		nclient, err := notifications.NewClient("icinga-kubernetes/"+internal.Version.Version, cfg.Notifications)
+		nclient, err := notifications.NewClient("icinga-kubernetes/"+internal.Version.Version, cfg.Notifications, db)
 		if err != nil {
 			klog.Fatal(err)
 		}
