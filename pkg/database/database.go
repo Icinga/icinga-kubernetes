@@ -3,16 +3,12 @@ package database
 import (
 	"context"
 	"fmt"
-	"net"
-	"net/url"
 	"reflect"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/go-sql-driver/mysql"
 	"github.com/icinga/icinga-go-library/backoff"
 	"github.com/icinga/icinga-go-library/com"
 	"github.com/icinga/icinga-go-library/database"
@@ -45,74 +41,15 @@ type Database struct {
 	tableSemaphoresMu sync.Mutex
 }
 
-// NewFromConfig returns a new Database connection from the given Config.
-func NewFromConfig(c *database.Config, log logr.Logger) (*Database, error) {
+// NewFromSqlxDb returns a new Database connection from the given sqlx.DB.
+func NewFromSqlxDb(c *database.Config, log logr.Logger, otherDB *sqlx.DB) (*Database, error) {
 	registerDriversOnce.Do(func() {
 		RegisterDrivers(log)
 	})
 
-	var dsn string
-	switch c.Type {
-	case "mysql":
-		config := mysql.NewConfig()
+	db := sqlx.NewDb(otherDB.DB, "icinga-"+c.Type)
 
-		config.User = c.User
-		config.Passwd = c.Password
-
-		if IsUnixAddr(c.Host) {
-			config.Net = "unix"
-			config.Addr = c.Host
-		} else {
-			config.Net = "tcp"
-			port := c.Port
-			if port == 0 {
-				port = 3306
-			}
-			config.Addr = net.JoinHostPort(c.Host, strconv.Itoa(port))
-		}
-
-		config.DBName = c.Database
-		config.Timeout = time.Minute
-		config.Params = map[string]string{"sql_mode": "TRADITIONAL"}
-
-		dsn = config.FormatDSN()
-	case "pgsql":
-		uri := &url.URL{
-			Scheme: "postgres",
-			User:   url.UserPassword(c.User, c.Password),
-			Path:   "/" + url.PathEscape(c.Database),
-		}
-
-		query := url.Values{
-			"connect_timeout":   {"60"},
-			"binary_parameters": {"yes"},
-
-			// Host and port can alternatively be specified in the query string. lib/pq cannot parse the connection URI
-			// if a Unix domain socket path is specified in the host part of the URI, therefore always use the query
-			// string. See also https://github.com/lib/pq/issues/796
-			"host": {c.Host},
-		}
-		if c.Port != 0 {
-			query["port"] = []string{strconv.FormatInt(int64(c.Port), 10)}
-		}
-
-		uri.RawQuery = query.Encode()
-		dsn = uri.String()
-	default:
-		return nil, errors.Errorf(`unknown database type %q, must be one of: "mysql", "pgsql"`, c.Type)
-	}
-
-	db, err := sqlx.Open("icinga-"+c.Type, dsn)
-	if err != nil {
-		return nil, errors.Wrap(err, "cannot open database")
-	}
-
-	db.SetMaxIdleConns(c.Options.MaxConnections / 3)
-	db.SetMaxOpenConns(c.Options.MaxConnections)
-
-	db.Mapper = reflectx.NewMapperFunc("db", func(s string) string {
-		return strcase.Snake(s)
-	})
+	db.Mapper = reflectx.NewMapperFunc("db", strcase.Snake)
 
 	return &Database{
 		DB:              db,

@@ -118,8 +118,18 @@ func main() {
 		klog.Fatal(errors.Wrap(err, "can't create configuration"))
 	}
 
+	logs, err := logging.NewLoggingFromConfig("Icinga Kubernetes", cfg.Logging)
+	if err != nil {
+		klog.Fatal(errors.Wrap(err, "cannot configure logging"))
+	}
+
+	db, err := database.NewDbFromConfig(&cfg.Database, logs.GetChildLogger("database"), database.RetryConnectorCallbacks{})
+	if err != nil {
+		klog.Fatal("IGL_DATABASE: ", err)
+	}
+
 	dbLog := log.WithName("database")
-	kdb, err := kdatabase.NewFromConfig(&cfg.Database, dbLog)
+	kdb, err := kdatabase.NewFromSqlxDb(&cfg.Database, dbLog, db.DB)
 	if err != nil {
 		klog.Fatal(err)
 	}
@@ -211,16 +221,6 @@ func main() {
 				}
 			}
 		}
-	}
-
-	logs, err := logging.NewLoggingFromConfig("Icinga Kubernetes", cfg.Logging)
-	if err != nil {
-		klog.Fatal(errors.Wrap(err, "cannot configure logging"))
-	}
-
-	db, err := database.NewDbFromConfig(&cfg.Database, logs.GetChildLogger("database"), database.RetryConnectorCallbacks{})
-	if err != nil {
-		klog.Fatal("IGL_DATABASE: ", err)
 	}
 
 	if clusterName == "" {
