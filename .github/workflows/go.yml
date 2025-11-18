@@ -9,7 +9,7 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: actions/setup-go@v5
         with:
@@ -24,7 +24,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: actions/setup-go@v5
         with:
@@ -39,7 +39,7 @@ jobs:
   modtidy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: actions/setup-go@v5
         with:
@@ -61,7 +61,7 @@ jobs:
           go-version: stable
 
       - name: Checkout base commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           path: a
           ref: ${{ github.base_ref }}
@@ -71,7 +71,7 @@ jobs:
         working-directory: a
 
       - name: Checkout PR
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           path: b
 
