@@ -19,7 +19,7 @@ CREATE TABLE resource_annotation (
 
 CREATE TABLE label (
   uuid binary(16) NOT NULL,
-  name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(317) COLLATE utf8mb4_unicode_ci NOT NULL,
   value varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
@@ -874,7 +874,7 @@ CREATE TABLE secret_label (
 
 CREATE TABLE selector (
   uuid binary(16) NOT NULL,
-  name varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  name varchar(317) COLLATE utf8mb4_unicode_ci NOT NULL,
   value varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
