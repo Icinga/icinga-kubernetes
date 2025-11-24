@@ -3,18 +3,22 @@ package notifications
 import (
 	"context"
 	"encoding/json"
+	"io"
+	"net/http"
 	"net/url"
 	"sync"
 
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/notifications/source"
 	"github.com/icinga/icinga-go-library/types"
+	"github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/pkg/errors"
 	"k8s.io/klog/v2"
 )
 
 type Client struct {
 	client    *source.Client
+	rawClient http.Client
 	webUrl    *url.URL
 	db        *database.DB
 	mu        sync.Mutex
@@ -46,13 +50,23 @@ func NewClient(name string, config Config, db *database.DB) (*Client, error) {
 		webUrl:    webUrl,
 		rulesInfo: &source.RulesInfo{},
 		db:        db,
+		rawClient: http.Client{
+			Transport: &com.BasicAuthTransport{
+				RoundTripper: &ScopeTransport{
+					RoundTripper: http.DefaultTransport,
+					BaseUrl:      baseUrl,
+					UserAgent:    name,
+				},
+				Username: config.Username,
+				Password: config.Password,
+			},
+		},
 	}, nil
 }
 
-func (c *Client) ProcessEvent(ctx context.Context, event Marshaler) error {
-	e, _ := event.MarshalEvent()
-	e.URL = c.webUrl.ResolveReference(e.URL)
-	ev := e.Carry()
+func (c *Client) ProcessEvent(ctx context.Context, event Event) error {
+	event.URL = c.webUrl.ResolveReference(event.URL)
+	ev := event.Carry()
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -60,9 +74,9 @@ func (c *Client) ProcessEvent(ctx context.Context, event Marshaler) error {
 	for try := 0; try < 3; try++ {
 		eventRuleIds, err := c.evaluateRulesForObject(
 			ctx,
-			e.Kind,
-			e.Uuid,
-			e.ClusterUuid)
+			event.Kind,
+			event.Uuid,
+			event.ClusterUuid)
 		if err != nil {
 			klog.Errorf("Cannot evaluate rules for event, assuming no rule matched: %v", err)
 			eventRuleIds = []string{}
@@ -101,13 +115,33 @@ func (c *Client) Stream(ctx context.Context, entities <-chan any) error {
 				return nil
 			}
 
-			if err := c.ProcessEvent(ctx, entity.(Marshaler)); err != nil {
-				klog.Error(err)
+			event, err := entity.(Marshaler).MarshalEvent()
+			if err != nil {
+				klog.Errorf("Cannot marshal event: %v", err)
+				continue
+			}
+
+			if err := c.ProcessEvent(ctx, event); err != nil {
+				klog.Errorf("Cannot process event: %v", err)
 			}
 		case <-ctx.Done():
 			return ctx.Err()
 		}
 	}
+}
+
+func (c *Client) Incidents(ctx context.Context) (io.ReadCloser, error) {
+	r, err := http.NewRequestWithContext(ctx, "GET", "incidents", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := c.rawClient.Do(r)
+	if err != nil {
+		return nil, err
+	}
+
+	return res.Body, nil
 }
 
 func (c *Client) evaluateRulesForObject(ctx context.Context, kind string, uuid, clusterUuid types.UUID) ([]string, error) {
@@ -171,4 +205,17 @@ type rule struct {
 	Kind    string `json:"kind"`
 	Query   string `json:"query"`
 	Args    []any  `json:"args"`
+}
+
+type ScopeTransport struct {
+	http.RoundTripper
+	UserAgent string
+	BaseUrl   *url.URL
+}
+
+func (t *ScopeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req.URL = t.BaseUrl.ResolveReference(req.URL)
+	req.Header.Add("User-Agent", t.UserAgent)
+
+	return t.RoundTripper.RoundTrip(req)
 }

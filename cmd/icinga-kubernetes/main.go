@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -21,7 +23,7 @@ import (
 	"github.com/icinga/icinga-kubernetes/internal"
 	cachev1 "github.com/icinga/icinga-kubernetes/internal/cache/v1"
 	"github.com/icinga/icinga-kubernetes/pkg/cluster"
-	"github.com/icinga/icinga-kubernetes/pkg/com"
+	kcom "github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/icinga/icinga-kubernetes/pkg/daemon"
 	kdatabase "github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/metrics"
@@ -29,6 +31,7 @@ import (
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
 	syncv1 "github.com/icinga/icinga-kubernetes/pkg/sync/v1"
 	k8sMysql "github.com/icinga/icinga-kubernetes/schema/mysql"
+	"github.com/jmoiron/sqlx"
 	"github.com/okzk/sdnotify"
 	"github.com/pkg/errors"
 	promapi "github.com/prometheus/client_golang/api"
@@ -41,6 +44,7 @@ import (
 	"k8s.io/client-go/informers"
 	v2 "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
+	kcache "k8s.io/client-go/tools/cache"
 	kclientcmd "k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 )
@@ -292,6 +296,102 @@ func main() {
 			klog.Fatal(err)
 		}
 
+		type objectTags struct {
+			UUID        string `json:"uuid"`
+			ClusterUUID string `json:"cluster_uuid"`
+			Resource    string `json:"resource"`
+			Name        string `json:"name"`
+			Namespace   string `json:"namespace"`
+		}
+
+		type incident struct {
+			// Incident   string `json:"incident"`
+			ObjectTags objectTags `json:"object_tags"`
+			// Severity string `json:"severity"`
+		}
+
+		defer periodic.Start(ctx, time.Hour, func(tick periodic.Tick) {
+			r, err := nclient.Incidents(ctx)
+			if err != nil {
+				klog.Errorf("Cannot fetch incidents: %v", err)
+				return
+			}
+			defer func() { _ = r.Close() }()
+
+			var incidents []incident
+			if err := json.NewDecoder(r).Decode(&incidents); err != nil {
+				klog.Errorf("Cannot decode incidents: %v", err)
+				return
+			}
+
+			objectTagMap := make(map[string]objectTags)
+			uuidMap := make(map[string][]types.UUID)
+			for _, inc := range incidents {
+				objectTagMap[inc.ObjectTags.UUID] = inc.ObjectTags
+				uuidMap[inc.ObjectTags.Resource] = append(uuidMap[inc.ObjectTags.Resource], types.UUID{UUID: uuid.MustParse(inc.ObjectTags.UUID)})
+			}
+
+			ng, nctx := errgroup.WithContext(ctx)
+
+			for kind, uuids := range uuidMap {
+				ng.Go(func() error {
+					q, args, err := sqlx.In(fmt.Sprintf("SELECT uuid FROM %s WHERE uuid IN (?)", kind), uuids)
+					if err != nil {
+						return err
+					}
+
+					rows, err := db.QueryxContext(nctx, q, args...)
+					if err != nil {
+						return err
+					}
+					defer func() { _ = rows.Close() }()
+					for rows.Next() {
+						var _uuid types.UUID
+						if err := rows.Scan(&_uuid); err != nil {
+							return err
+						}
+
+						delete(objectTagMap, _uuid.String())
+					}
+
+					return nil
+				})
+			}
+
+			if err := ng.Wait(); err != nil {
+				klog.Errorf("Cannot fetch orphaned incidents: %v", err)
+			}
+
+			for _, tags := range objectTagMap {
+				var clusterUuid types.UUID
+				_tags := map[string]string{
+					"uuid":      tags.UUID,
+					"resource":  tags.Resource,
+					"name":      tags.Name,
+					"namespace": tags.Namespace,
+				}
+				if tags.ClusterUUID != "" {
+					clusterUuid = types.UUID{UUID: uuid.MustParse(tags.ClusterUUID)}
+					_tags["cluster_uuid"] = tags.ClusterUUID
+				}
+				ev := notifications.Event{
+					Uuid:        types.UUID{UUID: uuid.MustParse(tags.UUID)},
+					ClusterUuid: clusterUuid,
+					Kind:        tags.Resource,
+					Name:        kcache.NewObjectName(tags.Namespace, tags.Name).String(),
+					Severity:    "ok",
+					Message:     "Automatically resolving the incident because of an orphaned resource.",
+					URL:         &url.URL{Path: fmt.Sprintf("/%s", strings.ReplaceAll(tags.Resource, "_", "")), RawQuery: fmt.Sprintf("id=%s", tags.UUID)},
+					Tags:        _tags,
+					ExtraTags:   nil,
+				}
+				klog.Infof("Deleting orphaned incident: %q", ev.Name)
+				if err := nclient.ProcessEvent(ctx, ev); err != nil {
+					klog.Errorf("Cannot delete orphaned incident: %v", err)
+				}
+			}
+		}, periodic.Immediate()).Stop()
+
 		g.Go(func() error {
 			return nclient.Stream(ctx, cachev1.Multiplexers().Nodes().UpsertEvents().Out())
 		})
@@ -334,7 +434,7 @@ func main() {
 	}
 
 	if cfg.Prometheus.Url != "" {
-		basicAuthTransport := &com.BasicAuthTransport{}
+		basicAuthTransport := &kcom.BasicAuthTransport{}
 
 		if cfg.Prometheus.Insecure == "true" {
 			basicAuthTransport.Insecure = true
