@@ -493,13 +493,13 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		schemav1.SyncContainers(
-			ctx,
-			kdb,
-			g,
-			cachev1.Multiplexers().Pods().UpsertEvents().Out(),
-			cachev1.Multiplexers().Pods().DeleteEvents().Out(),
-		)
+		// schemav1.SyncContainers(
+		// 	ctx,
+		// 	kdb,
+		// 	g,
+		// 	cachev1.Multiplexers().Pods().UpsertEvents().Out(),
+		// 	cachev1.Multiplexers().Pods().DeleteEvents().Out(),
+		// )
 
 		f := schemav1.NewPodFactory(clientset)
 		s := syncv1.NewSync(kdb, factory.Core().V1().Pods().Informer(), log.WithName("pods"), f.New)
