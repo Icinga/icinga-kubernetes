@@ -123,10 +123,13 @@ func (n *Node) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	n.KubeProxyVersion = node.Status.NodeInfo.KubeProxyVersion
 
 	var roles []string
-	for labelName := range node.Labels {
+	for labelName, labelValue := range node.Labels {
 		if strings.Contains(labelName, "node-role") {
-			role := strings.SplitAfter(labelName, "/")[1]
-			roles = append(roles, role)
+			if _, role, ok := strings.Cut(labelName, "/"); ok {
+				roles = append(roles, role)
+			} else if labelValue != "" {
+				roles = append(roles, labelValue)
+			}
 		}
 	}
 	n.Roles = strings.Join(roles, ", ")
