@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 
 	"github.com/icinga/icinga-go-library/database"
@@ -65,7 +66,7 @@ func NewClient(name string, config Config, db *database.DB) (*Client, error) {
 }
 
 func (c *Client) ProcessEvent(ctx context.Context, event Event) error {
-	event.URL = c.webUrl.ResolveReference(event.URL)
+	event.URL = c.resolveEventURL(event.URL)
 	ev := event.Carry()
 
 	c.mu.Lock()
@@ -104,6 +105,24 @@ func (c *Client) ProcessEvent(ctx context.Context, event Event) error {
 	}
 
 	return errors.New("Received three rule updates from Icinga Notifications in a row")
+}
+
+func (c *Client) resolveEventURL(ref *url.URL) *url.URL {
+	if ref == nil || ref.IsAbs() {
+		return ref
+	}
+
+	base := *c.webUrl
+	if base.Path == "" {
+		base.Path = "/"
+	} else if !strings.HasSuffix(base.Path, "/") {
+		base.Path += "/"
+	}
+
+	eventURL := *ref
+	eventURL.Path = strings.TrimLeft(eventURL.Path, "/")
+
+	return base.ResolveReference(&eventURL)
 }
 
 // Stream consumes the items from the given `entities` chan and triggers a notifications event for each of them.
