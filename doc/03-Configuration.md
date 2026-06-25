@@ -49,13 +49,17 @@ Defined in the `notifications` section of the configuration file.
 Connection configuration for a Prometheus instance that collects metrics from your Kubernetes cluster,
 from which Icinga for Kubernetes [synchronizes predefined metrics](01-About.md#metric-sync) to display charts in the UI.
 Defined in the `prometheus` section of the configuration file. If one of username or password is set, both must be set.
+Basic authentication and token authentication are mutually exclusive. If token authentication is used, only one of
+`token` or `token_file` may be set.
 
-| Option   | Description                                                                                                                |
-|----------|----------------------------------------------------------------------------------------------------------------------------|
-| url      | **Optional.** Prometheus server URL. If not set, metric synchronization is disabled.                                       |
-| insecure | **Optional.** Skip the TLS/SSL certificate verification. Can be set to 'true' or 'false'. If not set, defaults to 'false'. |
-| username | **Optional.** Prometheus username.                                                                                         |
-| password | **Optional.** Prometheus password.                                                                                         |
+| Option     | Description                                                                                                                |
+|------------|----------------------------------------------------------------------------------------------------------------------------|
+| url        | **Optional.** Prometheus server URL. If not set, metric synchronization is disabled.                                       |
+| insecure   | **Optional.** Skip the TLS/SSL certificate verification. Can be set to 'true' or 'false'. If not set, defaults to 'false'. |
+| username   | **Optional.** Prometheus username.                                                                                         |
+| password   | **Optional.** Prometheus password.                                                                                         |
+| token      | **Optional.** Bearer token for authenticating with Prometheus.                                                             |
+| token_file | **Optional.** Path to a file containing the bearer token for authenticating with Prometheus.                                |
 
 # Configuration via Environment Variables
 
@@ -93,12 +97,14 @@ The configurations set by environment variables override the ones set by YAML.
 
 ## Prometheus Configuration
 
-| Env                 | Description                                                                                                                |
-|---------------------|----------------------------------------------------------------------------------------------------------------------------|
-| PROMETHEUS_URL      | **Optional.** Prometheus server URL. If not set, metric synchronization is disabled.                                       |
-| PROMETHEUS_INSECURE | **Optional.** Skip the TLS/SSL certificate verification. Can be set to 'true' or 'false'. If not set, defaults to 'false'. |
-| PROMETHEUS_USERNAME | **Optional.** Prometheus username.                                                                                         |
-| PROMETHEUS_PASSWORD | **Optional.** Prometheus password.                                                                                         | |
+| Env                   | Description                                                                                                                |
+|-----------------------|----------------------------------------------------------------------------------------------------------------------------|
+| PROMETHEUS_URL        | **Optional.** Prometheus server URL. If not set, metric synchronization is disabled.                                       |
+| PROMETHEUS_INSECURE   | **Optional.** Skip the TLS/SSL certificate verification. Can be set to 'true' or 'false'. If not set, defaults to 'false'. |
+| PROMETHEUS_USERNAME   | **Optional.** Prometheus username.                                                                                         |
+| PROMETHEUS_PASSWORD   | **Optional.** Prometheus password.                                                                                         |
+| PROMETHEUS_TOKEN      | **Optional.** Bearer token for authenticating with Prometheus.                                                             |
+| PROMETHEUS_TOKEN_FILE | **Optional.** Path to a file containing the bearer token for authenticating with Prometheus.                                |
 
 ## Multi-Cluster Support using systemd Instantiated Services
 
