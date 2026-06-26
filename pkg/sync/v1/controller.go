@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"github.com/go-logr/logr"
+	"github.com/icinga/icinga-go-library/types"
+	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
 	"github.com/pkg/errors"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/runtime"
@@ -31,11 +33,7 @@ func NewController(
 	}
 }
 
-func (c *Controller) Announce(obj interface{}) error {
-	return c.informer.GetStore().Add(obj)
-}
-
-func (c *Controller) Stream(ctx context.Context, sink *Sink) error {
+func (c *Controller) Stream(ctx context.Context, sink *Sink, warmupKeys map[string]types.UUID) error {
 	_, err := c.informer.AddEventHandler(NewEventHandler(c.queue, c.log.WithName("events")))
 	if err != nil {
 		return err
@@ -54,7 +52,35 @@ func (c *Controller) Stream(ctx context.Context, sink *Sink) error {
 		return errors.New("timed out waiting for caches to sync")
 	}
 
+	if err := c.enqueueMissingWarmupDeletes(warmupKeys); err != nil {
+		return err
+	}
+
 	return c.stream(ctx, sink)
+}
+
+func (c *Controller) enqueueMissingWarmupDeletes(warmupKeys map[string]types.UUID) error {
+	for key, warmupId := range warmupKeys {
+		item, exists, err := c.informer.GetStore().GetByKey(key)
+		if err != nil {
+			return errors.Wrapf(err, "fetching warmed-up key %s failed", key)
+		}
+
+		if exists {
+			currentId := schemav1.EnsureUUID(item.(kmetav1.Object).GetUID())
+			if currentId == warmupId {
+				continue
+			}
+		}
+
+		c.queue.Add(EventHandlerItem{
+			Type: EventDelete,
+			Id:   warmupId,
+			KKey: key,
+		})
+	}
+
+	return nil
 }
 
 func (c *Controller) stream(ctx context.Context, sink *Sink) error {
