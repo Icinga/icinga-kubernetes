@@ -15,16 +15,12 @@ import (
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
 	"strings"
-	"sync"
 	"time"
 	"unicode/utf8"
 )
 
 var (
 	scheduler = gocron.NewScheduler(time.UTC)
-
-	containerLogs   = make(map[string]ContainerLog)
-	containerLogsMu sync.Mutex
 
 	deletedPodIds = make(map[string]bool)
 )
@@ -277,9 +273,15 @@ func (cl *ContainerLog) Upsert() interface{} {
 
 // syncContainerLogs fetches the logs from the kubernetes API for the given container and syncs to the database.
 func (cl *ContainerLog) syncContainerLogs(ctx context.Context, clientset *kubernetes.Clientset, db *database.Database) error {
+	current, err := cl.currentLog(ctx, db)
+	if err != nil {
+		return err
+	}
+	defer func() { cl.Logs = "" }()
+
 	logOptions := &kcorev1.PodLogOptions{Container: cl.ContainerName}
-	if !cl.LastUpdate.Time().IsZero() {
-		sinceSeconds := int64(time.Since(cl.LastUpdate.Time()).Seconds())
+	if !current.LastUpdate.Time().IsZero() {
+		sinceSeconds := int64(time.Since(current.LastUpdate.Time()).Seconds())
 		logOptions.SinceSeconds = &sinceSeconds
 	}
 
@@ -296,12 +298,30 @@ func (cl *ContainerLog) syncContainerLogs(ctx context.Context, clientset *kubern
 	}
 
 	cl.LastUpdate = types.UnixMilli(time.Now())
-	cl.Logs = truncate(cl.Logs+string(logs), MaxLogLength)
+	cl.Logs = truncate(current.Logs+string(logs), MaxLogLength)
 	entities := make(chan interface{}, 1)
 	entities <- cl
 	close(entities)
 
 	return db.UpsertStreamed(ctx, entities)
+}
+
+func (cl *ContainerLog) currentLog(ctx context.Context, db *database.Database) (ContainerLogMeta, error) {
+	var meta ContainerLogMeta
+	err := db.GetContext(
+		ctx,
+		&meta,
+		db.Rebind(`SELECT logs, last_update FROM container_log WHERE container_uuid = ?`),
+		cl.ContainerUuid,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ContainerLogMeta{}, nil
+	}
+	if err != nil {
+		return ContainerLogMeta{}, database.CantPerformQuery(err, `SELECT logs, last_update FROM container_log WHERE container_uuid = ?`)
+	}
+
+	return meta, nil
 }
 
 func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStatus) (IcingaState, string) {
@@ -459,13 +479,6 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 		Uuid    types.UUID
 		PodUuid types.UUID
 	}
-
-	// Fetch all container logs from the database
-	err := make(chan error, 1)
-	err <- warmup(ctx, db)
-	close(err)
-	com.ErrgroupReceive(g, err)
-
 	// Use buffered channel here not to block the goroutines, as they can stream container ids
 	// from multiple pods concurrently.
 	containerIds := make(chan interface{}, db.Options.MaxPlaceholdersPerStatement)
@@ -532,10 +545,6 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 							if err != nil && !errors.Is(err, gocron.ErrJobNotFoundWithTag) {
 								return err
 							}
-
-							containerLogsMu.Lock()
-							delete(containerLogs, container.Uuid.String())
-							containerLogsMu.Unlock()
 						}
 					}
 				})
@@ -563,12 +572,6 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 							PodName:       pod.Name,
 						}
 
-						containerLogsMu.Lock()
-						if cl, ok := containerLogs[container.Uuid.String()]; ok {
-							containerLog.Logs = truncate(cl.Logs, MaxLogLength)
-						}
-						containerLogsMu.Unlock()
-
 						scheduler.Every(ScheduleInterval.String()).Tag(container.Uuid.String())
 						_, err = scheduler.Do(containerLog.syncContainerLogs, ctx, pod.factory.clientset, db)
 						if err != nil {
@@ -579,10 +582,6 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 						if err != nil {
 							return err
 						}
-
-						containerLogsMu.Lock()
-						delete(containerLogs, container.Uuid.String())
-						containerLogsMu.Unlock()
 					}
 				}
 			}
@@ -590,42 +589,11 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 	})
 }
 
-// warmup fetches all container logs from the database and caches them in the containerlogs variable.
-func warmup(ctx context.Context, db *database.Database) error {
-	g, ctx := errgroup.WithContext(ctx)
-
-	entities, errs := db.YieldAll(ctx, func() (interface{}, error) {
-		return &ContainerLog{}, nil
-	}, db.BuildSelectStmt(ContainerLog{}, ContainerLog{}))
-	com.ErrgroupReceive(g, errs)
-
-	g.Go(func() error {
-		defer runtime.HandleCrash()
-
-		containerLogsMu.Lock()
-		defer containerLogsMu.Unlock()
-
-		for {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case e, ok := <-entities:
-				if !ok {
-					return nil
-				}
-
-				containerLog := e.(*ContainerLog)
-				containerLogs[containerLog.ContainerUuid.String()] = *containerLog
-			}
-		}
-	})
-
-	return g.Wait()
-}
-
 // truncate truncates a UTF-8 string from the front to ensure it does not exceed the given byte length.
 // It also removes content before the first newline character if one is found in the truncated string.
 func truncate(s string, n int) string {
+	s = strings.ToValidUTF8(s, "")
+
 	if len(s) <= n {
 		return s
 	}
