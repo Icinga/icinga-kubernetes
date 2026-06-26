@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/go-logr/logr"
 	"github.com/icinga/icinga-go-library/com"
+	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/cluster"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
@@ -37,21 +38,25 @@ func (s *Sync) Run(ctx context.Context, features ...Feature) error {
 	controller := NewController(s.informer, s.log.WithName("controller"))
 
 	with := NewFeatures(features...)
+	warmupKeys := map[string]types.UUID{}
 
 	if !with.NoWarmup() {
-		if err := s.warmup(ctx, controller); err != nil {
+		var err error
+		warmupKeys, err = s.warmup(ctx)
+		if err != nil {
 			return err
 		}
 	}
 
-	return s.sync(ctx, controller, features...)
+	return s.sync(ctx, controller, warmupKeys, features...)
 }
 
-func (s *Sync) warmup(ctx context.Context, c *Controller) error {
+func (s *Sync) warmup(ctx context.Context) (map[string]types.UUID, error) {
 	g, ctx := errgroup.WithContext(ctx)
 
 	meta := &schemav1.Meta{ClusterUuid: cluster.ClusterUuidFromContext(ctx)}
 	query := s.db.BuildSelectStmt(s.factory(), meta) + ` WHERE cluster_uuid=:cluster_uuid`
+	warmupKeys := make(map[string]types.UUID)
 
 	entities, errs := s.db.YieldAll(ctx, func() (interface{}, error) {
 		return s.factory(), nil
@@ -70,19 +75,23 @@ func (s *Sync) warmup(ctx context.Context, c *Controller) error {
 					return nil
 				}
 
-				if err := c.Announce(e); err != nil {
+				object := e.(schemav1.Resource)
+				key, err := cache.MetaNamespaceKeyFunc(object)
+				if err != nil {
 					return err
 				}
+
+				warmupKeys[key] = schemav1.EnsureUUID(object.GetUID())
 			case <-ctx.Done():
 				return ctx.Err()
 			}
 		}
 	})
 
-	return g.Wait()
+	return warmupKeys, g.Wait()
 }
 
-func (s *Sync) sync(ctx context.Context, c *Controller, features ...Feature) error {
+func (s *Sync) sync(ctx context.Context, c *Controller, warmupKeys map[string]types.UUID, features ...Feature) error {
 	sink := NewSink(func(i *Item) interface{} {
 		entity := s.factory()
 		entity.Obtain(*i.Item, cluster.ClusterUuidFromContext(ctx))
@@ -98,7 +107,7 @@ func (s *Sync) sync(ctx context.Context, c *Controller, features ...Feature) err
 	g.Go(func() error {
 		defer runtime.HandleCrash()
 
-		return c.Stream(ctx, sink)
+		return c.Stream(ctx, sink, warmupKeys)
 	})
 	g.Go(func() error {
 		defer runtime.HandleCrash()
