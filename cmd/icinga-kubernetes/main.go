@@ -287,7 +287,7 @@ func main() {
 		}
 
 		instance := schema.Instance{
-			Uuid:                types.UUID{UUID: instanceId},
+			Uuid:                types.MakeUUID(instanceId),
 			ClusterUuid:         clusterInstance.Uuid,
 			Version:             daemon.Version.Version,
 			KubernetesVersion:   schema.NewNullableString(kubernetesVersion),
@@ -356,7 +356,7 @@ func main() {
 			uuidMap := make(map[string][]types.UUID)
 			for _, inc := range incidents {
 				objectTagMap[inc.ObjectTags.UUID] = inc.ObjectTags
-				uuidMap[inc.ObjectTags.Resource] = append(uuidMap[inc.ObjectTags.Resource], types.UUID{UUID: uuid.MustParse(inc.ObjectTags.UUID)})
+				uuidMap[inc.ObjectTags.Resource] = append(uuidMap[inc.ObjectTags.Resource], types.MakeUUID(uuid.MustParse(inc.ObjectTags.UUID)))
 			}
 
 			ng, nctx := errgroup.WithContext(ctx)
@@ -399,11 +399,11 @@ func main() {
 					"namespace": tags.Namespace,
 				}
 				if tags.ClusterUUID != "" {
-					clusterUuid = types.UUID{UUID: uuid.MustParse(tags.ClusterUUID)}
+					clusterUuid = types.MakeUUID(uuid.MustParse(tags.ClusterUUID))
 					_tags["cluster_uuid"] = tags.ClusterUUID
 				}
 				ev := notifications.Event{
-					Uuid:        types.UUID{UUID: uuid.MustParse(tags.UUID)},
+					Uuid:        types.MakeUUID(uuid.MustParse(tags.UUID)),
 					ClusterUuid: clusterUuid,
 					Kind:        tags.Resource,
 					Name:        kcache.NewObjectName(tags.Namespace, tags.Name).String(),
@@ -929,7 +929,7 @@ func (s *uuidSliceValue) Set(val string) error {
 			return err
 		}
 
-		uu := types.UUID{UUID: u}
+		uu := types.MakeUUID(u)
 
 		if !slices.Contains(s.values, uu) {
 			s.values = append(s.values, uu)

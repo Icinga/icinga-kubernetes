@@ -22,7 +22,7 @@ func SyncNotificationsConfig(ctx context.Context, db *database.DB, config *notif
 			{ClusterUuid: clusterUuid, Key: schema.ConfigKeyNotificationsPassword, Value: config.Password, Locked: _true},
 		}
 
-		if err := db.ExecTx(ctx, func(ctx context.Context, tx *sqlx.Tx) error {
+		if err := db.ExecTx(ctx, nil, func(ctx context.Context, tx *sqlx.Tx) error {
 			if kwebUrl := config.KubernetesWebUrl; kwebUrl != "" {
 				toDb = append(toDb, schema.Config{
 					ClusterUuid: clusterUuid,
@@ -63,7 +63,7 @@ func SyncNotificationsConfig(ctx context.Context, db *database.DB, config *notif
 			return errors.Wrap(err, "transaction failed")
 		}
 	} else {
-		if err := db.ExecTx(ctx, func(ctx context.Context, tx *sqlx.Tx) error {
+		if err := db.ExecTx(ctx, nil, func(ctx context.Context, tx *sqlx.Tx) error {
 			if _, err := tx.ExecContext(
 				ctx,
 				fmt.Sprintf(
