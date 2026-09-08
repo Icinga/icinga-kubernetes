@@ -71,7 +71,7 @@ func (c *Client) ProcessEvent(ctx context.Context, event Event) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	for try := 0; try < 3; try++ {
+	for range 3 {
 		eventRuleIds, err := c.evaluateRulesForObject(
 			ctx,
 			event.Kind,

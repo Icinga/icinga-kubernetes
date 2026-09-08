@@ -107,7 +107,7 @@ func NewNullableString(s any) sql.NullString {
 			return sql.NullString{Valid: false, String: ""}
 		}
 
-		stringType := reflect.TypeOf("")
+		stringType := reflect.TypeFor[string]()
 		if v.Elem().CanConvert(stringType) {
 			v := v.Elem().Convert(stringType).Interface().(string)
 

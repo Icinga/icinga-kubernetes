@@ -218,7 +218,7 @@ func main() {
 	if !hasSchema {
 		dbLog.Info("Importing schema")
 
-		for _, ddl := range strings.Split(k8sMysql.Schema, ";") {
+		for ddl := range strings.SplitSeq(k8sMysql.Schema, ";") {
 			if ddl = strings.TrimSpace(ddl); ddl != "" {
 				if _, err := kdb.Exec(ddl); err != nil {
 					klog.Fatal(err)
