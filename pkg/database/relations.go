@@ -9,7 +9,7 @@ type Relation interface {
 	SetForeignKey(fk string)
 	CascadeDelete() bool
 	WithoutCascadeDelete()
-	StreamInto(context.Context, chan interface{}) error
+	StreamInto(context.Context, chan any) error
 	TableName() string
 }
 
@@ -71,7 +71,7 @@ func HasMany[T comparable](entities []T, options ...RelationOption) Relation {
 	return r
 }
 
-func (r *hasMany[T]) StreamInto(ctx context.Context, ch chan interface{}) error {
+func (r *hasMany[T]) StreamInto(ctx context.Context, ch chan any) error {
 	for _, entity := range r.entities {
 		select {
 		case ch <- entity:
@@ -98,7 +98,7 @@ func HasOne[T comparable](entity T, options ...RelationOption) Relation {
 	return r
 }
 
-func (r *hasOne[T]) StreamInto(ctx context.Context, ch chan interface{}) error {
+func (r *hasOne[T]) StreamInto(ctx context.Context, ch chan any) error {
 	if r.entity != Zero[T]() {
 		select {
 		case ch <- r.entity:

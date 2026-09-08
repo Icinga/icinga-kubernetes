@@ -18,7 +18,7 @@ func (b *Bitmask[T]) Clear(flag T)   { b.bitmask &= ^flag }
 func (b *Bitmask[T]) Toggle(flag T)  { b.bitmask ^= flag }
 
 // Scan implements the sql.Scanner interface.
-func (b *Bitmask[T]) Scan(src interface{}) error {
+func (b *Bitmask[T]) Scan(src any) error {
 	i, err := strconv.ParseInt(string(src.([]byte)), 10, 64)
 	if err != nil {
 		return err

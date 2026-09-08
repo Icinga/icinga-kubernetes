@@ -7,5 +7,5 @@ type TableNamer interface {
 }
 
 type Upserter interface {
-	Upsert() interface{}
+	Upsert() any
 }
