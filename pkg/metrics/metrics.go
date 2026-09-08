@@ -340,8 +340,6 @@ func (pms *PromMetricSync) run(
 	g, ctx := errgroup.WithContext(ctx)
 
 	for _, promQuery := range promQueries {
-		promQuery := promQuery
-
 		g.Go(func() error {
 			var result model.Value
 			var warnings v1.Warnings

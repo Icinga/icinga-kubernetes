@@ -330,8 +330,6 @@ func (db *Database) DeleteStreamed(
 		g, ctx = errgroup.WithContext(ctx)
 		streams := make(map[string]chan any, len(relations.Relations()))
 		for _, relation := range relations.Relations() {
-			relation := relation
-
 			if !relation.CascadeDelete() {
 				continue
 			}
@@ -448,8 +446,6 @@ func (db *Database) UpsertStreamed(
 		g, ctx = errgroup.WithContext(ctx)
 		streams := make(map[string]chan any, len(relations.Relations()))
 		for _, relation := range relations.Relations() {
-			relation := relation
-
 			ch := make(chan any)
 			g.Go(func() error {
 				defer runtime.HandleCrash()
@@ -503,7 +499,6 @@ func (db *Database) UpsertStreamed(
 					}
 
 					for _, relation := range entity.(HasRelations).Relations() {
-						relation := relation
 						g.Go(func() error {
 							defer runtime.HandleCrash()
 

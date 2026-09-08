@@ -108,8 +108,6 @@ func (mux *channelMultiplexer[T]) Run(ctx context.Context) error {
 	defer close(sink)
 
 	for _, ch := range mux.in {
-		ch := ch
-
 		g.Go(func() error {
 			for {
 				select {
