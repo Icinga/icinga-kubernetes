@@ -42,7 +42,7 @@ func WithNoDelete() Feature {
 	}
 }
 
-func WithNoWarumup() Feature {
+func WithNoWarmup() Feature {
 	return func(f *Features) {
 		f.noWarmup = true
 	}

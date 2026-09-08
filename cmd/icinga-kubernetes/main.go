@@ -619,7 +619,7 @@ func main() {
 	g.Go(func() error {
 		s := syncv1.NewSync(kdb, factory.Events().V1().Events().Informer(), log.WithName("events"), schemav1.NewEvent)
 
-		return s.Run(ctx, syncv1.WithNoDelete(), syncv1.WithNoWarumup())
+		return s.Run(ctx, syncv1.WithNoDelete(), syncv1.WithNoWarmup())
 	})
 
 	g.Go(func() error {
