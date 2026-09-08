@@ -593,7 +593,7 @@ func (db *Database) query(ctx context.Context, query string, scope ...any) (rows
 func IsStruct(subject any) bool {
 	v := reflect.ValueOf(subject)
 	switch v.Kind() {
-	case reflect.Ptr:
+	case reflect.Pointer:
 		return v.Elem().Kind() == reflect.Struct
 	case reflect.Struct:
 		return true
