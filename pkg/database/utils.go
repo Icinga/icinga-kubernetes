@@ -85,7 +85,7 @@ func IsRetryable(err error) bool {
 }
 
 // TableName returns the table of t.
-func TableName(t interface{}) string {
+func TableName(t any) string {
 	if tn, ok := t.(TableNamer); ok {
 		return tn.TableName()
 	}

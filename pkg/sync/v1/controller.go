@@ -31,7 +31,7 @@ func NewController(
 	}
 }
 
-func (c *Controller) Announce(obj interface{}) error {
+func (c *Controller) Announce(obj any) error {
 	return c.informer.GetStore().Add(obj)
 }
 

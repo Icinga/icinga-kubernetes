@@ -53,7 +53,7 @@ func (s *Sync) warmup(ctx context.Context, c *Controller) error {
 	meta := &schemav1.Meta{ClusterUuid: cluster.ClusterUuidFromContext(ctx)}
 	query := s.db.BuildSelectStmt(s.factory(), meta) + ` WHERE cluster_uuid=:cluster_uuid`
 
-	entities, errs := s.db.YieldAll(ctx, func() (interface{}, error) {
+	entities, errs := s.db.YieldAll(ctx, func() (any, error) {
 		return s.factory(), nil
 	}, query, meta)
 
@@ -83,12 +83,12 @@ func (s *Sync) warmup(ctx context.Context, c *Controller) error {
 }
 
 func (s *Sync) sync(ctx context.Context, c *Controller, features ...Feature) error {
-	sink := NewSink(func(i *Item) interface{} {
+	sink := NewSink(func(i *Item) any {
 		entity := s.factory()
 		entity.Obtain(*i.Item, cluster.ClusterUuidFromContext(ctx))
 
 		return entity
-	}, func(k interface{}) interface{} {
+	}, func(k any) any {
 		return k
 	})
 

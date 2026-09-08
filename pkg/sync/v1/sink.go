@@ -14,23 +14,23 @@ type Item struct {
 
 type Sink struct {
 	error      chan error
-	delete     chan interface{}
-	deleteFunc func(interface{}) interface{}
-	upsert     chan interface{}
-	upsertFunc func(*Item) interface{}
+	delete     chan any
+	deleteFunc func(any) any
+	upsert     chan any
+	upsertFunc func(*Item) any
 }
 
-func NewSink(upsertFunc func(*Item) interface{}, deleteFunc func(interface{}) interface{}) *Sink {
+func NewSink(upsertFunc func(*Item) any, deleteFunc func(any) any) *Sink {
 	return &Sink{
 		error:      make(chan error),
-		delete:     make(chan interface{}),
+		delete:     make(chan any),
 		deleteFunc: deleteFunc,
-		upsert:     make(chan interface{}),
+		upsert:     make(chan any),
 		upsertFunc: upsertFunc,
 	}
 }
 
-func (s *Sink) Delete(ctx context.Context, key interface{}) error {
+func (s *Sink) Delete(ctx context.Context, key any) error {
 	select {
 	case s.delete <- s.deleteFunc(key):
 		return nil
@@ -39,7 +39,7 @@ func (s *Sink) Delete(ctx context.Context, key interface{}) error {
 	}
 }
 
-func (s *Sink) DeleteCh() <-chan interface{} {
+func (s *Sink) DeleteCh() <-chan any {
 	return s.delete
 }
 
@@ -75,6 +75,6 @@ func (s *Sink) Upsert(ctx context.Context, item *Item) error {
 	}
 }
 
-func (s *Sink) UpsertCh() <-chan interface{} {
+func (s *Sink) UpsertCh() <-chan any {
 	return s.upsert
 }

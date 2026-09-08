@@ -271,7 +271,7 @@ func (c ContainerStateReasonAndMassage) String() string {
 }
 
 // Upsert implements the database.Upserter interface.
-func (cl *ContainerLog) Upsert() interface{} {
+func (cl *ContainerLog) Upsert() any {
 	return cl.ContainerLogMeta
 }
 
@@ -297,7 +297,7 @@ func (cl *ContainerLog) syncContainerLogs(ctx context.Context, clientset *kubern
 
 	cl.LastUpdate = types.UnixMilli(time.Now())
 	cl.Logs = truncate(cl.Logs+string(logs), MaxLogLength)
-	entities := make(chan interface{}, 1)
+	entities := make(chan any, 1)
 	entities <- cl
 	close(entities)
 
@@ -454,7 +454,7 @@ func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStat
 // When pods are deleted, their IDs are streamed through the `deletePods` chan, and this fetches all the container
 // IDs matching the respective pod ID from the database and initiates a container deletion stream that cleans up all
 // container-related resources.
-func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Group, upsertPods, deletePods <-chan interface{}) {
+func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Group, upsertPods, deletePods <-chan any) {
 	type containerFingerprint struct {
 		Uuid    types.UUID
 		PodUuid types.UUID
@@ -468,7 +468,7 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 
 	// Use buffered channel here not to block the goroutines, as they can stream container ids
 	// from multiple pods concurrently.
-	containerIds := make(chan interface{}, db.Options.MaxPlaceholdersPerStatement)
+	containerIds := make(chan any, db.Options.MaxPlaceholdersPerStatement)
 	g.Go(func() error {
 		defer runtime.HandleCrash()
 
@@ -504,7 +504,7 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 				}
 				deletedPodIds[meta.PodUuid.String()] = true
 
-				entities, errs := db.YieldAll(ctx, func() (interface{}, error) {
+				entities, errs := db.YieldAll(ctx, func() (any, error) {
 					return &Container{}, nil
 				}, query, meta)
 				com.ErrgroupReceive(g, errs)
@@ -594,7 +594,7 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 func warmup(ctx context.Context, db *database.Database) error {
 	g, ctx := errgroup.WithContext(ctx)
 
-	entities, errs := db.YieldAll(ctx, func() (interface{}, error) {
+	entities, errs := db.YieldAll(ctx, func() (any, error) {
 		return &ContainerLog{}, nil
 	}, db.BuildSelectStmt(ContainerLog{}, ContainerLog{}))
 	com.ErrgroupReceive(g, errs)

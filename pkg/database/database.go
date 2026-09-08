@@ -73,7 +73,7 @@ func (db *Database) BatchSizeByPlaceholders(n int) int {
 }
 
 // BuildDeleteStmt returns a DELETE statement for the given struct.
-func (db *Database) BuildDeleteStmt(from interface{}) string {
+func (db *Database) BuildDeleteStmt(from any) string {
 	var column string
 	if relation, ok := from.(Relation); ok {
 		column = relation.ForeignKey()
@@ -90,7 +90,7 @@ func (db *Database) BuildDeleteStmt(from interface{}) string {
 
 // BuildSelectStmt returns a SELECT query that creates the FROM part from the given table struct
 // and the column list from the specified columns struct.
-func (db *Database) BuildSelectStmt(table interface{}, columns interface{}) string {
+func (db *Database) BuildSelectStmt(table any, columns any) string {
 	q := fmt.Sprintf(
 		"SELECT %s FROM %s",
 		db.QuoteColumns(db.columnMap.Columns(columns)),
@@ -101,14 +101,14 @@ func (db *Database) BuildSelectStmt(table interface{}, columns interface{}) stri
 }
 
 // BuildUpsertStmt returns an upsert statement for the given struct.
-func (db *Database) BuildUpsertStmt(subject interface{}) (stmt string, placeholders int) {
+func (db *Database) BuildUpsertStmt(subject any) (stmt string, placeholders int) {
 	var updateColumns []string
 	insertColumns := db.columnMap.Columns(subject)
 	table := TableName(subject)
 
 	if upserter, ok := subject.(Upserter); ok {
 		upsert := upserter.Upsert()
-		if sliceofcolumns, ok := upsert.([]interface{}); ok {
+		if sliceofcolumns, ok := upsert.([]any); ok {
 			for _, columns := range sliceofcolumns {
 				updateColumns = append(updateColumns, db.columnMap.Columns(columns)...)
 			}
@@ -153,7 +153,7 @@ func (db *Database) BuildUpsertStmt(subject interface{}) (stmt string, placehold
 // and can be executed concurrently to the extent allowed by the semaphore passed in sem.
 // Arguments for which the query ran successfully will be passed to onSuccess.
 func (db *Database) BulkExec(
-	ctx context.Context, query string, count int, sem *semaphore.Weighted, arg <-chan interface{}, features ...Feature,
+	ctx context.Context, query string, count int, sem *semaphore.Weighted, arg <-chan any, features ...Feature,
 ) error {
 	g, ctx := errgroup.WithContext(ctx)
 
@@ -177,7 +177,7 @@ func (db *Database) BulkExec(
 				return errors.Wrap(err, "cannot acquire semaphore")
 			}
 
-			g.Go(func(b []interface{}) func() error {
+			g.Go(func(b []any) func() error {
 				return func() error {
 					defer sem.Release(n)
 
@@ -238,8 +238,8 @@ func (db *Database) Connect() bool {
 // and can be executed concurrently to the extent allowed by the semaphore passed in sem.
 // Entities for which the query ran successfully will be passed to onSuccess.
 func (db *Database) NamedBulkExec(
-	ctx context.Context, query string, count int, sem *semaphore.Weighted, arg <-chan interface{},
-	splitPolicyFactory com.BulkChunkSplitPolicyFactory[interface{}], features ...Feature,
+	ctx context.Context, query string, count int, sem *semaphore.Weighted, arg <-chan any,
+	splitPolicyFactory com.BulkChunkSplitPolicyFactory[any], features ...Feature,
 ) error {
 	g, ctx := errgroup.WithContext(ctx)
 
@@ -263,7 +263,7 @@ func (db *Database) NamedBulkExec(
 					return errors.Wrap(err, "cannot acquire semaphore")
 				}
 
-				g.Go(func(b []interface{}) func() error {
+				g.Go(func(b []any) func() error {
 					return func() error {
 						defer runtime.HandleCrash()
 						defer sem.Release(1)
@@ -321,14 +321,14 @@ func (db *Database) GetSemaphoreForTable(table string) *semaphore.Weighted {
 // concurrency is controlled via Options.MaxConnectionsPerTable.
 // IDs for which the query ran successfully will be passed to onSuccess.
 func (db *Database) DeleteStreamed(
-	ctx context.Context, from interface{}, ids <-chan interface{}, features ...Feature,
+	ctx context.Context, from any, ids <-chan any, features ...Feature,
 ) error {
 	f := NewFeatures(features...)
 
 	if relations, ok := from.(HasRelations); ok && f.cascading {
 		var g *errgroup.Group
 		g, ctx = errgroup.WithContext(ctx)
-		streams := make(map[string]chan interface{}, len(relations.Relations()))
+		streams := make(map[string]chan any, len(relations.Relations()))
 		for _, relation := range relations.Relations() {
 			relation := relation
 
@@ -336,7 +336,7 @@ func (db *Database) DeleteStreamed(
 				continue
 			}
 
-			ch := make(chan interface{})
+			ch := make(chan any)
 			g.Go(func() error {
 				defer runtime.HandleCrash()
 				defer close(ch)
@@ -347,8 +347,8 @@ func (db *Database) DeleteStreamed(
 		}
 
 		source := ids
-		ids := make(chan interface{})
-		dup := make(chan interface{})
+		ids := make(chan any)
+		dup := make(chan any)
 
 		g.Go(func() error {
 			defer close(ids)
@@ -432,7 +432,7 @@ func (db *Database) DeleteStreamed(
 // Bulk size is controlled via Options.MaxPlaceholdersPerStatement and
 // concurrency is controlled via Options.MaxConnectionsPerTable.
 func (db *Database) UpsertStreamed(
-	ctx context.Context, entities <-chan interface{}, features ...Feature,
+	ctx context.Context, entities <-chan any, features ...Feature,
 ) error {
 	first, forward, err := com.CopyFirst(ctx, entities)
 	if first == nil {
@@ -446,11 +446,11 @@ func (db *Database) UpsertStreamed(
 	if relations, ok := first.(HasRelations); ok && with.cascading {
 		var g *errgroup.Group
 		g, ctx = errgroup.WithContext(ctx)
-		streams := make(map[string]chan interface{}, len(relations.Relations()))
+		streams := make(map[string]chan any, len(relations.Relations()))
 		for _, relation := range relations.Relations() {
 			relation := relation
 
-			ch := make(chan interface{})
+			ch := make(chan any)
 			g.Go(func() error {
 				defer runtime.HandleCrash()
 				defer close(ch)
@@ -461,8 +461,8 @@ func (db *Database) UpsertStreamed(
 		}
 
 		source := forward
-		forward := make(chan interface{})
-		dup := make(chan interface{})
+		forward := make(chan any)
+		dup := make(chan any)
 
 		g.Go(func() error {
 			defer close(forward)
@@ -533,9 +533,9 @@ func (db *Database) UpsertStreamed(
 // YieldAll executes the query with the supplied scope,
 // scans each resulting row into an entity returned by the factory function,
 // and streams them into a returned channel.
-func (db *Database) YieldAll(ctx context.Context, factoryFunc func() (interface{}, error), query string, scope ...interface{}) (<-chan interface{}, <-chan error) {
+func (db *Database) YieldAll(ctx context.Context, factoryFunc func() (any, error), query string, scope ...any) (<-chan any, <-chan error) {
 	g, ctx := errgroup.WithContext(ctx)
-	entities := make(chan interface{}, 1)
+	entities := make(chan any, 1)
 
 	g.Go(func() error {
 		defer runtime.HandleCrash()
@@ -585,7 +585,7 @@ func (db *Database) periodicLog(ctx context.Context, query string, counter *com.
 	}))
 }
 
-func (db *Database) query(ctx context.Context, query string, scope ...interface{}) (rows *sqlx.Rows, err error) {
+func (db *Database) query(ctx context.Context, query string, scope ...any) (rows *sqlx.Rows, err error) {
 	if len(scope) == 1 && IsStruct(scope[0]) {
 		rows, err = db.NamedQueryContext(ctx, query, scope[0])
 	} else {
@@ -595,7 +595,7 @@ func (db *Database) query(ctx context.Context, query string, scope ...interface{
 	return
 }
 
-func IsStruct(subject interface{}) bool {
+func IsStruct(subject any) bool {
 	v := reflect.ValueOf(subject)
 	switch v.Kind() {
 	case reflect.Ptr:

@@ -145,7 +145,7 @@ func (n *Node) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		})
 	}
 
-	volumesMounted := make(map[kcorev1.UniqueVolumeName]interface{}, len(node.Status.VolumesInUse))
+	volumesMounted := make(map[kcorev1.UniqueVolumeName]any, len(node.Status.VolumesInUse))
 	for _, name := range node.Status.VolumesInUse {
 		volumesMounted[name] = struct{}{}
 	}

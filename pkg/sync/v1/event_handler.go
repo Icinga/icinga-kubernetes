@@ -31,19 +31,19 @@ func NewEventHandler(queue workqueue.TypedInterface[EventHandlerItem], log logr.
 	return &EventHandler{queue: queue, log: log}
 }
 
-func (e *EventHandler) OnAdd(obj interface{}, _ bool) {
+func (e *EventHandler) OnAdd(obj any, _ bool) {
 	e.enqueue(EventAdd, obj, cache.MetaNamespaceKeyFunc)
 }
 
-func (e *EventHandler) OnUpdate(_, newObj interface{}) {
+func (e *EventHandler) OnUpdate(_, newObj any) {
 	e.enqueue(EventUpdate, newObj, cache.MetaNamespaceKeyFunc)
 }
 
-func (e *EventHandler) OnDelete(obj interface{}) {
+func (e *EventHandler) OnDelete(obj any) {
 	e.enqueue(EventDelete, obj, cache.DeletionHandlingMetaNamespaceKeyFunc)
 }
 
-func (e *EventHandler) enqueue(_type EventType, obj interface{}, keyFunc cache.KeyFunc) {
+func (e *EventHandler) enqueue(_type EventType, obj any, keyFunc cache.KeyFunc) {
 	key, err := keyFunc(obj)
 	if err != nil {
 		e.log.Error(err, "cannot make key")

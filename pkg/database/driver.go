@@ -83,7 +83,7 @@ func (d Driver) OpenConnector(name string) (driver.Connector, error) {
 func RegisterDrivers(logger logr.Logger) {
 	sql.Register(MySQL, &Driver{ctxDriver: &mysql.MySQLDriver{}, Logger: logger})
 	sql.Register(PostgreSQL, &Driver{ctxDriver: &PgSQLDriver{}, Logger: logger})
-	_ = mysql.SetLogger(mysqlLogger(func(v ...interface{}) { fmt.Println(v...) }))
+	_ = mysql.SetLogger(mysqlLogger(func(v ...any) { fmt.Println(v...) }))
 	sqlx.BindDriver(PostgreSQL, sqlx.DOLLAR)
 }
 
@@ -94,10 +94,10 @@ type ctxDriver interface {
 }
 
 // mysqlLogger is an adapter that allows ordinary functions to be used as a logger for mysql.SetLogger.
-type mysqlLogger func(v ...interface{})
+type mysqlLogger func(v ...any)
 
 // Print implements the mysql.Logger interface.
-func (log mysqlLogger) Print(v ...interface{}) {
+func (log mysqlLogger) Print(v ...any) {
 	log(v)
 }
 

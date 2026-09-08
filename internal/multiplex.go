@@ -7,42 +7,42 @@ import (
 )
 
 type Multiplex interface {
-	In() chan interface{}
-	Out() chan interface{}
+	In() chan any
+	Out() chan any
 	Do(context.Context) error
 }
 
 func NewMultiplex() Multiplex {
 	return &multiplex{
 		started: false,
-		in:      make([]chan interface{}, 0, 1),
-		out:     make([]chan interface{}, 0, 2),
+		in:      make([]chan any, 0, 1),
+		out:     make([]chan any, 0, 2),
 	}
 }
 
 type multiplex struct {
 	started bool
-	in      []chan interface{}
-	out     []chan interface{}
+	in      []chan any
+	out     []chan any
 }
 
-func (m *multiplex) In() chan interface{} {
+func (m *multiplex) In() chan any {
 	if m.started {
 		panic("already started")
 	}
 
-	ch := make(chan interface{})
+	ch := make(chan any)
 	m.in = append(m.in, ch)
 
 	return ch
 }
 
-func (m *multiplex) Out() chan interface{} {
+func (m *multiplex) Out() chan any {
 	if m.started {
 		panic("already started")
 	}
 
-	ch := make(chan interface{})
+	ch := make(chan any)
 	m.out = append(m.out, ch)
 
 	return ch
@@ -53,7 +53,7 @@ func (m *multiplex) Do(ctx context.Context) error {
 
 	g, ctx := errgroup.WithContext(ctx)
 
-	sink := make(chan interface{})
+	sink := make(chan any)
 	defer close(sink)
 
 	g.Go(func() error {
