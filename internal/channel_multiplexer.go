@@ -2,8 +2,9 @@ package internal
 
 import (
 	"context"
-	"golang.org/x/sync/errgroup"
 	"sync/atomic"
+
+	"golang.org/x/sync/errgroup"
 )
 
 // ChannelMultiplexer is a multiplexer for channels of variable types.

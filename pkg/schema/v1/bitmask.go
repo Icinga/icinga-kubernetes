@@ -3,8 +3,9 @@ package v1
 import (
 	"database/sql"
 	"database/sql/driver"
-	"golang.org/x/exp/constraints"
 	"strconv"
+
+	"golang.org/x/exp/constraints"
 )
 
 type Bitmask[T constraints.Integer] struct {

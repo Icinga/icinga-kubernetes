@@ -2,6 +2,7 @@ package v1
 
 import (
 	"context"
+
 	"github.com/icinga/icinga-kubernetes/internal"
 	"golang.org/x/sync/errgroup"
 )

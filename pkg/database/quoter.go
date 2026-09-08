@@ -2,8 +2,9 @@ package database
 
 import (
 	"fmt"
-	"github.com/jmoiron/sqlx"
 	"strings"
+
+	"github.com/jmoiron/sqlx"
 )
 
 type Quoter struct {

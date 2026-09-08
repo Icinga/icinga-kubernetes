@@ -1,9 +1,10 @@
 package v1
 
 import (
+	"strconv"
+
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/types"
-	"strconv"
 )
 
 type PrometheusClusterMetric struct {
