@@ -21,7 +21,6 @@ func NewController(
 	informer cache.SharedIndexInformer,
 	log logr.Logger,
 ) *Controller {
-
 	return &Controller{
 		informer: informer,
 		log:      log,
