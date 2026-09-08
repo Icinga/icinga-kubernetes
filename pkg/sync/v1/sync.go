@@ -150,8 +150,11 @@ func (s *Sync) sync(ctx context.Context, c *Controller, synced map[string]types.
 	})
 	g.Go(func() error {
 		return s.db.UpsertStreamed(
-			ctx, sink.UpsertCh(),
-			database.WithCascading(), database.WithOnSuccess(with.OnUpsert()))
+			ctx,
+			sink.UpsertCh(),
+			database.WithCascading(),
+			database.WithOnSuccess(with.OnUpsert()),
+		)
 	})
 	g.Go(func() error {
 		if with.NoDelete() {
@@ -168,8 +171,13 @@ func (s *Sync) sync(ctx context.Context, c *Controller, synced map[string]types.
 			}
 		} else {
 			return s.db.DeleteStreamed(
-				ctx, s.factory(), sink.DeleteCh(),
-				database.WithBlocking(), database.WithCascading(), database.WithOnSuccess(with.OnDelete()))
+				ctx,
+				s.factory(),
+				sink.DeleteCh(),
+				database.WithBlocking(),
+				database.WithCascading(),
+				database.WithOnSuccess(with.OnDelete()),
+			)
 		}
 	})
 
