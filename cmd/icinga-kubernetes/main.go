@@ -72,10 +72,10 @@ func main() {
 	loadingRules.DefaultClientConfig = &kclientcmd.DefaultClientConfig
 	pflag.StringVar(&loadingRules.ExplicitPath, "kubeconfig", "", "Path to a kube config. Only required if out-of-cluster")
 
-	overrides := kclientcmd.ConfigOverrides{}
+	overrides := &kclientcmd.ConfigOverrides{}
 	kflags := kclientcmd.RecommendedConfigOverrideFlags("")
 	kflags.ContextOverrideFlags.Namespace = kclientcmd.FlagInfo{}
-	kclientcmd.BindOverrideFlags(&overrides, pflag.CommandLine, kflags)
+	kclientcmd.BindOverrideFlags(overrides, pflag.CommandLine, kflags)
 
 	pflag.Parse()
 
@@ -86,7 +86,7 @@ func main() {
 
 	klog.Infof("Starting Icinga for Kubernetes (%s)", internal.Version.Version)
 
-	kconfig, err := kclientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, &overrides).ClientConfig()
+	kconfig, err := kclientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, overrides).ClientConfig()
 	if err != nil {
 		if kclientcmd.IsEmptyConfig(err) {
 			klog.Fatal(
