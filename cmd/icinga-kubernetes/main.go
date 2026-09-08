@@ -106,7 +106,7 @@ func main() {
 		klog.Fatal(err)
 	}
 
-	klog.Infof("Conntected to %s", kconfig.Host)
+	klog.Infof("Connected to %s", kconfig.Host)
 
 	log := klog.NewKlogr()
 
