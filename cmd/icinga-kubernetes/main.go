@@ -108,7 +108,6 @@ func main() {
 
 	klog.Infof("Conntected to %s", kconfig.Host)
 
-	factory := informers.NewSharedInformerFactory(clientset, 0)
 	log := klog.NewKlogr()
 
 	var cfg daemon.Config
@@ -414,6 +413,8 @@ func main() {
 			return nclient.Stream(ctx, cachev1.Multiplexers().Pods().UpsertEvents().Out())
 		})
 	}
+
+	factory := informers.NewSharedInformerFactory(clientset, 0)
 
 	g.Go(func() error {
 		return SyncServicePods(ctx, kdb, factory.Core().V1().Services(), factory.Core().V1().Pods())
