@@ -1,6 +1,6 @@
 module github.com/icinga/icinga-kubernetes
 
-go 1.25.0
+go 1.27
 
 require (
 	github.com/go-co-op/gocron v1.37.0
