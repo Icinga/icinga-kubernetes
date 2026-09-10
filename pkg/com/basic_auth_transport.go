@@ -16,6 +16,8 @@ type BasicAuthTransport struct {
 // RoundTrip executes a single HTTP transaction with the basic auth credentials.
 func (t *BasicAuthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if t.Username != "" {
+		// RoundTrip must not modify the caller's request.
+		req = req.Clone(req.Context())
 		req.SetBasicAuth(t.Username, t.Password)
 	}
 
