@@ -70,14 +70,14 @@ func (m *Meta) SetManagedFields([]kmetav1.ManagedFieldsEntry)  { panic("Not expe
 
 func EnsureUUID(uid ktypes.UID) types.UUID {
 	if id, err := uuid.Parse(string(uid)); err == nil {
-		return types.UUID{UUID: id}
+		return types.MakeUUID(id)
 	}
 
-	return types.UUID{UUID: uuid.NewSHA1(NameSpaceKubernetes, []byte(uid))}
+	return types.MakeUUID(uuid.NewSHA1(NameSpaceKubernetes, []byte(uid)))
 }
 
 func NewUUID(space types.UUID, data string) types.UUID {
-	return types.UUID{UUID: uuid.NewSHA1(space.UUID, []byte(data))}
+	return types.MakeUUID(uuid.NewSHA1(space.UUID, []byte(data)))
 }
 
 func NewNullableString(s any) sql.NullString {
