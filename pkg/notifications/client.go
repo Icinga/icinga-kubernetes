@@ -45,18 +45,17 @@ func NewClient(name string, config Config, db *database.DB) (*Client, error) {
 		return nil, errors.Wrap(err, "unable to create notifications client")
 	}
 
+	transport := http.DefaultTransport
+	transport = com.NewUserAgentTransport(transport, name)
+	transport = com.NewBaseUrlTransport(transport, baseUrl)
+	transport = com.NewBasicAuthTransport(transport, config.Username, config.Password)
+
 	return &Client{
 		client:    client,
 		webUrl:    webUrl,
 		rulesInfo: &source.RulesInfo{},
 		db:        db,
-		rawClient: http.Client{
-			Transport: com.NewBasicAuthTransport(
-				com.NewScopeTransport(http.DefaultTransport, baseUrl, name),
-				config.Username,
-				config.Password,
-			),
-		},
+		rawClient: http.Client{Transport: transport},
 	}, nil
 }
 
