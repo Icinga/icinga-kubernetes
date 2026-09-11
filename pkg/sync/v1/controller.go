@@ -75,14 +75,10 @@ func (c *Controller) stream(ctx context.Context, sink *Sink) error {
 		if err != nil {
 			if c.queue.NumRequeues(eventHandlerItem) < 5 {
 				c.log.Error(errors.WithStack(err), fmt.Sprintf("Fetching key %s failed. Retrying", key))
-
 				c.queue.AddRateLimited(eventHandlerItem)
 			} else {
+				c.log.Error(errors.WithStack(err), fmt.Sprintf("Fetching key %s failed. Stopped retrying", key))
 				c.queue.Forget(eventHandlerItem)
-
-				if err := sink.Error(ctx, errors.Wrapf(err, "fetching key %s failed", key)); err != nil {
-					return err
-				}
 			}
 
 			continue

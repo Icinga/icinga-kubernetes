@@ -128,23 +128,6 @@ func (s *Sync) sync(ctx context.Context, c *Controller, features ...Feature) err
 				database.WithBlocking(), database.WithCascading(), database.WithOnSuccess(with.OnDelete()))
 		}
 	})
-	g.Go(func() error {
-		defer runtime.HandleCrash()
-
-		for {
-			select {
-			case err, more := <-sink.ErrorCh():
-				if !more {
-					return nil
-				}
-
-				s.log.Error(err, "sync error")
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-
-		}
-	})
 
 	return g.Wait()
 }

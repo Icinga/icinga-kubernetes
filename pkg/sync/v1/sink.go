@@ -13,7 +13,6 @@ type Item struct {
 }
 
 type Sink struct {
-	error      chan error
 	delete     chan any
 	deleteFunc func(any) any
 	upsert     chan any
@@ -22,7 +21,6 @@ type Sink struct {
 
 func NewSink(upsertFunc func(*Item) any, deleteFunc func(any) any) *Sink {
 	return &Sink{
-		error:      make(chan error),
 		delete:     make(chan any),
 		deleteFunc: deleteFunc,
 		upsert:     make(chan any),
@@ -41,19 +39,6 @@ func (s *Sink) Delete(ctx context.Context, key any) error {
 
 func (s *Sink) DeleteCh() <-chan any {
 	return s.delete
-}
-
-func (s *Sink) Error(ctx context.Context, err error) error {
-	select {
-	case s.error <- err:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-func (s *Sink) ErrorCh() <-chan error {
-	return s.error
 }
 
 func (s *Sink) Upsert(ctx context.Context, item *Item) error {
