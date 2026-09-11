@@ -40,7 +40,6 @@ import (
 	"golang.org/x/sync/errgroup"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/informers"
 	v2 "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -52,8 +51,6 @@ import (
 const expectedSchemaVersion = "0.4.0"
 
 func main() {
-	runtime.ReallyCrash = true
-
 	var glue daemon.ConfigFlagGlue
 	var showVersion bool
 	var clusterName string
