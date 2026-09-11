@@ -26,6 +26,15 @@ prometheus:
   # Prometheus server URL.
 #  url: http://localhost:9090
 
+  # Skip TLS/SSL certificate verification.
+#  insecure: false
+
+  # Bearer token for authenticating with Prometheus.
+#  token: token
+
+  # Path to a file containing the bearer token for authenticating with Prometheus.
+#  token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+
 # Configuration for Icinga Notifications daemon.
 notifications:
   # Icinga Notifications daemon URL.

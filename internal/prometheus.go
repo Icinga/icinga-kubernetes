@@ -38,6 +38,19 @@ func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *metrics.
 				schemav1.Config{ClusterUuid: clusterUuid, Key: schemav1.ConfigKeyPrometheusPassword, Value: config.Password, Locked: _true},
 			)
 		}
+		if config.Token != "" {
+			toDb = append(
+				toDb,
+				schemav1.Config{ClusterUuid: clusterUuid, Key: schemav1.ConfigKeyPrometheusToken, Value: config.Token, Locked: _true},
+			)
+		}
+
+		if config.TokenFile != "" {
+			toDb = append(
+				toDb,
+				schemav1.Config{ClusterUuid: clusterUuid, Key: schemav1.ConfigKeyPrometheusTokenFile, Value: config.TokenFile, Locked: _true},
+			)
+		}
 
 		err := db.ExecTx(ctx, func(ctx context.Context, tx *sqlx.Tx) error {
 			if _, err := tx.ExecContext(
@@ -98,6 +111,10 @@ func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *metrics.
 					config.Username = r.Value
 				case schemav1.ConfigKeyPrometheusPassword:
 					config.Password = r.Value
+				case schemav1.ConfigKeyPrometheusToken:
+					config.Token = r.Value
+				case schemav1.ConfigKeyPrometheusTokenFile:
+					config.TokenFile = r.Value
 				}
 			}
 
