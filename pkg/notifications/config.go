@@ -1,9 +1,9 @@
 package notifications
 
 import (
-	"github.com/pkg/errors"
 	"net/url"
-	"regexp"
+
+	"github.com/pkg/errors"
 )
 
 type Config struct {
@@ -19,14 +19,6 @@ func (c *Config) Validate() error {
 	if c.Url != "" || c.Username != "" || c.Password != "" {
 		if c.Url == "" || c.Username == "" || c.Password == "" {
 			return errors.New("if one of 'url', 'username', or 'password' is set, all must be set")
-		}
-
-		usernameValid, err := regexp.MatchString(`^source-\d+$`, c.Username)
-		if err != nil {
-			return errors.WithStack(err)
-		}
-		if !usernameValid {
-			return errors.New("'username' must be of the form 'source-<source_id>'")
 		}
 
 		if _, err := url.Parse(c.Url); err != nil {
