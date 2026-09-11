@@ -45,22 +45,17 @@ func NewClient(name string, config Config, db *database.DB) (*Client, error) {
 		return nil, errors.Wrap(err, "unable to create notifications client")
 	}
 
+	transport := http.DefaultTransport
+	transport = com.NewUserAgentTransport(transport, name)
+	transport = com.NewBaseUrlTransport(transport, baseUrl)
+	transport = com.NewBasicAuthTransport(transport, config.Username, config.Password)
+
 	return &Client{
 		client:    client,
 		webUrl:    webUrl,
 		rulesInfo: &source.RulesInfo{},
 		db:        db,
-		rawClient: http.Client{
-			Transport: com.NewBasicAuthTransport(
-				&ScopeTransport{
-					RoundTripper: http.DefaultTransport,
-					BaseUrl:      baseUrl,
-					UserAgent:    name,
-				},
-				config.Username,
-				config.Password,
-			),
-		},
+		rawClient: http.Client{Transport: transport},
 	}, nil
 }
 
@@ -205,17 +200,4 @@ type rule struct {
 	Kind    string `json:"kind"`
 	Query   string `json:"query"`
 	Args    []any  `json:"args"`
-}
-
-type ScopeTransport struct {
-	http.RoundTripper
-	UserAgent string
-	BaseUrl   *url.URL
-}
-
-func (t *ScopeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	req.URL = t.BaseUrl.ResolveReference(req.URL)
-	req.Header.Add("User-Agent", t.UserAgent)
-
-	return t.RoundTripper.RoundTrip(req)
 }
