@@ -3,11 +3,12 @@ package v1
 import (
 	"database/sql"
 	"fmt"
+	"reflect"
+
 	"github.com/google/uuid"
 	"github.com/icinga/icinga-go-library/types"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ktypes "k8s.io/apimachinery/pkg/types"
-	"reflect"
 )
 
 var NameSpaceKubernetes = uuid.MustParse("3f249403-2bb0-428f-8e91-504d1fd7ddb6")

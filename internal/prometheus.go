@@ -3,6 +3,8 @@ package internal
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/metrics"
@@ -13,7 +15,6 @@ import (
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"strings"
 )
 
 func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *metrics.PrometheusConfig, clusterUuid types.UUID) error {

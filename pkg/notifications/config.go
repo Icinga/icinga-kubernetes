@@ -1,9 +1,10 @@
 package notifications
 
 import (
-	"github.com/pkg/errors"
 	"net/url"
 	"regexp"
+
+	"github.com/pkg/errors"
 )
 
 type Config struct {

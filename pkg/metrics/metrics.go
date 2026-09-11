@@ -3,6 +3,11 @@ package metrics
 import (
 	"context"
 	"fmt"
+	"net"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/icinga/icinga-go-library/backoff"
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/logging"
@@ -17,10 +22,6 @@ import (
 	"golang.org/x/sync/errgroup"
 	kcorev1 "k8s.io/api/core/v1"
 	kcache "k8s.io/client-go/tools/cache"
-	"net"
-	"strings"
-	"sync"
-	"time"
 )
 
 // PromQuery defines a prometheus query with the metric group, the query and the name label

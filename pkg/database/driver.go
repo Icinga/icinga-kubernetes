@@ -5,13 +5,14 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
+	"time"
+
 	"github.com/go-logr/logr"
 	"github.com/go-sql-driver/mysql"
 	"github.com/icinga/icinga-go-library/backoff"
 	"github.com/icinga/icinga-go-library/retry"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
-	"time"
 )
 
 const MySQL = "icinga-mysql"

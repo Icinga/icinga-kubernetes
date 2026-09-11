@@ -3,12 +3,13 @@ package database
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/icinga/icinga-go-library/backoff"
 	"github.com/icinga/icinga-go-library/com"
 	"github.com/icinga/icinga-go-library/periodic"
 	"github.com/icinga/icinga-go-library/retry"
 	"github.com/icinga/icinga-go-library/types"
-	"time"
 )
 
 // CleanupStmt defines information needed to compose cleanup statements.

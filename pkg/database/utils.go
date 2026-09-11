@@ -3,13 +3,14 @@ package database
 import (
 	sqlDriver "database/sql/driver"
 	"fmt"
+	"net"
+	"strings"
+
 	"github.com/go-sql-driver/mysql"
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/lib/pq"
 	"github.com/pkg/errors"
-	"net"
-	"strings"
 )
 
 // CantPerformQuery wraps the given error with the specified query that cannot be executed.

@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+
 	"github.com/icinga/icinga-go-library/types"
 )
 

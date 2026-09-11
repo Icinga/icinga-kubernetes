@@ -3,6 +3,8 @@ package v1
 import (
 	"database/sql"
 	"fmt"
+	"strings"
+
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
@@ -13,7 +15,6 @@ import (
 	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	ktypes "k8s.io/apimachinery/pkg/types"
-	"strings"
 )
 
 type Job struct {
