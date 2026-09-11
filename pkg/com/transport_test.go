@@ -74,9 +74,9 @@ func TestNewTransportReusesConnections(t *testing.T) {
 			},
 		},
 		{
-			name: "wrapped in BasicAuthTransport",
+			name: "wrapped in basicAuthTransport",
 			transport: func(rt http.RoundTripper) http.RoundTripper {
-				return &BasicAuthTransport{RoundTripper: rt, Username: "user", Password: "pass"}
+				return NewBasicAuthTransport(rt, "user", "pass")
 			},
 		},
 	}

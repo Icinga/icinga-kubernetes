@@ -438,11 +438,7 @@ func main() {
 		var transport http.RoundTripper = kcom.NewTransport(cfg.Prometheus.Insecure == "true")
 
 		if cfg.Prometheus.Username != "" {
-			transport = &kcom.BasicAuthTransport{
-				RoundTripper: transport,
-				Username:     cfg.Prometheus.Username,
-				Password:     cfg.Prometheus.Password,
-			}
+			transport = kcom.NewBasicAuthTransport(transport, cfg.Prometheus.Username, cfg.Prometheus.Password)
 		}
 
 		promClient, err := promapi.NewClient(promapi.Config{
