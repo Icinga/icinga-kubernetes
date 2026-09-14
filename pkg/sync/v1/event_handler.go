@@ -2,6 +2,7 @@ package v1
 
 import (
 	"fmt"
+
 	"github.com/go-logr/logr"
 	"github.com/icinga/icinga-go-library/types"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"

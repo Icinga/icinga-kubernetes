@@ -1,8 +1,9 @@
 package v1
 
 import (
-	"github.com/icinga/icinga-go-library/types"
 	"time"
+
+	"github.com/icinga/icinga-go-library/types"
 )
 
 type PodMetrics struct {

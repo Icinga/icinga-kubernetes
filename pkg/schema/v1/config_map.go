@@ -1,11 +1,12 @@
 package v1
 
 import (
+	"strings"
+
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"strings"
 )
 
 type ConfigMap struct {

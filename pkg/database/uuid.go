@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql/driver"
 	"encoding"
+
 	"github.com/google/uuid"
 )
 

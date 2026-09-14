@@ -1,6 +1,8 @@
 package v1
 
 import (
+	"strings"
+
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	kcorev1 "k8s.io/api/core/v1"
@@ -8,7 +10,6 @@ import (
 	kruntime "k8s.io/apimachinery/pkg/runtime"
 	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
-	"strings"
 )
 
 type Namespace struct {

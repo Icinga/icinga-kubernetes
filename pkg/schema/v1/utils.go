@@ -1,9 +1,10 @@
 package v1
 
 import (
+	"reflect"
+
 	"github.com/icinga/icinga-go-library/types"
 	"golang.org/x/exp/constraints"
-	"reflect"
 )
 
 func MarshalFirstNonNilStructFieldToJSON(i any) (string, string, error) {

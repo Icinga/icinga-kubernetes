@@ -2,6 +2,7 @@ package v1
 
 import (
 	"database/sql"
+
 	"github.com/icinga/icinga-go-library/types"
 	keventsv1 "k8s.io/api/events/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

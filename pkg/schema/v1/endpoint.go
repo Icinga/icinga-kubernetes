@@ -2,13 +2,14 @@ package v1
 
 import (
 	"database/sql"
+	"strings"
+
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	v1 "k8s.io/api/core/v1"
 	kdiscoveryv1 "k8s.io/api/discovery/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ktypes "k8s.io/apimachinery/pkg/types"
-	"strings"
 )
 
 type EndpointSlice struct {

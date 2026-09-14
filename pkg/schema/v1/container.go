@@ -5,19 +5,20 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
+	"strings"
+	"sync"
+	"time"
+	"unicode/utf8"
+
 	"github.com/go-co-op/gocron"
 	"github.com/icinga/icinga-go-library/com"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"golang.org/x/sync/errgroup"
-	"io"
 	kcorev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
-	"strings"
-	"sync"
-	"time"
-	"unicode/utf8"
 )
 
 var (
