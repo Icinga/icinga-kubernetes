@@ -1043,9 +1043,11 @@ CREATE TABLE config (
     'prometheus.url',
     'prometheus.insecure',
     'prometheus.username',
-    'prometheus.password'
+    'prometheus.password',
+    'prometheus.token',
+    'prometheus.token_file'
     ) COLLATE utf8mb4_unicode_ci NOT NULL,
-  value varchar(255) NOT NULL,
+  value text NOT NULL,
   locked enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
 
   PRIMARY KEY (`key`, cluster_uuid)
