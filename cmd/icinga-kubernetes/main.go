@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -434,20 +435,15 @@ func main() {
 	}
 
 	if cfg.Prometheus.Url != "" {
-		basicAuthTransport := &kcom.BasicAuthTransport{}
-
-		if cfg.Prometheus.Insecure == "true" {
-			basicAuthTransport.Insecure = true
-		}
+		var transport http.RoundTripper = kcom.NewTransport(cfg.Prometheus.Insecure == "true")
 
 		if cfg.Prometheus.Username != "" {
-			basicAuthTransport.Username = cfg.Prometheus.Username
-			basicAuthTransport.Password = cfg.Prometheus.Password
+			transport = kcom.NewBasicAuthTransport(transport, cfg.Prometheus.Username, cfg.Prometheus.Password)
 		}
 
 		promClient, err := promapi.NewClient(promapi.Config{
 			Address:      cfg.Prometheus.Url,
-			RoundTripper: basicAuthTransport,
+			RoundTripper: transport,
 		})
 		if err != nil {
 			klog.Fatal(errors.Wrap(err, "error creating Prometheus client"))

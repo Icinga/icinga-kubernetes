@@ -51,15 +51,15 @@ func NewClient(name string, config Config, db *database.DB) (*Client, error) {
 		rulesInfo: &source.RulesInfo{},
 		db:        db,
 		rawClient: http.Client{
-			Transport: &com.BasicAuthTransport{
-				RoundTripper: &ScopeTransport{
+			Transport: com.NewBasicAuthTransport(
+				&ScopeTransport{
 					RoundTripper: http.DefaultTransport,
 					BaseUrl:      baseUrl,
 					UserAgent:    name,
 				},
-				Username: config.Username,
-				Password: config.Password,
-			},
+				config.Username,
+				config.Password,
+			),
 		},
 	}, nil
 }
