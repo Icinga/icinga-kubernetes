@@ -4,7 +4,7 @@ go 1.27
 
 require (
 	github.com/go-co-op/gocron v1.37.0
-	github.com/go-logr/logr v1.4.3
+	github.com/go-logr/logr v1.4.4
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/google/uuid v1.6.0
 	github.com/icinga/icinga-go-library v0.8.1-0.20251117102853-6ea33d1f7965
