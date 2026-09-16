@@ -9,7 +9,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/icinga/icinga-go-library v0.8.1-0.20251117102853-6ea33d1f7965
 	github.com/jmoiron/sqlx v1.4.0
-	github.com/lib/pq v1.10.9
+	github.com/lib/pq v1.12.3
 	github.com/okzk/sdnotify v0.0.0-20240725214427-1c1fdd37c5ac
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.23.2
