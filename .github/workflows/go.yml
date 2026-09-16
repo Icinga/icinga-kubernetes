@@ -15,9 +15,6 @@ jobs:
         with:
           go-version: stable
 
-      - name: Build
-        run: go build -gcflags="-m" ./...
-
       - name: Test
         run: go test -v -race ./...
 
