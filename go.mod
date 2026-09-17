@@ -12,7 +12,7 @@ require (
 	github.com/lib/pq v1.12.3
 	github.com/okzk/sdnotify v0.0.0-20240725214427-1c1fdd37c5ac
 	github.com/pkg/errors v0.9.1
-	github.com/prometheus/client_golang v1.23.2
+	github.com/prometheus/client_golang v1.24.1
 	github.com/prometheus/common v0.71.0
 	github.com/spf13/pflag v1.0.10
 	go.uber.org/zap v1.28.0
