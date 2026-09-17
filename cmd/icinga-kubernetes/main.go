@@ -49,12 +49,17 @@ import (
 	"k8s.io/klog/v2"
 )
 
-const expectedSchemaVersion = "0.4.0"
+const (
+	expectedSchemaVersion      = "0.4.0"
+	clusterRemovalActiveWithin = 5 * time.Minute
+)
 
 func main() {
 	var glue daemon.ConfigFlagGlue
 	var showVersion bool
 	var clusterName string
+	var removeCluster string
+	var confirmClusterRemoval bool
 
 	klog.InitFlags(nil)
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
@@ -67,6 +72,9 @@ func main() {
 		fmt.Sprintf("path to the config file (default: %s)", daemon.DefaultConfigPath),
 	)
 	pflag.StringVar(&clusterName, "cluster-name", "", "name of the current cluster")
+
+	pflag.StringVar(&removeCluster, "remove-cluster", "", "inspect or remove a decommissioned cluster by UUID using database state only")
+	pflag.BoolVar(&confirmClusterRemoval, "confirm-cluster-removal", false, "confirm destructive removal requested by --remove-cluster")
 
 	loadingRules := kclientcmd.NewDefaultClientConfigLoadingRules()
 	loadingRules.DefaultClientConfig = &kclientcmd.DefaultClientConfig
@@ -82,6 +90,17 @@ func main() {
 	if showVersion {
 		internal.Version.Print("Icinga Kubernetes")
 		os.Exit(0)
+	}
+
+	if confirmClusterRemoval && removeCluster == "" {
+		klog.Fatal("--confirm-cluster-removal requires --remove-cluster")
+	}
+
+	if removeCluster != "" {
+		if err := runClusterRemoval(context.Background(), glue, removeCluster, confirmClusterRemoval); err != nil {
+			klog.Fatal(err)
+		}
+		return
 	}
 
 	klog.Infof("Starting Icinga for Kubernetes (%s)", internal.Version.Version)
@@ -696,6 +715,234 @@ func main() {
 	if err := g.Wait(); err != nil {
 		klog.Fatal(err)
 	}
+}
+
+func runClusterRemoval(
+	ctx context.Context,
+	glue daemon.ConfigFlagGlue,
+	clusterUuidText string,
+	confirm bool,
+) error {
+	parsedUuid, err := uuid.Parse(clusterUuidText)
+	if err != nil {
+		return errors.Wrapf(
+			err,
+			"invalid cluster UUID %q",
+			clusterUuidText,
+		)
+	}
+
+	clusterUuid := types.UUID{
+		UUID: parsedUuid,
+	}
+
+	var cfg daemon.Config
+
+	if err := config.Load(
+		&cfg,
+		config.LoadOptions{
+			Flags: glue,
+			EnvOptions: config.EnvOptions{
+				Prefix: "ICINGA_FOR_KUBERNETES_",
+			},
+		},
+	); err != nil {
+		return errors.Wrap(
+			err,
+			"can't create configuration",
+		)
+	}
+
+	logs, err := logging.NewLoggingFromConfig(
+		"Icinga Kubernetes",
+		cfg.Logging,
+	)
+	if err != nil {
+		return errors.Wrap(
+			err,
+			"cannot configure logging",
+		)
+	}
+
+	db, err := database.NewDbFromConfig(
+		&cfg.Database,
+		logs.GetChildLogger("database"),
+		database.RetryConnectorCallbacks{},
+	)
+	if err != nil {
+		return errors.Wrap(
+			err,
+			"cannot create database connection",
+		)
+	}
+
+	kdb, err := kdatabase.NewFromSqlxDb(
+		&cfg.Database,
+		klog.NewKlogr().WithName("database"),
+		db.DB,
+	)
+	if err != nil {
+		return err
+	}
+
+	if !kdb.Connect() {
+		return errors.New(
+			"cannot connect to database",
+		)
+	}
+
+	hasSchema, err := dbHasSchema(
+		kdb,
+		cfg.Database.Database,
+	)
+	if err != nil {
+		return errors.Wrap(
+			err,
+			"cannot inspect database schema",
+		)
+	}
+
+	if !hasSchema {
+		return errors.New(
+			"cannot remove cluster: kubernetes schema is not initialized",
+		)
+	}
+
+	const schemaVersionQuery = "SELECT version FROM kubernetes_schema ORDER BY id DESC LIMIT 1"
+
+	var schemaVersion string
+
+	if err := kdb.QueryRowxContext(
+		ctx,
+		schemaVersionQuery,
+	).Scan(
+		&schemaVersion,
+	); err != nil {
+		return kdatabase.CantPerformQuery(
+			err,
+			schemaVersionQuery,
+		)
+	}
+
+	if schemaVersion != expectedSchemaVersion {
+		return errors.Errorf(
+			"cannot remove cluster: database schema version %q does not match expected version %q",
+			schemaVersion,
+			expectedSchemaVersion,
+		)
+	}
+
+	inspection, err := kdb.InspectClusterRemoval(
+		ctx,
+		clusterUuid,
+		clusterRemovalActiveWithin,
+	)
+	if err != nil {
+		return err
+	}
+
+	clusterName := "<unnamed>"
+
+	if inspection.Name.Valid {
+		clusterName = inspection.Name.String
+	}
+
+	latestHeartbeat := "none"
+
+	if !inspection.LatestHeartbeat.IsZero() {
+		latestHeartbeat = inspection.LatestHeartbeat.Format(
+			time.RFC3339Nano,
+		)
+	}
+
+	klog.Infof(
+		"Cluster removal inspection: uuid=%s name=%q state=%s instances=%d latest_heartbeat=%s active_within=%s",
+		clusterUuid.String(),
+		clusterName,
+		inspection.State,
+		inspection.InstanceCount,
+		latestHeartbeat,
+		clusterRemovalActiveWithin,
+	)
+
+	switch inspection.State {
+	case kdatabase.ClusterRemovalStateMissing:
+		klog.Infof(
+			"Cluster %s is already absent; nothing to remove",
+			clusterUuid.String(),
+		)
+
+		return nil
+
+	case kdatabase.ClusterRemovalStateActive:
+		return errors.Errorf(
+			"refusing to remove cluster %s: daemon heartbeat is within %s",
+			clusterUuid.String(),
+			clusterRemovalActiveWithin,
+		)
+
+	case kdatabase.ClusterRemovalStateNoInstance:
+		return errors.Errorf(
+			"refusing to remove cluster %s: cluster exists but has no kubernetes_instance heartbeat to evaluate",
+			clusterUuid.String(),
+		)
+
+	case kdatabase.ClusterRemovalStateStale:
+		if !confirm {
+			klog.Infof(
+				"Cluster %s is stale and eligible for explicit removal; no data was removed. Re-run with --confirm-cluster-removal to perform the destructive operation.",
+				clusterUuid.String(),
+			)
+
+			return nil
+		}
+
+	default:
+		return errors.Errorf(
+			"refusing to remove cluster %s: unknown removal state %q",
+			clusterUuid.String(),
+			inspection.State,
+		)
+	}
+
+	if err := kdb.RemoveCluster(
+		ctx,
+		clusterUuid,
+	); err != nil {
+		return errors.Wrapf(
+			err,
+			"cannot remove cluster %s",
+			clusterUuid.String(),
+		)
+	}
+
+	after, err := kdb.InspectClusterRemoval(
+		ctx,
+		clusterUuid,
+		clusterRemovalActiveWithin,
+	)
+	if err != nil {
+		return errors.Wrap(
+			err,
+			"cannot verify cluster removal",
+		)
+	}
+
+	if after.State != kdatabase.ClusterRemovalStateMissing {
+		return errors.Errorf(
+			"cluster removal returned successfully but cluster %s is still in state %q",
+			clusterUuid.String(),
+			after.State,
+		)
+	}
+
+	klog.Infof(
+		"Removed cluster %s (%s)",
+		clusterUuid.String(),
+		clusterName,
+	)
+
+	return nil
 }
 
 // dbHasSchema queries via db whether the database dbName has a table named "kubernetes_schema".
