@@ -109,6 +109,10 @@ ICINGA_FOR_KUBERNETES_PROMETHEUS_URL=http://localhost:9090
 2. Remove the corresponding environment file from `/etc/icinga-kubernetes`.
 3. Reload the systemd daemon with `systemctl daemon-reload` to make sure the daemon forgets the file.
 
+Removing the service instance and its environment file does not remove the cluster's already synchronized database
+state. If the cluster has been permanently decommissioned and should also be removed from Icinga for Kubernetes,
+follow [Remove a Decommissioned Kubernetes Cluster](remove-cluster-instance/remove-instance.md).
+
 !!! Warning
 
     If you stop the service without removing the environment file, the instance will restart when the service is
