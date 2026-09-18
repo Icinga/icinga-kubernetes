@@ -1,15 +1,18 @@
 package database
 
 import (
+	"database/sql"
+
 	"github.com/icinga/icinga-go-library/database"
 )
 
 type Feature func(*Features)
 
 type Features struct {
-	blocking  bool
-	cascading bool
-	onSuccess database.OnSuccess[any]
+	blocking    bool
+	cascading   bool
+	transaction *sql.TxOptions
+	onSuccess   database.OnSuccess[any]
 }
 
 func NewFeatures(features ...Feature) *Features {
@@ -36,5 +39,11 @@ func WithCascading() Feature {
 func WithOnSuccess(fn database.OnSuccess[any]) Feature {
 	return func(f *Features) {
 		f.onSuccess = fn
+	}
+}
+
+func WithTransaction(opts *sql.TxOptions) Feature {
+	return func(f *Features) {
+		f.transaction = opts
 	}
 }

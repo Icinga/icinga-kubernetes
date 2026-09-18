@@ -163,9 +163,23 @@ func (db *Database) BulkExec(
 	f := NewFeatures(features...)
 	var n int64
 	if f.blocking {
-		n = int64(db.Options.MaxConnectionsPerTable)
-	} else {
 		n = 1
+	} else {
+		n = int64(db.Options.MaxConnectionsPerTable)
+	}
+
+	var dbOrTx sqlx.ExecerContext
+	var tx *sqlx.Tx
+	var err error
+	if f.transaction != nil {
+		tx, err = db.BeginTxx(ctx, f.transaction)
+		if err != nil {
+			return fmt.Errorf("bulk exec transaction: %w", err)
+		}
+		defer func() { _ = tx.Rollback() }()
+		dbOrTx = tx
+	} else {
+		dbOrTx = db
 	}
 
 	bulk := com.Bulk(ctx, arg, count, com.NeverSplit[any])
@@ -190,7 +204,7 @@ func (db *Database) BulkExec(
 							}
 
 							stmt = db.Rebind(stmt)
-							_, err = db.ExecContext(ctx, stmt, args...)
+							_, err = dbOrTx.ExecContext(ctx, stmt, args...)
 							if err != nil {
 								return CantPerformQuery(err, query)
 							}
@@ -215,6 +229,16 @@ func (db *Database) BulkExec(
 
 		return g.Wait()
 	})
+
+	if err := g.Wait(); err != nil {
+		return fmt.Errorf("bulk exec: %w", err)
+	}
+
+	if tx != nil {
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("cannot commit transaction: %w", err)
+		}
+	}
 
 	return g.Wait()
 }

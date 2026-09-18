@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/icinga/icinga-go-library/types"
+	v1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
 )
@@ -232,15 +233,44 @@ func (db *Database) RemoveCluster(
 ) error {
 	tx, err := db.BeginTxx(ctx, nil)
 	if err != nil {
-		return errors.Wrap(
-			err,
-			"cannot begin cluster removal transaction",
-		)
+		return errors.Wrap(err, "cannot begin cluster removal transaction")
 	}
 
-	defer func() {
-		_ = tx.Rollback()
-	}()
+	defer func() { _ = tx.Rollback() }()
+
+	// Loop: SELECT all resources that have cluster_uuid
+	factory := v1.NewDaemonSet
+
+	meta := &v1.Meta{ClusterUuid: clusterUuid}
+	query := db.BuildSelectStmt(factory(), meta) + ` WHERE cluster_uuid=:cluster_uuid`
+
+	deletes := make(chan any)
+
+	entities, errs := db.YieldAll(ctx, func() (any, error) {
+		return factory(), nil
+	}, query, meta)
+	for {
+		select {
+		case entity, ok := <-entities:
+			if !ok {
+				return ctx.Err()
+			}
+
+			select {
+			case deletes <- entity.(v1.Meta).Uuid:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		case <-ctx.Done():
+			return nil
+		case err := <-errs:
+			return fmt.Errorf("cannot remove cluster: %w", err)
+		}
+	}
+
+	if err := db.DeleteStreamed(ctx, factory(), deletes); err != nil {
+		return fmt.Errorf("cannot remove cluster %s: %w", clusterUuid, err)
+	}
 
 	if err := db.removeClusterPodContainers(
 		ctx,
