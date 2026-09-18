@@ -31,6 +31,9 @@ This is also the database used in
 | output   | **Optional.** Logging output. Can be set to `console` (stderr) or `systemd-journald`. If not set, logs to systemd-journald when running under systemd, otherwise stderr. |
 | interval | **Optional.** Interval for periodic logging defined as duration string. Valid units are `ms`, `s`, `m`, `h`. Defaults to `20s`.                                          |
 
+Note that, `icinga-kubernetes` also supports increasing the log level using the `-v` flag.
+To increase the log level for debugging purposes, you can start the daemon with `icinga-kubernetes -v 2`.
+
 ## Notifications Configuration
 
 Connection configuration for [Icinga Notifications](https://github.com/icinga/icinga-notifications) daemon.
