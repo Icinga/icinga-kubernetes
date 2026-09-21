@@ -14,227 +14,367 @@ Cluster B daemon ─┘                 │
                            Icinga Kubernetes Web
 ```
 
-If Cluster B is permanently decommissioned, its daemon stops writing new data, but its old database state remains.
+If Cluster B is permanently decommissioned, its daemon stops writing new data, but its synchronized database state
+remains.
 
 The result is:
 
 ```text
-Cluster B decommissioned
+Cluster B permanently decommissioned
         ↓
-daemon stops
+its icinga-kubernetes daemon stops
         ↓
-heartbeat becomes stale
+old Cluster B database state remains
         ↓
-old Cluster B resources remain in the database
-        ↓
-Cluster B remains visible in Kubernetes Web
+Cluster B remains available through Kubernetes Web
 ```
 
-Deleting only the row from the `cluster` table is not sufficient because a cluster owns many resources and dependent relation tables.
+Deleting only the row from the `cluster` table is not sufficient. A monitored cluster owns resource rows, dependent
+relationship rows, container state, metrics, configuration and daemon-instance state.
 
 ---
 
-## What We Changed
+## Final Operator Behaviour
 
-The resolution was implemented in the Go daemon/database layer.
-
-Runtime source changes:
-
-```text
-cmd/icinga-kubernetes/main.go
-pkg/database/remove_cluster.go
-pkg/database/cluster_removal_inspection.go
-pkg/database/cluster_removal_inspection_test.go
-```
-
-### `cmd/icinga-kubernetes/main.go`
-
-Added the DB-only administrative interface:
-
-```text
---remove-cluster <UUID>
---confirm-cluster-removal
-```
-
-The active-heartbeat safety window is fixed at `5m`.
-
-The removal command runs before normal Kubernetes client initialization, so removal does not require a working kubeconfig or reachable Kubernetes API.
-
-It also verifies that the existing database schema is present and is the supported schema version before allowing removal.
-
-### `pkg/database/cluster_removal_inspection.go`
-
-Added a read-only lifecycle inspection step.
-
-A cluster is classified as:
-
-```text
-missing
-no_instance
-active
-stale
-```
-
-This separates:
-
-```text
-"what does the database currently show?"
-```
-
-from:
-
-```text
-"should this cluster actually be deleted?"
-```
-
-### `pkg/database/remove_cluster.go`
-
-Added the actual cluster-scoped cleanup operation.
-
-`RemoveCluster()` removes Cluster B's resources and dependent rows inside one SQL transaction:
-
-```text
-BEGIN
-  ↓
-dependent rows
-  ↓
-resource relation rows
-  ↓
-cluster-owned resources
-  ↓
-metrics / config / instance state
-  ↓
-cluster row LAST
-  ↓
-COMMIT
-```
-
-If one of the deletion steps fails:
-
-```text
-ROLLBACK
-```
-
-so the database is not intentionally left half-cleaned.
-
-### `pkg/database/cluster_removal_inspection_test.go`
-
-Added lifecycle-classification tests, including:
-
-```text
-no instance
-fresh heartbeat
-heartbeat exactly on boundary
-stale heartbeat
-future heartbeat / clock skew
-multiple instance records
-```
-
----
-
-## Safety Rules
-
-A stale heartbeat is **not automatically permission to delete a cluster**.
-
-The implemented policy is:
-
-```text
-missing
-    → nothing to remove
-
-active
-    → REFUSE
-
-no_instance
-    → REFUSE
-
-stale
-    → inspection only unless explicitly confirmed
-```
-
-The confirmation flag does not override the active-cluster protection.
-
-There is intentionally no:
-
-```text
---force-delete-active-cluster
-```
-
-style bypass.
-
-This operation is intended for a cluster that has actually been permanently decommissioned and whose Icinga Kubernetes daemon has been stopped.
-
----
-
-## Real-World Removal Flow
-
-When permanently removing a monitored cluster:
-
-```text
-Decide that Cluster B is permanently decommissioned
-        ↓
-stop its icinga-kubernetes daemon
-        ↓
-identify Cluster B UUID
-        ↓
-run removal command without confirmation
-        ↓
-InspectClusterRemoval()
-        ↓
-        ├── active      → STOP
-        ├── no_instance → STOP
-        ├── missing     → nothing to do
-        └── stale       → eligible for explicit confirmation
-                               ↓
-                     run confirmed removal
-                               ↓
-                       RemoveCluster()
-                               ↓
-                   transactional DB cleanup
-                               ↓
-                    inspect Cluster B again
-                               ↓
-                       require "missing"
-                               ↓
-                Cluster B disappears from Web
-```
-
-### First run — inspection / dry run
-
-Using the same database configuration used by the daemon:
+Cluster removal is an explicit DB-only administrative operation:
 
 ```bash
 icinga-kubernetes \
     --remove-cluster <CLUSTER_UUID>
 ```
 
-For a stale cluster this reports that the cluster is eligible for explicit removal but does not delete anything.
+The command performs the removal immediately.
 
-### Confirmed removal
+There is no separate lifecycle-inspection or confirmation phase in the final implementation.
 
-After confirming that the cluster really is permanently decommissioned:
+The operator must therefore first permanently decommission the target cluster from this Icinga for Kubernetes
+database and stop the daemon that synchronizes it.
 
-```bash
-icinga-kubernetes \
-    --remove-cluster <CLUSTER_UUID> \
-    --confirm-cluster-removal
-```
-
-The command performs the transactional cleanup and then checks the database again.
-
-The final expected lifecycle state is:
-
-```text
-missing
-```
-
-The built-in `5m` safety window remains in effect for both inspection and confirmed removal. A cluster whose newest heartbeat is within that window is classified as `active` and removal is refused. `--confirm-cluster-removal` does not override that protection.
+The removal path executes before normal Kubernetes client initialization. A reachable Kubernetes API or working
+kubeconfig is not required for the cleanup operation.
 
 ---
 
-## Why No Kubernetes Web Deletion Code Was Needed
+## Final Runtime Structure
 
-Kubernetes Web already builds its cluster selector from rows in the `cluster` table.
+The implementation is split across three responsibilities:
+
+```text
+cmd/icinga-kubernetes/main.go
+        │
+        │ parse UUID
+        │ load normal configuration
+        │ connect to existing database
+        ▼
+internal/remove_cluster.go
+        │
+        │ own complete cluster-removal transaction
+        │ select target resource UUIDs
+        │ orchestrate normal + special cleanup
+        ▼
+pkg/database/database.go
+        │
+        └── DeleteTx()
+              │
+              ├── existing Relations()
+              ├── CascadeDelete()
+              ├── BuildDeleteStmt()
+              ├── batching
+              └── caller-owned *sqlx.Tx
+```
+
+`internal/remove_cluster.go` is the orchestration layer because it can depend on both the database package and the
+schema package without reversing their existing dependency direction.
+
+---
+
+## Reuse-First Deletion Design
+
+The previous implementation contained a large manually maintained cluster deletion graph.
+
+The final implementation instead reuses the repository's existing resource relationship metadata wherever that
+metadata correctly expresses deletion ownership.
+
+For ordinary resources the flow is:
+
+```text
+resource factory
+        ↓
+select UUIDs belonging to target cluster
+        ↓
+DeleteTx(..., WithCascading())
+        ↓
+existing resource Relations()
+        ↓
+delete cascading relation rows
+        ↓
+delete resource root rows
+```
+
+That means relationship knowledge continues to live primarily in the schema resource models instead of being copied
+into a second general-purpose cluster cleanup registry.
+
+---
+
+## Why `YieldAll()` + `DeleteStreamed()` Are Not Used Directly
+
+The repository already contains `YieldAll()` and `DeleteStreamed()`, and that existing machinery strongly influenced
+the simplified design.
+
+They were not copied directly into the final cluster-removal path because cluster removal has one additional
+requirement: the complete destructive operation must remain inside one caller-owned SQL transaction.
+
+### Transaction ownership
+
+`YieldAll()` performs its query through the database object:
+
+```text
+YieldAll()
+    ↓
+db.query(...)
+```
+
+It does not accept a caller-owned `*sqlx.Tx`.
+
+`DeleteStreamed()` similarly reaches the normal database bulk-execution path:
+
+```text
+DeleteStreamed()
+    ↓
+BulkExec()
+    ↓
+database executor
+```
+
+Using those two functions directly would therefore move selection and/or deletion work outside the transaction owned
+by `RemoveCluster()`.
+
+The cluster-removal implementation instead performs its UUID selections through:
+
+```text
+tx.SelectContext(...)
+```
+
+and its deletions through:
+
+```text
+DeleteTx(..., tx, ...)
+```
+
+so the complete mutation remains under the same transaction.
+
+### Streaming mechanics
+
+A literal synchronous producer such as:
+
+```text
+create unbuffered delete channel
+        ↓
+send UUID into channel
+        ↓
+start DeleteStreamed later
+```
+
+would block on the first send because no receiver has started yet.
+
+Likewise, a deletion consumer placed after a producer loop that only exits on cancellation does not form a valid
+producer/consumer pipeline.
+
+The existing streaming helpers solve these problems through concurrent goroutines. Cluster removal avoids adding a
+second concurrent streaming pipeline because its stronger requirement is transaction ownership, not streaming
+throughput.
+
+### Concrete resource types
+
+Schema resource factories return concrete pointer-backed resources.
+
+For example, a DaemonSet factory returns a `Resource` whose concrete value is `*DaemonSet`. `DaemonSet` embeds `Meta`,
+but the interface's dynamic type is not `Meta` itself.
+
+The removal implementation therefore does not depend on an assertion such as:
+
+```text
+entity.(Meta)
+```
+
+It selects only the database UUID into the small `clusterRemovalUuid` shape required for deletion.
+
+### Cascading is explicit
+
+`DeleteStreamed()` only traverses a resource's `Relations()` when cascading is enabled.
+
+A generic root deletion without:
+
+```text
+WithCascading()
+```
+
+would remove only the resource root row and leave cascading relationship rows behind.
+
+The final implementation preserves that same feature semantic through `DeleteTx()`.
+
+---
+
+## Why `DeleteTx()` Exists
+
+`DeleteTx()` is deliberately a small extension of the existing deletion machinery rather than a second independent
+deletion system.
+
+It reuses:
+
+```text
+HasRelations
+Relations()
+CascadeDelete()
+BuildDeleteStmt()
+MaxPlaceholdersPerStatement
+Feature handling
+```
+
+but executes the resulting deletes through the `*sqlx.Tx` supplied by the caller.
+
+Conceptually:
+
+```text
+DeleteStreamed()
+    existing relationship semantics
+    existing delete-statement semantics
+    database-owned execution
+
+DeleteTx()
+    existing relationship semantics
+    existing delete-statement semantics
+    caller-owned transaction execution
+```
+
+This preserves the repository's authoritative relationship metadata while allowing `RemoveCluster()` to retain
+cluster-wide atomic rollback.
+
+---
+
+## Why Some Cleanup Is Still Explicit
+
+Not every table needed by cluster removal is represented safely by the normal zero-value resource relation graph.
+
+Those cases remain deliberately small and explicit.
+
+### Persistent Volumes
+
+`PersistentVolume.Relations()` returns no relations when the zero-value resource has no `Claim`.
+
+A factory-created descriptor therefore cannot be blindly cascaded during administrative removal, because other
+PersistentVolume relation rows may still exist.
+
+Cluster removal supplies the required PersistentVolume relation descriptors explicitly while retaining shared global
+label and annotation records.
+
+### Pod Containers
+
+`Pod.Relations()` deliberately marks:
+
+```text
+containers
+init containers
+sidecar containers
+```
+
+as `WithoutCascadeDelete()`.
+
+Containers also own their own child data.
+
+Cluster removal therefore removes target-cluster container metrics and container trees before deleting the Pod roots.
+
+### Services
+
+The current Service relation metadata reaches `ResourceAnnotations` through more than one foreign-key path.
+
+The streaming deletion implementation groups cascading relation channels by relation table name, so blindly sending
+that duplicate same-table relation shape through the generic streaming path would not safely represent both paths.
+
+Cluster removal therefore uses a small explicit Service relation list with the required foreign keys.
+
+This is kept local to the cluster-removal exception instead of broadening Issue #218 into an unrelated schema-model
+refactor.
+
+### Metrics and direct cluster state
+
+Prometheus node, pod and container metrics are not all represented as normal cascading resource relations.
+
+Cluster-level Prometheus metrics, configuration and `kubernetes_instance` rows are also directly scoped by
+`cluster_uuid`.
+
+Those rows are therefore cleaned explicitly before the final cluster row is removed.
+
+---
+
+## Transaction Boundary
+
+`RemoveCluster()` owns one transaction around the complete operation:
+
+```text
+BEGIN
+  ↓
+container metrics
+  ↓
+container trees
+  ↓
+resource-specific metric / relation cleanup
+  ↓
+normal resources through existing Relations()
+  ↓
+PersistentVolume / Service special relations
+  ↓
+cluster metrics
+  ↓
+configuration
+  ↓
+kubernetes_instance
+  ↓
+cluster row LAST
+  ↓
+COMMIT
+```
+
+If any intermediate SQL operation fails:
+
+```text
+ROLLBACK
+```
+
+The cluster row is removed last so a successful transaction cannot leave a surviving cluster selector entry after
+its cluster-owned state has been removed.
+
+---
+
+## Operator Safety Boundary
+
+The final CLI does not perform heartbeat classification and does not decide whether a cluster is operationally safe
+to remove.
+
+The safety boundary is therefore explicit operator intent:
+
+```text
+permanently decommission target
+        ↓
+stop its icinga-kubernetes daemon
+        ↓
+verify target database
+        ↓
+verify target cluster UUID
+        ↓
+run --remove-cluster
+```
+
+If the stopped daemon is later restarted against the same database, it can synchronize that cluster again.
+
+This is why stopping and permanently decommissioning the correct daemon remains an important prerequisite even
+though it is no longer enforced by a runtime heartbeat policy.
+
+---
+
+## Why No Kubernetes Web Deletion Code Is Needed
+
+Kubernetes Web derives its available cluster information from database state.
 
 Therefore:
 
@@ -243,84 +383,77 @@ RemoveCluster()
       ↓
 Cluster B database state removed
       ↓
-Cluster B cluster row removed last
+Cluster B cluster row removed
       ↓
 next Web query
       ↓
-Cluster B no longer exists in selector data
+Cluster B no longer appears as an available cluster
 ```
 
-The Web module does not need its own duplicate implementation of the cluster deletion graph.
+The Web module does not need to maintain a second deletion graph.
+
+A browser session that was previously fixed to the removed cluster may need to select `All clusters` and refresh.
 
 ---
 
-## What Was Verified
+## Runtime Validation
 
-The implementation was tested first against a disposable copy of the reproduced database and then against the original reproduced environment.
+The transaction-capable replacement was exercised against restored disposable two-cluster MariaDB fixtures before
+the superseded implementation was removed.
 
-Validation included:
-
-```text
-active-cluster refusal
-stale-cluster dry run
-confirmed stale removal
-missing-cluster no-op
-transaction rollback on forced SQL failure
-other-cluster isolation
-full Go test suite
-race-enabled Go tests
-complete Go build
-Web verification
-```
-
-The final deep database audit covered:
+Successful removal proved:
 
 ```text
-141 unique checks
-0 audit failures
-0 Cluster B orphan rows
+Cluster B removal                PASS
+Cluster A isolation              PASS
+20 direct cluster-owned tables   PASS
+112 relationship paths           PASS
+3 container-metric paths         PASS
+5 retained shared/global tables  PASS
+141 deep checks                  PASS
+Cluster B orphan rows            0
 ```
 
-Cluster A remained present, its heartbeat continued advancing and its Web data remained usable.
+Repeat removal of the already-absent Cluster B was then run against the complete 98-table database. The command
+returned success, Cluster A remained present, Cluster B remained absent, and every table retained exactly the same
+row count.
 
-Cluster B was removed from the database and no longer appeared as a valid Web cluster.
+A controlled failure was also introduced after earlier resource deletion stages had already begun. The real removal
+reached the injected SQL fault and failed. The transaction restored the earlier deletes, all 98 table counts exactly
+matched the frozen pre-failure database again, and both Cluster A and Cluster B remained present.
+
+That rollback proof is the reason transaction ownership is not merely an architectural preference in this
+implementation: it is a runtime-tested property of the removal operation.
 
 ---
 
 ## Final Resolution
 
-The problem was resolved by making cluster removal:
+Issue #218 is resolved through an operation that is:
 
 ```text
 explicit
 +
 cluster-scoped
 +
-lifecycle-aware
-+
 transactional
 +
 DB-only
 +
-safe against apparently active daemons
+reuse-oriented
++
+idempotent for an already-absent target
 ```
 
-The important architectural boundary is:
+The important implementation principle is:
 
-```text
-InspectClusterRemoval()
-        ↓
-operator safety policy
-        ↓
-RemoveCluster()
-        ↓
-database
-        ↓
-Kubernetes Web naturally reflects the cleaned state
-```
+> Reuse the existing schema relationship and deletion knowledge wherever it correctly represents the data, extend
+> the generic deletion primitive only enough to preserve the required transaction boundary, and keep explicit
+> cleanup limited to relationships that the existing generic metadata cannot safely express.
 
-For someone encountering the same problem again:
+For operators:
 
-> Stop and permanently decommission the target cluster's Icinga Kubernetes daemon, inspect the cluster through the DB-only removal command, and only explicitly confirm removal when the lifecycle state is `stale`.
+> Permanently decommission the target, stop its Icinga for Kubernetes daemon, verify the database and cluster UUID,
+> then run `icinga-kubernetes --remove-cluster <CLUSTER_UUID>`.
 
-Do not manually delete only the `cluster` row, and do not treat a stale heartbeat by itself as proof that deletion is safe.
+Do not manually delete only the `cluster` row.
