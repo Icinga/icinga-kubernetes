@@ -25,11 +25,13 @@ This is also the database used in
 
 ## Logging Configuration
 
-| Env      | Description                                                                                                                                                              |
-|----------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| level    | **Optional.** Default logging level. Can be set to `fatal`, `error`, `warn`, `info` or `debug`. If not set, defaults to `info`.                                          |
-| output   | **Optional.** Logging output. Can be set to `console` (stderr) or `systemd-journald`. If not set, logs to systemd-journald when running under systemd, otherwise stderr. |
-| interval | **Optional.** Interval for periodic logging defined as duration string. Valid units are `ms`, `s`, `m`, `h`. Defaults to `20s`.                                          |
+| Option     | Description                                                                                                                                                              |
+|------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| level      | **Optional.** Default logging level. Can be set to `fatal`, `error`, `warn`, `info` or `debug`. If not set, defaults to `info`.                                          |
+| output     | **Optional.** Logging output. Can be set to `console` (stderr) or `systemd-journald`. If not set, logs to systemd-journald when running under systemd, otherwise stderr. |
+| interval   | **Optional.** Interval for periodic logging defined as duration string. Valid units are `ms`, `s`, `m`, `h`. Defaults to `20s`.                                          |
+| options    | **Optional.** Map of component names to log levels, overriding `level` for those components. See [Logging Components](#logging-components).                              |
+| kubernetes | **Optional.** Verbosity of the Kubernetes client libraries, from `0` to `9`. If not set, defaults to `0`. See [Kubernetes Client Logging](#kubernetes-client-logging).   |
 
 ## Notifications Configuration
 
@@ -76,11 +78,13 @@ The configurations set by environment variables override the ones set by YAML.
 
 ## Logging Configuration
 
-| Env              | Description                                                                                                                                                              |
-|------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| LOGGING_LEVEL    | **Optional.** Default logging level. Can be set to `fatal`, `error`, `warn`, `info` or `debug`. If not set, defaults to `info`.                                          |
-| LOGGING_OUTPUT   | **Optional.** Logging output. Can be set to `console` (stderr) or `systemd-journald`. If not set, logs to systemd-journald when running under systemd, otherwise stderr. |
-| LOGGING_INTERVAL | **Optional.** Interval for periodic logging defined as duration string. Valid units are `ms`, `s`, `m`, `h`. Defaults to `20s`.                                          |
+| Env                | Description                                                                                                                                                              |
+|--------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| LOGGING_LEVEL      | **Optional.** Default logging level. Can be set to `fatal`, `error`, `warn`, `info` or `debug`. If not set, defaults to `info`.                                          |
+| LOGGING_OUTPUT     | **Optional.** Logging output. Can be set to `console` (stderr) or `systemd-journald`. If not set, logs to systemd-journald when running under systemd, otherwise stderr. |
+| LOGGING_INTERVAL   | **Optional.** Interval for periodic logging defined as duration string. Valid units are `ms`, `s`, `m`, `h`. Defaults to `20s`.                                          |
+| LOGGING_OPTIONS    | **Optional.** Comma-separated list of `component:level` pairs, overriding `LOGGING_LEVEL` for those components. See [Logging Components](#logging-components).           |
+| LOGGING_KUBERNETES | **Optional.** Verbosity of the Kubernetes client libraries, from `0` to `9`. If not set, defaults to `0`. See [Kubernetes Client Logging](#kubernetes-client-logging).   |
 
 ## Notifications Configuration
 
@@ -98,7 +102,60 @@ The configurations set by environment variables override the ones set by YAML.
 | PROMETHEUS_URL      | **Optional.** Prometheus server URL. If not set, metric synchronization is disabled.                                       |
 | PROMETHEUS_INSECURE | **Optional.** Skip the TLS/SSL certificate verification. Can be set to 'true' or 'false'. If not set, defaults to 'false'. |
 | PROMETHEUS_USERNAME | **Optional.** Prometheus username.                                                                                         |
-| PROMETHEUS_PASSWORD | **Optional.** Prometheus password.                                                                                         | |
+| PROMETHEUS_PASSWORD | **Optional.** Prometheus password.                                                                                         |
+
+## Logging Components
+
+Icinga for Kubernetes logs through a named component logger for each
+synchronized resource and for each subsystem. Give a single component its own
+level with the `options` map, or with `LOGGING_OPTIONS` as a comma-separated
+list of `component:level` pairs. Components without their own level use `level`.
+
+```yaml
+logging:
+  level: info
+  options:
+    pods: debug
+    database: warn
+```
+
+The same setting as an environment variable:
+
+```bash
+ICINGA_FOR_KUBERNETES_LOGGING_OPTIONS="pods:debug,database:warn"
+```
+
+The component names are `config-maps`, `cron-jobs`, `daemon-sets`, `database`,
+`deployments`, `endpoints`, `events`, `ingresses`, `jobs`, `namespaces`,
+`nodes`, `notifications`, `persistent-volumes`, `pods`, `prometheus`, `pvcs`,
+`replica-sets`, `secrets`, `services` and `stateful-sets`.
+
+## Kubernetes Client Logging
+
+The Kubernetes client libraries do not log through the settings above. They
+log through klog, whose verbosity is a separate number from `0` to `9`. At
+`0`, only the messages the client libraries log unconditionally appear. Higher
+values add progressively more detail about the requests they make to the
+Kubernetes API.
+
+Example to set the verbosity level to 4:
+
+```yaml
+logging:
+  kubernetes: 4
+```
+
+The `-v`/`--v` command line flag sets the same verbosity and takes precedence
+over the configuration file:
+
+```bash
+icinga-kubernetes --v=4
+icinga-kubernetes -v 4
+```
+
+Each systemd instance is configured through its environment file, so set
+`ICINGA_FOR_KUBERNETES_LOGGING_KUBERNETES` there rather than passing a command
+line flag.
 
 ## Multi-Cluster Support using systemd Instantiated Services
 
