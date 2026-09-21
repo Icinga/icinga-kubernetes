@@ -68,10 +68,10 @@ func (c *Controller) stream(ctx context.Context, sink *Sink) error {
 		item, exists, err := c.informer.GetStore().GetByKey(key)
 		if err != nil {
 			if c.queue.NumRequeues(eventHandlerItem) < 5 {
-				c.log.Errorw("Fetching key failed. Retrying", zap.String("key", key), zap.Error(errors.WithStack(err)))
+				c.log.Errorw("Cannot fetch key. Retrying", zap.String("key", key), zap.Error(errors.WithStack(err)))
 				c.queue.AddRateLimited(eventHandlerItem)
 			} else {
-				c.log.Errorw("Fetching key failed. Stopped retrying", zap.String("key", key), zap.Error(errors.WithStack(err)))
+				c.log.Errorw("Cannot fetch key. Stopped retrying", zap.String("key", key), zap.Error(errors.WithStack(err)))
 				c.queue.Forget(eventHandlerItem)
 			}
 

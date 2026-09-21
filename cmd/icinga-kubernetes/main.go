@@ -94,7 +94,7 @@ func main() {
 		Flags:      glue,
 		EnvOptions: config.EnvOptions{Prefix: "ICINGA_FOR_KUBERNETES_"},
 	}); err != nil {
-		utils.PrintErrorThenExit(errors.Wrap(err, "can't create configuration"), 1)
+		utils.PrintErrorThenExit(errors.Wrap(err, "cannot load configuration"), 1)
 	}
 
 	logs, err := logging.NewLoggingFromConfig("Icinga Kubernetes", cfg.Logging)
@@ -110,7 +110,7 @@ func main() {
 	if err != nil {
 		if kclientcmd.IsEmptyConfig(err) {
 			logger.Fatal(
-				"no configuration provided: set KUBECONFIG environment variable or --kubeconfig CLI flag to" +
+				"No configuration provided: set KUBECONFIG environment variable or --kubeconfig CLI flag to" +
 					" a kubeconfig file with cluster access configured")
 		}
 
@@ -126,7 +126,7 @@ func main() {
 		logger.Fatal(err)
 	}
 
-	logger.Infof("Conntected to %s", kconfig.Host)
+	logger.Infof("Connected to %s", kconfig.Host)
 
 	factory := informers.NewSharedInformerFactory(clientset, 0)
 
@@ -134,7 +134,7 @@ func main() {
 
 	db, err := database.NewDbFromConfig(&cfg.Database, dbLog, database.RetryConnectorCallbacks{})
 	if err != nil {
-		logger.Fatal("IGL_DATABASE: ", err)
+		logger.Fatal(err)
 	}
 
 	kdb, err := kdatabase.NewFromSqlxDb(&cfg.Database, dbLog, db.DB)
@@ -238,7 +238,7 @@ func main() {
 	namespaceName := "kube-system"
 	ns, err := clientset.CoreV1().Namespaces().Get(context.TODO(), namespaceName, v1.GetOptions{})
 	if err != nil {
-		logger.Fatalf("Failed to retrieve namespace '%s' for cluster '%s': %v", namespaceName, clusterName, err)
+		logger.Fatalf("Cannot retrieve namespace '%s' for cluster '%s': %v", namespaceName, clusterName, err)
 	}
 
 	clusterInstance := &schemav1.Cluster{
@@ -450,7 +450,7 @@ func main() {
 			RoundTripper: transport,
 		})
 		if err != nil {
-			logger.Fatal(errors.Wrap(err, "error creating Prometheus client"))
+			logger.Fatal(errors.Wrap(err, "cannot create Prometheus client"))
 		}
 
 		promApiClient := promv1.NewAPI(promClient)

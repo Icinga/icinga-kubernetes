@@ -223,7 +223,7 @@ func (db *Database) BulkExec(
 func (db *Database) Connect() bool {
 	db.log.Info("Connecting to database")
 	if err := db.Ping(); err != nil {
-		db.log.Errorw("cannot connect to database", zap.Error(errors.WithStack(err)))
+		db.log.Errorw("Cannot connect to database", zap.Error(errors.WithStack(err)))
 
 		return false
 	}
