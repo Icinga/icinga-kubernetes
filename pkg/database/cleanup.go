@@ -69,7 +69,7 @@ func (db *Database) CleanupOlderThan(
 				Timeout: retry.DefaultTimeout,
 				OnRetryableError: func(_ time.Duration, _ uint64, err, lastErr error) {
 					if lastErr == nil || err.Error() != lastErr.Error() {
-						db.log.Infow("Cannot execute query. Retrying", zap.Error(err))
+						db.log.Warnw("Cannot execute query. Retrying", zap.Error(err))
 					}
 				},
 				OnSuccess: func(elapsed time.Duration, attempt uint64, lastErr error) {
