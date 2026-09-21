@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-logr/logr"
 	"github.com/icinga/icinga-go-library/backoff"
 	"github.com/icinga/icinga-go-library/com"
 	"github.com/icinga/icinga-go-library/database"
+	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-go-library/periodic"
 	"github.com/icinga/icinga-go-library/retry"
 	"github.com/icinga/icinga-go-library/strcase"
@@ -19,6 +19,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/jmoiron/sqlx/reflectx"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 )
@@ -33,7 +34,7 @@ type Database struct {
 
 	Options database.Options
 
-	log logr.Logger
+	log *logging.Logger
 
 	columnMap database.ColumnMap
 
@@ -42,7 +43,7 @@ type Database struct {
 }
 
 // NewFromSqlxDb returns a new Database connection from the given sqlx.DB.
-func NewFromSqlxDb(c *database.Config, log logr.Logger, otherDB *sqlx.DB) (*Database, error) {
+func NewFromSqlxDb(c *database.Config, log *logging.Logger, otherDB *sqlx.DB) (*Database, error) {
 	registerDriversOnce.Do(func() {
 		RegisterDrivers(log)
 	})
@@ -222,7 +223,7 @@ func (db *Database) BulkExec(
 func (db *Database) Connect() bool {
 	db.log.Info("Connecting to database")
 	if err := db.Ping(); err != nil {
-		db.log.Error(errors.WithStack(err), "cannot connect to database")
+		db.log.Errorw("cannot connect to database", zap.Error(errors.WithStack(err)))
 
 		return false
 	}
@@ -637,10 +638,10 @@ func (db *Database) YieldAll(ctx context.Context, factoryFunc func() (any, error
 func (db *Database) periodicLog(ctx context.Context, query string, counter *com.Counter) periodic.Stopper {
 	return periodic.Start(ctx, 10*time.Second, func(tick periodic.Tick) {
 		if count := counter.Reset(); count > 0 {
-			db.log.V(2).Info(fmt.Sprintf("Executed %s with %d rows", query, count))
+			db.log.Debugf("Executed %s with %d rows", query, count)
 		}
 	}, periodic.OnStop(func(tick periodic.Tick) {
-		db.log.V(2).Info(fmt.Sprintf("Finished executing %s with %d rows in %s", query, counter.Total(), tick.Elapsed))
+		db.log.Debugf("Finished executing %s with %d rows in %s", query, counter.Total(), tick.Elapsed)
 	}))
 }
 

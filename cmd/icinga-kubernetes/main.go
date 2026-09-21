@@ -21,6 +21,7 @@ import (
 	"github.com/icinga/icinga-go-library/periodic"
 	"github.com/icinga/icinga-go-library/retry"
 	"github.com/icinga/icinga-go-library/types"
+	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/internal"
 	cachev1 "github.com/icinga/icinga-kubernetes/internal/cache/v1"
 	"github.com/icinga/icinga-kubernetes/pkg/cluster"
@@ -56,8 +57,11 @@ func main() {
 	var showVersion bool
 	var clusterName string
 
-	klog.InitFlags(nil)
-	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
+	// The Kubernetes client libraries log through klog, so keep its flags on our command line
+	// to let -v and friends control their output. Our own code logs via icinga-go-library.
+	klogFlags := flag.NewFlagSet("klog", flag.ContinueOnError)
+	klog.InitFlags(klogFlags)
+	pflag.CommandLine.AddGoFlagSet(klogFlags)
 
 	pflag.BoolVar(&showVersion, "version", false, "print version and exit")
 	pflag.StringVar(
@@ -84,17 +88,33 @@ func main() {
 		os.Exit(0)
 	}
 
-	klog.Infof("Starting Icinga for Kubernetes (%s)", internal.Version.Version)
+	var cfg daemon.Config
+
+	if err := config.Load(&cfg, config.LoadOptions{
+		Flags:      glue,
+		EnvOptions: config.EnvOptions{Prefix: "ICINGA_FOR_KUBERNETES_"},
+	}); err != nil {
+		utils.PrintErrorThenExit(errors.Wrap(err, "can't create configuration"), 1)
+	}
+
+	logs, err := logging.NewLoggingFromConfig("Icinga Kubernetes", cfg.Logging)
+	if err != nil {
+		utils.PrintErrorThenExit(errors.Wrap(err, "cannot configure logging"), 1)
+	}
+
+	logger := logs.GetLogger()
+
+	logger.Infof("Starting Icinga for Kubernetes (%s)", internal.Version.Version)
 
 	kconfig, err := kclientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, &overrides).ClientConfig()
 	if err != nil {
 		if kclientcmd.IsEmptyConfig(err) {
-			klog.Fatal(
+			logger.Fatal(
 				"no configuration provided: set KUBECONFIG environment variable or --kubeconfig CLI flag to" +
 					" a kubeconfig file with cluster access configured")
 		}
 
-		klog.Fatal(errors.Wrap(err, "cannot configure Kubernetes client"))
+		logger.Fatal(errors.Wrap(err, "cannot configure Kubernetes client"))
 	}
 
 	if serverName, ok := os.LookupEnv("KUBERNETES_SERVER"); ok {
@@ -103,37 +123,23 @@ func main() {
 
 	clientset, err := kubernetes.NewForConfig(kconfig)
 	if err != nil {
-		klog.Fatal(err)
+		logger.Fatal(err)
 	}
 
-	klog.Infof("Conntected to %s", kconfig.Host)
+	logger.Infof("Conntected to %s", kconfig.Host)
 
 	factory := informers.NewSharedInformerFactory(clientset, 0)
-	log := klog.NewKlogr()
 
-	var cfg daemon.Config
+	dbLog := logs.GetChildLogger("database")
 
-	if err = config.Load(&cfg, config.LoadOptions{
-		Flags:      glue,
-		EnvOptions: config.EnvOptions{Prefix: "ICINGA_FOR_KUBERNETES_"},
-	}); err != nil {
-		klog.Fatal(errors.Wrap(err, "can't create configuration"))
-	}
-
-	logs, err := logging.NewLoggingFromConfig("Icinga Kubernetes", cfg.Logging)
+	db, err := database.NewDbFromConfig(&cfg.Database, dbLog, database.RetryConnectorCallbacks{})
 	if err != nil {
-		klog.Fatal(errors.Wrap(err, "cannot configure logging"))
+		logger.Fatal("IGL_DATABASE: ", err)
 	}
 
-	db, err := database.NewDbFromConfig(&cfg.Database, logs.GetChildLogger("database"), database.RetryConnectorCallbacks{})
-	if err != nil {
-		klog.Fatal("IGL_DATABASE: ", err)
-	}
-
-	dbLog := log.WithName("database")
 	kdb, err := kdatabase.NewFromSqlxDb(&cfg.Database, dbLog, db.DB)
 	if err != nil {
-		klog.Fatal(err)
+		logger.Fatal(err)
 	}
 
 	// When started by systemd, NOTIFY_SOCKET is set by systemd for Type=notify supervised services, which was the
@@ -147,7 +153,7 @@ func main() {
 
 	hasSchema, err := dbHasSchema(kdb, cfg.Database.Database)
 	if err != nil {
-		klog.Fatal(err)
+		logger.Fatal(err)
 	}
 
 	g, ctx := errgroup.WithContext(context.Background())
@@ -169,7 +175,7 @@ func main() {
 			backoff.NewExponentialWithJitter(128*time.Millisecond, 1*time.Minute),
 			retry.Settings{})
 		if err != nil {
-			klog.Fatal(err)
+			logger.Fatal(err)
 		}
 
 		if version != expectedSchemaVersion {
@@ -181,7 +187,7 @@ func main() {
 						cfg.Database.Database,
 					)
 					if err != nil {
-						klog.Fatal(err)
+						logger.Fatal(err)
 					}
 					defer func() {
 						_ = rows.Close()
@@ -192,12 +198,12 @@ func main() {
 					for rows.Next() {
 						var tableName string
 						if err := rows.Scan(&tableName); err != nil {
-							klog.Fatal(err)
+							logger.Fatal(err)
 						}
 
 						_, err := kdb.Exec(fmt.Sprintf(`DROP TABLE %s`, tableName))
 						if err != nil {
-							klog.Fatal(err)
+							logger.Fatal(err)
 						}
 					}
 					return
@@ -206,7 +212,7 @@ func main() {
 				backoff.NewExponentialWithJitter(128*time.Millisecond, 1*time.Minute),
 				retry.Settings{})
 			if err != nil {
-				klog.Fatal(err)
+				logger.Fatal(err)
 			}
 
 			hasSchema = false
@@ -219,7 +225,7 @@ func main() {
 		for ddl := range strings.SplitSeq(k8sMysql.Schema, ";") {
 			if ddl = strings.TrimSpace(ddl); ddl != "" {
 				if _, err := kdb.Exec(ddl); err != nil {
-					klog.Fatal(err)
+					logger.Fatal(err)
 				}
 			}
 		}
@@ -232,7 +238,7 @@ func main() {
 	namespaceName := "kube-system"
 	ns, err := clientset.CoreV1().Namespaces().Get(context.TODO(), namespaceName, v1.GetOptions{})
 	if err != nil {
-		klog.Fatalf("Failed to retrieve namespace '%s' for cluster '%s': %v", namespaceName, clusterName, err)
+		logger.Fatalf("Failed to retrieve namespace '%s' for cluster '%s': %v", namespaceName, clusterName, err)
 	}
 
 	clusterInstance := &schemav1.Cluster{
@@ -244,11 +250,11 @@ func main() {
 
 	stmt, _ := kdb.BuildUpsertStmt(clusterInstance)
 	if _, err := kdb.NamedExecContext(ctx, stmt, clusterInstance); err != nil {
-		klog.Error(errors.Wrap(err, "cannot update cluster"))
+		logger.Error(errors.Wrap(err, "cannot update cluster"))
 	}
 
 	if _, err := kdb.ExecContext(ctx, "DELETE FROM kubernetes_instance WHERE cluster_uuid = ?", clusterInstance.Uuid); err != nil {
-		klog.Fatal(errors.Wrap(err, "cannot delete instance"))
+		logger.Fatal(errors.Wrap(err, "cannot delete instance"))
 	}
 	// ,omitempty
 	var kubernetesVersion string
@@ -278,20 +284,21 @@ func main() {
 		stmt, _ := kdb.BuildUpsertStmt(instance)
 
 		if _, err := kdb.NamedExecContext(ctx, stmt, instance); err != nil {
-			klog.Error(errors.Wrap(err, "cannot update instance"))
+			logger.Error(errors.Wrap(err, "cannot update instance"))
 		}
 	}, periodic.Immediate()).Stop()
 
 	if err := internal.SyncNotificationsConfig(ctx, db, &cfg.Notifications, clusterInstance.Uuid); err != nil {
-		klog.Fatal(err)
+		logger.Fatal(err)
 	}
 
 	if cfg.Notifications.Url != "" {
-		klog.Infof("Sending notifications to %s", cfg.Notifications.Url)
+		logger.Infof("Sending notifications to %s", cfg.Notifications.Url)
 
-		nclient, err := notifications.NewClient("icinga-kubernetes/"+internal.Version.Version, cfg.Notifications, db)
+		nclient, err := notifications.NewClient(
+			"icinga-kubernetes/"+internal.Version.Version, cfg.Notifications, db, logs.GetChildLogger("notifications"))
 		if err != nil {
-			klog.Fatal(err)
+			logger.Fatal(err)
 		}
 
 		type objectTags struct {
@@ -311,14 +318,14 @@ func main() {
 		defer periodic.Start(ctx, time.Hour, func(tick periodic.Tick) {
 			r, err := nclient.Incidents(ctx)
 			if err != nil {
-				klog.Errorf("Cannot fetch incidents: %v", err)
+				logger.Errorf("Cannot fetch incidents: %v", err)
 				return
 			}
 			defer func() { _ = r.Close() }()
 
 			var incidents []incident
 			if err := json.NewDecoder(r).Decode(&incidents); err != nil {
-				klog.Errorf("Cannot decode incidents: %v", err)
+				logger.Errorf("Cannot decode incidents: %v", err)
 				return
 			}
 
@@ -357,7 +364,7 @@ func main() {
 			}
 
 			if err := ng.Wait(); err != nil {
-				klog.Errorf("Cannot fetch orphaned incidents: %v", err)
+				logger.Errorf("Cannot fetch orphaned incidents: %v", err)
 			}
 
 			for _, tags := range objectTagMap {
@@ -383,9 +390,9 @@ func main() {
 					Tags:        _tags,
 					ExtraTags:   nil,
 				}
-				klog.Infof("Deleting orphaned incident: %q", ev.Name)
+				logger.Infof("Deleting orphaned incident: %q", ev.Name)
 				if err := nclient.ProcessEvent(ctx, ev); err != nil {
-					klog.Errorf("Cannot delete orphaned incident: %v", err)
+					logger.Errorf("Cannot delete orphaned incident: %v", err)
 				}
 			}
 		}, periodic.Immediate()).Stop()
@@ -421,13 +428,13 @@ func main() {
 
 	err = internal.SyncPrometheusConfig(ctx, db, &cfg.Prometheus, clusterInstance.Uuid)
 	if err != nil {
-		klog.Error(errors.Wrap(err, "cannot sync prometheus config"))
+		logger.Error(errors.Wrap(err, "cannot sync prometheus config"))
 	}
 
 	if cfg.Prometheus.Url == "" {
 		err = internal.AutoDetectPrometheus(ctx, clientset, &cfg.Prometheus)
 		if err != nil {
-			klog.Error(errors.Wrap(err, "cannot auto-detect prometheus"))
+			logger.Error(errors.Wrap(err, "cannot auto-detect prometheus"))
 		}
 	}
 
@@ -443,7 +450,7 @@ func main() {
 			RoundTripper: transport,
 		})
 		if err != nil {
-			klog.Fatal(errors.Wrap(err, "error creating Prometheus client"))
+			logger.Fatal(errors.Wrap(err, "error creating Prometheus client"))
 		}
 
 		promApiClient := promv1.NewAPI(promClient)
@@ -459,7 +466,7 @@ func main() {
 	}
 
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Core().V1().Namespaces().Informer(), log.WithName("namespaces"), schemav1.NewNamespace)
+		s := syncv1.NewSync(kdb, factory.Core().V1().Namespaces().Informer(), logs.GetChildLogger("namespaces"), schemav1.NewNamespace)
 
 		return s.Run(ctx)
 	})
@@ -468,7 +475,7 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Core().V1().Nodes().Informer(), log.WithName("nodes"), schemav1.NewNode)
+		s := syncv1.NewSync(kdb, factory.Core().V1().Nodes().Informer(), logs.GetChildLogger("nodes"), schemav1.NewNode)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -495,7 +502,7 @@ func main() {
 		)
 
 		f := schemav1.NewPodFactory(clientset)
-		s := syncv1.NewSync(kdb, factory.Core().V1().Pods().Informer(), log.WithName("pods"), f.New)
+		s := syncv1.NewSync(kdb, factory.Core().V1().Pods().Informer(), logs.GetChildLogger("pods"), f.New)
 
 		wg.Done()
 
@@ -509,7 +516,7 @@ func main() {
 	wg.Add(1)
 	g.Go(func() error {
 		s := syncv1.NewSync(
-			kdb, factory.Apps().V1().Deployments().Informer(), log.WithName("deployments"), schemav1.NewDeployment)
+			kdb, factory.Apps().V1().Deployments().Informer(), logs.GetChildLogger("deployments"), schemav1.NewDeployment)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -528,7 +535,7 @@ func main() {
 	wg.Add(1)
 	g.Go(func() error {
 		s := syncv1.NewSync(
-			kdb, factory.Apps().V1().DaemonSets().Informer(), log.WithName("daemon-sets"), schemav1.NewDaemonSet)
+			kdb, factory.Apps().V1().DaemonSets().Informer(), logs.GetChildLogger("daemon-sets"), schemav1.NewDaemonSet)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -547,7 +554,7 @@ func main() {
 	wg.Add(1)
 	g.Go(func() error {
 		s := syncv1.NewSync(
-			kdb, factory.Apps().V1().ReplicaSets().Informer(), log.WithName("replica-sets"), schemav1.NewReplicaSet)
+			kdb, factory.Apps().V1().ReplicaSets().Informer(), logs.GetChildLogger("replica-sets"), schemav1.NewReplicaSet)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -566,7 +573,7 @@ func main() {
 	wg.Add(1)
 	g.Go(func() error {
 		s := syncv1.NewSync(
-			kdb, factory.Apps().V1().StatefulSets().Informer(), log.WithName("stateful-sets"), schemav1.NewStatefulSet)
+			kdb, factory.Apps().V1().StatefulSets().Informer(), logs.GetChildLogger("stateful-sets"), schemav1.NewStatefulSet)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -584,7 +591,7 @@ func main() {
 
 	g.Go(func() error {
 		f := schemav1.NewServiceFactory(clientset)
-		s := syncv1.NewSync(kdb, factory.Core().V1().Services().Informer(), log.WithName("services"), f.NewService)
+		s := syncv1.NewSync(kdb, factory.Core().V1().Services().Informer(), logs.GetChildLogger("services"), f.NewService)
 
 		return s.Run(
 			ctx,
@@ -593,54 +600,54 @@ func main() {
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Discovery().V1().EndpointSlices().Informer(), log.WithName("endpoints"), schemav1.NewEndpointSlice)
+		s := syncv1.NewSync(kdb, factory.Discovery().V1().EndpointSlices().Informer(), logs.GetChildLogger("endpoints"), schemav1.NewEndpointSlice)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Core().V1().Secrets().Informer(), log.WithName("secrets"), schemav1.NewSecret)
+		s := syncv1.NewSync(kdb, factory.Core().V1().Secrets().Informer(), logs.GetChildLogger("secrets"), schemav1.NewSecret)
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Core().V1().ConfigMaps().Informer(), log.WithName("config-maps"), schemav1.NewConfigMap)
+		s := syncv1.NewSync(kdb, factory.Core().V1().ConfigMaps().Informer(), logs.GetChildLogger("config-maps"), schemav1.NewConfigMap)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Events().V1().Events().Informer(), log.WithName("events"), schemav1.NewEvent)
+		s := syncv1.NewSync(kdb, factory.Events().V1().Events().Informer(), logs.GetChildLogger("events"), schemav1.NewEvent)
 
 		return s.Run(ctx, syncv1.WithNoDelete(), syncv1.WithNoWarmup())
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Core().V1().PersistentVolumeClaims().Informer(), log.WithName("pvcs"), schemav1.NewPvc)
+		s := syncv1.NewSync(kdb, factory.Core().V1().PersistentVolumeClaims().Informer(), logs.GetChildLogger("pvcs"), schemav1.NewPvc)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Core().V1().PersistentVolumes().Informer(), log.WithName("persistent-volumes"), schemav1.NewPersistentVolume)
+		s := syncv1.NewSync(kdb, factory.Core().V1().PersistentVolumes().Informer(), logs.GetChildLogger("persistent-volumes"), schemav1.NewPersistentVolume)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Batch().V1().Jobs().Informer(), log.WithName("jobs"), schemav1.NewJob)
+		s := syncv1.NewSync(kdb, factory.Batch().V1().Jobs().Informer(), logs.GetChildLogger("jobs"), schemav1.NewJob)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Batch().V1().CronJobs().Informer(), log.WithName("cron-jobs"), schemav1.NewCronJob)
+		s := syncv1.NewSync(kdb, factory.Batch().V1().CronJobs().Informer(), logs.GetChildLogger("cron-jobs"), schemav1.NewCronJob)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Networking().V1().Ingresses().Informer(), log.WithName("ingresses"), schemav1.NewIngress)
+		s := syncv1.NewSync(kdb, factory.Networking().V1().Ingresses().Informer(), logs.GetChildLogger("ingresses"), schemav1.NewIngress)
 
 		return s.Run(ctx)
 	})
@@ -648,7 +655,7 @@ func main() {
 	g.Go(func() error {
 		wg.Wait()
 
-		klog.V(2).Info("Starting multiplexers")
+		logger.Debug("Starting multiplexers")
 
 		return cachev1.Multiplexers().Run(ctx)
 	})
@@ -694,7 +701,7 @@ func main() {
 	})
 
 	if err := g.Wait(); err != nil {
-		klog.Fatal(err)
+		logger.Fatal(err)
 	}
 }
 

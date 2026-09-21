@@ -2,10 +2,10 @@ package v1
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/go-logr/logr"
+	"github.com/icinga/icinga-go-library/logging"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -13,13 +13,13 @@ import (
 
 type Controller struct {
 	informer cache.SharedIndexInformer
-	log      logr.Logger
+	log      *logging.Logger
 	queue    workqueue.TypedRateLimitingInterface[EventHandlerItem]
 }
 
 func NewController(
 	informer cache.SharedIndexInformer,
-	log logr.Logger,
+	log *logging.Logger,
 ) *Controller {
 
 	return &Controller{
@@ -32,7 +32,7 @@ func NewController(
 }
 
 func (c *Controller) Stream(ctx context.Context, sink *Sink) error {
-	_, err := c.informer.AddEventHandler(NewEventHandler(c.queue, c.log.WithName("events")))
+	_, err := c.informer.AddEventHandler(NewEventHandler(c.queue, c.log))
 	if err != nil {
 		return err
 	}
@@ -68,10 +68,10 @@ func (c *Controller) stream(ctx context.Context, sink *Sink) error {
 		item, exists, err := c.informer.GetStore().GetByKey(key)
 		if err != nil {
 			if c.queue.NumRequeues(eventHandlerItem) < 5 {
-				c.log.Error(errors.WithStack(err), fmt.Sprintf("Fetching key %s failed. Retrying", key))
+				c.log.Errorw("Fetching key failed. Retrying", zap.String("key", key), zap.Error(errors.WithStack(err)))
 				c.queue.AddRateLimited(eventHandlerItem)
 			} else {
-				c.log.Error(errors.WithStack(err), fmt.Sprintf("Fetching key %s failed. Stopped retrying", key))
+				c.log.Errorw("Fetching key failed. Stopped retrying", zap.String("key", key), zap.Error(errors.WithStack(err)))
 				c.queue.Forget(eventHandlerItem)
 			}
 
