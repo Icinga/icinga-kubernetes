@@ -67,6 +67,26 @@ data:
       # Database password.
       password: CHANGEME
     
+    # Logging configuration.
+    logging:
+      # Default logging level. One of 'fatal', 'error', 'warn', 'info' or 'debug'.
+    #  level: info
+    
+      # Logging output. Either 'console' (stderr) or 'systemd-journald'.
+      # By default, systemd-journald when running under systemd, otherwise stderr.
+    #  output:
+    
+      # Interval for periodic logging as a duration string.
+    #  interval: 20s
+    
+      # Log levels for individual components, overriding 'level'.
+    #  options:
+    #    pods: debug
+    
+      # Verbosity of the Kubernetes client libraries, from 0 to 9.
+      # Overridden by the -v/--v command line flag.
+    #  kubernetes: 0
+    
     # Configuration for Prometheus metrics API.
     prometheus:
       # Prometheus server URL.
