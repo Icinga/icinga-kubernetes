@@ -636,7 +636,7 @@ func (db *Database) YieldAll(ctx context.Context, factoryFunc func() (any, error
 }
 
 func (db *Database) periodicLog(ctx context.Context, query string, counter *com.Counter) periodic.Stopper {
-	return periodic.Start(ctx, 10*time.Second, func(tick periodic.Tick) {
+	return periodic.Start(ctx, db.log.Interval(), func(tick periodic.Tick) {
 		if count := counter.Reset(); count > 0 {
 			db.log.Debugf("Executed %s with %d rows", query, count)
 		}
