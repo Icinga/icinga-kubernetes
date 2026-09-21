@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -97,7 +98,7 @@ func main() {
 		utils.PrintErrorThenExit(errors.Wrap(err, "cannot load configuration"), 1)
 	}
 
-	logs, err := logging.NewLoggingFromConfig("Icinga Kubernetes", cfg.Logging)
+	logs, err := logging.NewLoggingFromConfig("Icinga Kubernetes", cfg.Logging.Config)
 	if err != nil {
 		utils.PrintErrorThenExit(errors.Wrap(err, "cannot configure logging"), 1)
 	}
@@ -105,6 +106,13 @@ func main() {
 	logger := logs.GetLogger()
 
 	logger.Infof("Starting Icinga for Kubernetes (%s)", internal.Version.Version)
+
+	// An explicit -v/--v on the command line wins over the config file.
+	if !pflag.CommandLine.Changed("v") {
+		if err := pflag.CommandLine.Set("v", strconv.Itoa(int(cfg.Logging.Kubernetes))); err != nil {
+			logger.Fatal(errors.Wrap(err, "cannot set Kubernetes logging verbosity"))
+		}
+	}
 
 	kconfig, err := kclientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, &overrides).ClientConfig()
 	if err != nil {
