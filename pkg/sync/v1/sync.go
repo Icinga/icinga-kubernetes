@@ -101,7 +101,9 @@ func (s *Sync) warmup(ctx context.Context) (map[string]types.UUID, error) {
 // deleteVanished deletes the entities warmup() read from the database that the
 // cluster no longer has. Only a synced informer tells them apart: whatever its
 // initial list did not deliver was deleted while this daemon was not running,
-// and no event will ever report it.
+// and no event will ever report it. A key the list does deliver under a
+// different UID counts as gone as well, its object having been replaced by
+// another one of the same name.
 func (s *Sync) deleteVanished(ctx context.Context, sink *Sink, synced map[string]types.UUID) error {
 	if len(synced) == 0 {
 		return nil
@@ -112,12 +114,12 @@ func (s *Sync) deleteVanished(ctx context.Context, sink *Sink, synced map[string
 	}
 
 	for key, id := range synced {
-		_, exists, err := s.informer.GetStore().GetByKey(key)
+		obj, exists, err := s.informer.GetStore().GetByKey(key)
 		if err != nil {
 			return err
 		}
 
-		if exists {
+		if exists && schemav1.EnsureUUID(obj.(kmetav1.Object).GetUID()) == id {
 			continue
 		}
 
