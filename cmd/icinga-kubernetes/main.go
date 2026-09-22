@@ -722,7 +722,13 @@ func SyncServicePods(ctx context.Context, db *kdatabase.Database, serviceList v2
 	})
 
 	g.Go(func() error {
+		// Out() panics once the multiplexer has started, so subscribe before waiting for the cache.
 		ch := cachev1.Multiplexers().Pods().UpsertEvents().Out()
+
+		if !kcache.WaitForCacheSync(ctx.Done(), serviceList.Informer().HasSynced) {
+			return ctx.Err()
+		}
+
 		for {
 			select {
 			case pod, more := <-ch:
@@ -769,7 +775,13 @@ func SyncServicePods(ctx context.Context, db *kdatabase.Database, serviceList v2
 	})
 
 	g.Go(func() error {
+		// Out() panics once the multiplexer has started, so subscribe before waiting for the cache.
 		ch := cachev1.Multiplexers().Services().UpsertEvents().Out()
+
+		if !kcache.WaitForCacheSync(ctx.Done(), podList.Informer().HasSynced) {
+			return ctx.Err()
+		}
+
 		for {
 			select {
 			case service, more := <-ch:
