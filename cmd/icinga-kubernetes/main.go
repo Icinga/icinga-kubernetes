@@ -42,7 +42,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/informers"
-	v2 "k8s.io/client-go/informers/core/v1"
+	corev1 "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	kcache "k8s.io/client-go/tools/cache"
 	kclientcmd "k8s.io/client-go/tools/clientcmd"
@@ -713,7 +713,7 @@ func dbHasSchema(db *kdatabase.Database, dbName string) (bool, error) {
 	return rows.Next(), rows.Err()
 }
 
-func SyncServicePods(ctx context.Context, db *kdatabase.Database, serviceList v2.ServiceInformer, podList v2.PodInformer) error {
+func SyncServicePods(ctx context.Context, db *kdatabase.Database, serviceList corev1.ServiceInformer, podList corev1.PodInformer) error {
 	servicePods := make(chan any)
 
 	g, ctx := errgroup.WithContext(ctx)
