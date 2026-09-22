@@ -31,10 +31,6 @@ func NewController(
 	}
 }
 
-func (c *Controller) Announce(obj any) error {
-	return c.informer.GetStore().Add(obj)
-}
-
 func (c *Controller) Stream(ctx context.Context, sink *Sink) error {
 	_, err := c.informer.AddEventHandler(NewEventHandler(c.queue, c.log.WithName("events")))
 	if err != nil {

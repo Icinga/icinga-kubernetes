@@ -5,10 +5,12 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/icinga/icinga-go-library/com"
+	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/cluster"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
 	"golang.org/x/sync/errgroup"
+	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -38,16 +40,21 @@ func (s *Sync) Run(ctx context.Context, features ...Feature) error {
 
 	with := NewFeatures(features...)
 
+	var synced map[string]types.UUID
 	if !with.NoWarmup() {
-		if err := s.warmup(ctx, controller); err != nil {
+		var err error
+		if synced, err = s.warmup(ctx); err != nil {
 			return err
 		}
 	}
 
-	return s.sync(ctx, controller, features...)
+	return s.sync(ctx, controller, synced, features...)
 }
 
-func (s *Sync) warmup(ctx context.Context, c *Controller) error {
+// warmup returns the UUIDs of the entities already synced to the database,
+// keyed the way the informer keys its store, so that deleteVanished() can tell
+// which of them are gone from the cluster.
+func (s *Sync) warmup(ctx context.Context) (map[string]types.UUID, error) {
 	g, ctx := errgroup.WithContext(ctx)
 
 	meta := &schemav1.Meta{ClusterUuid: cluster.ClusterUuidFromContext(ctx)}
@@ -60,6 +67,8 @@ func (s *Sync) warmup(ctx context.Context, c *Controller) error {
 	// Let errors from YieldAll() cancel the group.
 	com.ErrgroupReceive(g, errs)
 
+	synced := make(map[string]types.UUID)
+
 	g.Go(func() error {
 		for {
 			select {
@@ -68,19 +77,59 @@ func (s *Sync) warmup(ctx context.Context, c *Controller) error {
 					return nil
 				}
 
-				if err := c.Announce(e); err != nil {
+				object := e.(kmetav1.Object)
+
+				key, err := cache.MetaNamespaceKeyFunc(object)
+				if err != nil {
 					return err
 				}
+
+				synced[key] = schemav1.EnsureUUID(object.GetUID())
 			case <-ctx.Done():
 				return ctx.Err()
 			}
 		}
 	})
 
-	return g.Wait()
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+
+	return synced, nil
 }
 
-func (s *Sync) sync(ctx context.Context, c *Controller, features ...Feature) error {
+// deleteVanished deletes the entities warmup() read from the database that the
+// cluster no longer has. Only a synced informer tells them apart: whatever its
+// initial list did not deliver was deleted while this daemon was not running,
+// and no event will ever report it.
+func (s *Sync) deleteVanished(ctx context.Context, sink *Sink, synced map[string]types.UUID) error {
+	if len(synced) == 0 {
+		return nil
+	}
+
+	if !cache.WaitForCacheSync(ctx.Done(), s.informer.HasSynced) {
+		return ctx.Err()
+	}
+
+	for key, id := range synced {
+		_, exists, err := s.informer.GetStore().GetByKey(key)
+		if err != nil {
+			return err
+		}
+
+		if exists {
+			continue
+		}
+
+		if err := sink.Delete(ctx, id); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *Sync) sync(ctx context.Context, c *Controller, synced map[string]types.UUID, features ...Feature) error {
 	sink := NewSink(func(i *Item) any {
 		entity := s.factory()
 		entity.Obtain(*i.Item, cluster.ClusterUuidFromContext(ctx))
@@ -95,6 +144,9 @@ func (s *Sync) sync(ctx context.Context, c *Controller, features ...Feature) err
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		return c.Stream(ctx, sink)
+	})
+	g.Go(func() error {
+		return s.deleteVanished(ctx, sink, synced)
 	})
 	g.Go(func() error {
 		return s.db.UpsertStreamed(
