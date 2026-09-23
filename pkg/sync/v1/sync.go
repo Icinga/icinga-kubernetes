@@ -9,7 +9,6 @@ import (
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
 	"golang.org/x/sync/errgroup"
-	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -62,8 +61,6 @@ func (s *Sync) warmup(ctx context.Context, c *Controller) error {
 	com.ErrgroupReceive(g, errs)
 
 	g.Go(func() error {
-		defer runtime.HandleCrash()
-
 		for {
 			select {
 			case e, more := <-entities:
@@ -97,20 +94,14 @@ func (s *Sync) sync(ctx context.Context, c *Controller, features ...Feature) err
 
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
-		defer runtime.HandleCrash()
-
 		return c.Stream(ctx, sink)
 	})
 	g.Go(func() error {
-		defer runtime.HandleCrash()
-
 		return s.db.UpsertStreamed(
 			ctx, sink.UpsertCh(),
 			database.WithCascading(), database.WithOnSuccess(with.OnUpsert()))
 	})
 	g.Go(func() error {
-		defer runtime.HandleCrash()
-
 		if with.NoDelete() {
 			for {
 				select {

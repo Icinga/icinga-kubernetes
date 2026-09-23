@@ -17,7 +17,6 @@ import (
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"golang.org/x/sync/errgroup"
 	kcorev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -471,13 +470,10 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 	// from multiple pods concurrently.
 	containerIds := make(chan any, db.Options.MaxPlaceholdersPerStatement)
 	g.Go(func() error {
-		defer runtime.HandleCrash()
-
 		return db.DeleteStreamed(ctx, &Container{}, containerIds, database.WithCascading())
 	})
 
 	g.Go(func() error {
-		defer runtime.HandleCrash()
 		defer close(containerIds)
 
 		scheduler.SetMaxConcurrentJobs(MaxConcurrentJobs, gocron.WaitMode)
@@ -511,8 +507,6 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 				com.ErrgroupReceive(g, errs)
 
 				g.Go(func() error {
-					defer runtime.HandleCrash()
-
 					for {
 						select {
 						case <-ctx.Done():
@@ -601,8 +595,6 @@ func warmup(ctx context.Context, db *database.Database) error {
 	com.ErrgroupReceive(g, errs)
 
 	g.Go(func() error {
-		defer runtime.HandleCrash()
-
 		containerLogsMu.Lock()
 		defer containerLogsMu.Unlock()
 
