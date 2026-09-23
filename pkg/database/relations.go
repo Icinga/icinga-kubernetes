@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"reflect"
 )
 
 type Relation interface {
@@ -11,8 +12,19 @@ type Relation interface {
 	WithoutCascadeDelete()
 	StreamInto(context.Context, chan any) error
 	TableName() string
+	// NewEntity returns a pointer to a new zero value of the related entity
+	// type, even if the related entities are pointers themselves.
+	NewEntity() any
 }
 
+// HasRelations is implemented by entities whose related entities are upserted
+// and deleted along with them when cascading.
+//
+// DeleteStreamed calls Relations on zero values, so it must return the same
+// relations regardless of the entity's field values. Related entities that
+// implement HasRelations themselves are deleted by their own ids, which requires
+// a uuid column in their table. DeleteStreamed sets up the whole cascade before
+// deleting anything, so relations must not form a cycle.
 type HasRelations interface {
 	Relations() []Relation
 }
@@ -54,6 +66,15 @@ func (r *relation[T]) WithoutCascadeDelete() {
 
 func (r *relation[T]) TableName() string {
 	return TableName(*new(T))
+}
+
+func (r *relation[T]) NewEntity() any {
+	t := reflect.TypeFor[T]()
+	if t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+
+	return reflect.New(t).Interface()
 }
 
 type hasMany[T comparable] struct {

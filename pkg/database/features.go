@@ -38,3 +38,11 @@ func WithOnSuccess(fn database.OnSuccess[any]) Feature {
 		f.onSuccess = fn
 	}
 }
+
+// withoutOnSuccess returns a Feature that applies f except for its onSuccess callback.
+func (f *Features) withoutOnSuccess() Feature {
+	return func(feat *Features) {
+		*feat = *f
+		feat.onSuccess = nil
+	}
+}
