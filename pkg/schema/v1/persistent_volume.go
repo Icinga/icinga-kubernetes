@@ -33,7 +33,7 @@ type PersistentVolume struct {
 	ResourceLabels              []ResourceLabel              `db:"-"`
 	Annotations                 []Annotation                 `db:"-"`
 	PersistentVolumeAnnotations []PersistentVolumeAnnotation `db:"-"`
-	ResourceAnnotations         []PersistentVolumeAnnotation `db:"-"`
+	ResourceAnnotations         []ResourceAnnotation         `db:"-"`
 	Favorites                   []Favorite                   `db:"-"`
 }
 
@@ -121,9 +121,9 @@ func (p *PersistentVolume) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			PersistentVolumeUuid: p.Uuid,
 			AnnotationUuid:       annotationUuid,
 		})
-		p.ResourceAnnotations = append(p.ResourceAnnotations, PersistentVolumeAnnotation{
-			PersistentVolumeUuid: p.Uuid,
-			AnnotationUuid:       annotationUuid,
+		p.ResourceAnnotations = append(p.ResourceAnnotations, ResourceAnnotation{
+			ResourceUuid:   p.Uuid,
+			AnnotationUuid: annotationUuid,
 		})
 	}
 

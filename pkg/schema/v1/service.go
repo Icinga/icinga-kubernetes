@@ -129,6 +129,10 @@ func (s *Service) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			ServiceUuid: s.Uuid,
 			LabelUuid:   labelUuid,
 		})
+		s.ResourceLabels = append(s.ResourceLabels, ResourceLabel{
+			ResourceUuid: s.Uuid,
+			LabelUuid:    labelUuid,
+		})
 	}
 
 	for annotationName, annotationValue := range service.Annotations {
@@ -145,10 +149,6 @@ func (s *Service) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		s.ResourceAnnotations = append(s.ResourceAnnotations, ResourceAnnotation{
 			ResourceUuid:   s.Uuid,
 			AnnotationUuid: annotationUuid,
-		})
-		s.ResourceLabels = append(s.ResourceLabels, ResourceLabel{
-			ResourceUuid: s.Uuid,
-			LabelUuid:    annotationUuid,
 		})
 	}
 
