@@ -135,10 +135,6 @@ func (p *PersistentVolume) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 }
 
 func (p *PersistentVolume) Relations() []database.Relation {
-	if p.Claim == nil {
-		return []database.Relation{}
-	}
-
 	fk := database.WithForeignKey("persistent_volume_uuid")
 
 	return []database.Relation{
