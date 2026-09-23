@@ -257,7 +257,6 @@ func (s *Service) Relations() []database.Relation {
 		database.HasMany(s.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
 		database.HasMany(s.Annotations, database.WithoutCascadeDelete()),
 		database.HasMany(s.ServiceAnnotations, fk),
-		database.HasMany(s.ResourceAnnotations, fk),
 		database.HasMany(s.ServicePods, fk),
 		database.HasMany(s.Favorites, database.WithForeignKey("resource_uuid")),
 	}
