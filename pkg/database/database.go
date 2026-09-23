@@ -332,8 +332,6 @@ func (db *Database) DeleteStreamed(
 
 			ch := make(chan any)
 			g.Go(func() error {
-				defer close(ch)
-
 				return db.DeleteStreamed(ctx, relation, ch, features...)
 			})
 			streams[TableName(relation)] = ch
@@ -372,6 +370,12 @@ func (db *Database) DeleteStreamed(
 		})
 
 		g.Go(func() error {
+			defer func() {
+				for _, ch := range streams {
+					close(ch)
+				}
+			}()
+
 			for {
 				select {
 				case entity, more := <-dup:
@@ -439,8 +443,6 @@ func (db *Database) UpsertStreamed(
 		for _, relation := range relations.Relations() {
 			ch := make(chan any)
 			g.Go(func() error {
-				defer close(ch)
-
 				return db.UpsertStreamed(ctx, ch, WithCascading())
 			})
 			streams[TableName(relation)] = ch
@@ -479,6 +481,15 @@ func (db *Database) UpsertStreamed(
 		})
 
 		g.Go(func() error {
+			var senders sync.WaitGroup
+
+			defer func() {
+				senders.Wait()
+				for _, ch := range streams {
+					close(ch)
+				}
+			}()
+
 			for {
 				select {
 				case entity, more := <-dup:
@@ -487,7 +498,10 @@ func (db *Database) UpsertStreamed(
 					}
 
 					for _, relation := range entity.(HasRelations).Relations() {
+						senders.Add(1)
 						g.Go(func() error {
+							defer senders.Done()
+
 							return relation.StreamInto(ctx, streams[TableName(relation)])
 						})
 					}
