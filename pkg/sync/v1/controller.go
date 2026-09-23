@@ -17,10 +17,7 @@ type Controller struct {
 	queue    workqueue.TypedRateLimitingInterface[EventHandlerItem]
 }
 
-func NewController(
-	informer cache.SharedIndexInformer,
-	log logr.Logger,
-) *Controller {
+func NewController(informer cache.SharedIndexInformer, log logr.Logger) *Controller {
 	return &Controller{
 		informer: informer,
 		log:      log,
