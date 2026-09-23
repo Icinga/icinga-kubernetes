@@ -431,6 +431,7 @@ func (p *Pod) Relations() []database.Relation {
 
 		// Delete-only relations.
 		database.HasMany([]PrometheusPodMetric(nil), fk),
+		database.HasMany([]ServicePod(nil), fk),
 	}
 }
 

@@ -824,24 +824,5 @@ func SyncServicePods(ctx context.Context, db *kdatabase.Database, serviceList co
 		}
 	})
 
-	g.Go(func() error {
-		ch := cachev1.Multiplexers().Pods().DeleteEvents().Out()
-		for {
-			select {
-			case podUuid, more := <-ch:
-				if !more {
-					return nil
-				}
-
-				_, err := db.ExecContext(ctx, `DELETE FROM service_pod WHERE pod_uuid = ?`, podUuid)
-				if err != nil {
-					return err
-				}
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		}
-	})
-
 	return g.Wait()
 }
