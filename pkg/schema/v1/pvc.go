@@ -150,8 +150,8 @@ func (p *Pvc) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			PvcUuid:        p.Uuid,
 			AnnotationUuid: annotationUuid,
 		})
-		p.PvcAnnotations = append(p.PvcAnnotations, PvcAnnotation{
-			PvcUuid:        p.Uuid,
+		p.ResourceAnnotations = append(p.ResourceAnnotations, ResourceAnnotation{
+			ResourceUuid:   p.Uuid,
 			AnnotationUuid: annotationUuid,
 		})
 	}
