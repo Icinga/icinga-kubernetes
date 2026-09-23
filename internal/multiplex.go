@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"golang.org/x/sync/errgroup"
-	"k8s.io/apimachinery/pkg/util/runtime"
 )
 
 type Multiplex interface {
@@ -58,8 +57,6 @@ func (m *multiplex) Do(ctx context.Context) error {
 	defer close(sink)
 
 	g.Go(func() error {
-		defer runtime.HandleCrash()
-
 		for {
 			for _, in := range m.in {
 				select {
@@ -81,8 +78,6 @@ func (m *multiplex) Do(ctx context.Context) error {
 	})
 
 	g.Go(func() error {
-		defer runtime.HandleCrash()
-
 		for {
 			select {
 			case item, more := <-sink:

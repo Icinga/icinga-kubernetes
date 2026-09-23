@@ -7,7 +7,6 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 )
@@ -43,8 +42,6 @@ func (c *Controller) Stream(ctx context.Context, sink *Sink) error {
 	}
 
 	go func() {
-		defer runtime.HandleCrash()
-
 		<-ctx.Done()
 		c.queue.ShutDown()
 	}()

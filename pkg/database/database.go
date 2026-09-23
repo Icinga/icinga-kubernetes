@@ -20,7 +20,6 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
-	"k8s.io/apimachinery/pkg/util/runtime"
 )
 
 var registerDriversOnce sync.Once
@@ -250,8 +249,6 @@ func (db *Database) NamedBulkExec(
 	with := NewFeatures(features...)
 
 	g.Go(func() error {
-		defer runtime.HandleCrash()
-
 		for {
 			select {
 			case b, ok := <-bulk:
@@ -265,7 +262,6 @@ func (db *Database) NamedBulkExec(
 
 				g.Go(func(b []any) func() error {
 					return func() error {
-						defer runtime.HandleCrash()
 						defer sem.Release(1)
 
 						return retry.WithBackoff(
@@ -336,7 +332,6 @@ func (db *Database) DeleteStreamed(
 
 			ch := make(chan any)
 			g.Go(func() error {
-				defer runtime.HandleCrash()
 				defer close(ch)
 
 				return db.DeleteStreamed(ctx, relation, ch, features...)
@@ -377,8 +372,6 @@ func (db *Database) DeleteStreamed(
 		})
 
 		g.Go(func() error {
-			defer runtime.HandleCrash()
-
 			for {
 				select {
 				case entity, more := <-dup:
@@ -400,8 +393,6 @@ func (db *Database) DeleteStreamed(
 		})
 
 		g.Go(func() error {
-			defer runtime.HandleCrash()
-
 			return db.BulkExec(
 				ctx,
 				db.BuildDeleteStmt(from),
@@ -448,7 +439,6 @@ func (db *Database) UpsertStreamed(
 		for _, relation := range relations.Relations() {
 			ch := make(chan any)
 			g.Go(func() error {
-				defer runtime.HandleCrash()
 				defer close(ch)
 
 				return db.UpsertStreamed(ctx, ch, WithCascading())
@@ -489,8 +479,6 @@ func (db *Database) UpsertStreamed(
 		})
 
 		g.Go(func() error {
-			defer runtime.HandleCrash()
-
 			for {
 				select {
 				case entity, more := <-dup:
@@ -500,8 +488,6 @@ func (db *Database) UpsertStreamed(
 
 					for _, relation := range entity.(HasRelations).Relations() {
 						g.Go(func() error {
-							defer runtime.HandleCrash()
-
 							return relation.StreamInto(ctx, streams[TableName(relation)])
 						})
 					}
@@ -512,8 +498,6 @@ func (db *Database) UpsertStreamed(
 		})
 
 		g.Go(func() error {
-			defer runtime.HandleCrash()
-
 			return db.NamedBulkExec(
 				ctx, stmt, db.BatchSizeByPlaceholders(placeholders), sem, forward, com.NeverSplit[any], features...)
 		})
@@ -533,7 +517,6 @@ func (db *Database) YieldAll(ctx context.Context, factoryFunc func() (any, error
 	entities := make(chan any, 1)
 
 	g.Go(func() error {
-		defer runtime.HandleCrash()
 		defer close(entities)
 
 		var counter com.Counter
