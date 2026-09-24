@@ -2,8 +2,6 @@ package database
 
 import (
 	sqlDriver "database/sql/driver"
-	"fmt"
-	"net"
 	"strings"
 
 	"github.com/go-sql-driver/mysql"
@@ -13,19 +11,6 @@ import (
 	"github.com/lib/pq"
 	"github.com/pkg/errors"
 )
-
-func IsUnixAddr(host string) bool {
-	return strings.HasPrefix(host, "/")
-}
-
-// JoinHostPort is like its equivalent in net., but handles UNIX sockets as well.
-func JoinHostPort(host string, port int) string {
-	if IsUnixAddr(host) {
-		return host
-	}
-
-	return net.JoinHostPort(host, fmt.Sprint(port))
-}
 
 // IsRetryable checks whether the given error is retryable.
 func IsRetryable(err error) bool {
