@@ -131,9 +131,8 @@ func (c *Cleanup) CleanupOlderThan(
 // fails or ctx is done, and returns the cleanup error or ctx.Err().
 func (c *Cleanup) PeriodicCleanup(ctx context.Context, stmt CleanupStmt) error {
 	errs := make(chan error, 1)
-	defer close(errs)
 
-	periodic.Start(ctx, time.Hour, func(tick periodic.Tick) {
+	defer periodic.Start(ctx, time.Hour, func(tick periodic.Tick) {
 		olderThan := tick.Time.AddDate(0, 0, -1)
 
 		_, err := c.CleanupOlderThan(ctx, stmt, 5000, olderThan)
