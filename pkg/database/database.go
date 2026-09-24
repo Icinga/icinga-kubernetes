@@ -30,7 +30,6 @@ var registerDriversOnce sync.Once
 // streaming and logging capabilities.
 type Database struct {
 	*sqlx.DB
-	*Quoter
 
 	Options database.Options
 
@@ -43,6 +42,8 @@ type Database struct {
 }
 
 // NewFromSqlxDb returns a new Database connection from the given sqlx.DB.
+// For MySQL, the connections of otherDB must use the ANSI_QUOTES SQL mode,
+// since the built statements quote identifiers with double quotes.
 func NewFromSqlxDb(c *database.Config, log *logging.Logger, otherDB *sqlx.DB) (*Database, error) {
 	registerDriversOnce.Do(func() {
 		RegisterDrivers(log)
@@ -58,7 +59,6 @@ func NewFromSqlxDb(c *database.Config, log *logging.Logger, otherDB *sqlx.DB) (*
 		columnMap:       database.NewColumnMap(db.Mapper),
 		Options:         c.Options,
 		tableSemaphores: make(map[string]*semaphore.Weighted),
-		Quoter:          NewQuoter(db),
 	}, nil
 }
 
@@ -83,8 +83,8 @@ func (db *Database) BuildDeleteStmt(from any) string {
 	}
 
 	return fmt.Sprintf(
-		`DELETE FROM %s WHERE %s IN (?)`,
-		db.QuoteIdentifier(database.TableName(from)),
+		`DELETE FROM "%s" WHERE %s IN (?)`,
+		database.TableName(from),
 		column,
 	)
 }
@@ -93,9 +93,9 @@ func (db *Database) BuildDeleteStmt(from any) string {
 // given table struct and the column list from the specified columns struct.
 func (db *Database) BuildSelectStmt(table any, columns any) string {
 	q := fmt.Sprintf(
-		"SELECT %s FROM %s",
-		db.QuoteColumns(db.columnMap.Columns(columns)),
-		db.QuoteIdentifier(database.TableName(table)),
+		`SELECT "%s" FROM "%s"`,
+		strings.Join(db.columnMap.Columns(columns), `", "`),
+		database.TableName(table),
 	)
 
 	return q
@@ -121,11 +121,10 @@ func (db *Database) BuildUpsertStmt(subject any) (stmt string, placeholders int)
 	}
 
 	var clause, setFormat string
-	quoted := db.QuoteIdentifier("%[1]s")
 	switch db.DriverName() {
 	case MySQL:
 		clause = "ON DUPLICATE KEY UPDATE"
-		setFormat = fmt.Sprintf("%[1]s = VALUES(%[1]s)", quoted)
+		setFormat = `"%[1]s" = VALUES("%[1]s")`
 	case PostgreSQL:
 		clause = fmt.Sprintf("ON CONFLICT ON CONSTRAINT pk_%s DO UPDATE SET", table)
 		setFormat = `"%[1]s" = EXCLUDED."%[1]s"`
@@ -138,9 +137,9 @@ func (db *Database) BuildUpsertStmt(subject any) (stmt string, placeholders int)
 	}
 
 	return fmt.Sprintf(
-		`INSERT INTO %s (%s) VALUES (%s) %s %s`,
-		db.QuoteIdentifier(table),
-		db.QuoteColumns(insertColumns),
+		`INSERT INTO "%s" ("%s") VALUES (%s) %s %s`,
+		table,
+		strings.Join(insertColumns, `", "`),
 		fmt.Sprintf(":%s", strings.Join(insertColumns, ", :")),
 		clause,
 		strings.Join(set, ", "),
@@ -321,8 +320,8 @@ func (db *Database) streamChildIds(
 	ctx context.Context, child any, relation Relation, parentIds <-chan any, childIds chan<- any,
 ) error {
 	query := fmt.Sprintf(
-		`SELECT uuid FROM %s WHERE %s IN (?)`,
-		db.QuoteIdentifier(database.TableName(child)),
+		`SELECT uuid FROM "%s" WHERE %s IN (?)`,
+		database.TableName(child),
 		relation.ForeignKey(),
 	)
 
