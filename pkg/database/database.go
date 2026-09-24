@@ -311,6 +311,69 @@ func (db *Database) GetSemaphoreForTable(table string) *semaphore.Weighted {
 	}
 }
 
+// DeleteTx deletes the specified ids serially through tx.
+//
+// It reuses the same relation metadata and delete-statement builder as
+// DeleteStreamed, but leaves transaction ownership to the caller.
+// Cascading relations are deleted before their parent rows.
+func (db *Database) DeleteTx(
+	ctx context.Context,
+	tx *sqlx.Tx,
+	from any,
+	ids []any,
+	features ...Feature,
+) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	f := NewFeatures(features...)
+
+	if relations, ok := from.(HasRelations); ok && f.cascading {
+		for _, relation := range relations.Relations() {
+			if !relation.CascadeDelete() {
+				continue
+			}
+
+			if err := db.DeleteTx(ctx, tx, relation, ids, features...); err != nil {
+				return err
+			}
+		}
+	}
+
+	query := db.BuildDeleteStmt(from)
+	batchSize := db.Options.MaxPlaceholdersPerStatement
+	if batchSize < 1 {
+		batchSize = 1
+	}
+
+	for start := 0; start < len(ids); start += batchSize {
+		end := start + batchSize
+		if end > len(ids) {
+			end = len(ids)
+		}
+
+		batch := ids[start:end]
+
+		stmt, args, err := sqlx.In(query, batch)
+		if err != nil {
+			return errors.Wrapf(err, "cannot build placeholders for %q", query)
+		}
+
+		if _, err := tx.ExecContext(ctx, db.Rebind(stmt), args...); err != nil {
+			return CantPerformQuery(err, query)
+		}
+
+		if f.onSuccess != nil {
+			if err := f.onSuccess(ctx, batch); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 // DeleteStreamed bulk deletes the specified ids via BulkExec.
 // The delete statement is created using BuildDeleteStmt with the passed entityType.
 // Bulk size is controlled via Options.MaxPlaceholdersPerStatement and

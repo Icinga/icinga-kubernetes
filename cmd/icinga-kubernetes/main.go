@@ -55,6 +55,7 @@ func main() {
 	var glue daemon.ConfigFlagGlue
 	var showVersion bool
 	var clusterName string
+	var removeCluster string
 
 	klog.InitFlags(nil)
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
@@ -67,6 +68,8 @@ func main() {
 		fmt.Sprintf("path to the config file (default: %s)", daemon.DefaultConfigPath),
 	)
 	pflag.StringVar(&clusterName, "cluster-name", "", "name of the current cluster")
+
+	pflag.StringVar(&removeCluster, "remove-cluster", "", "remove a cluster by UUID using database state only")
 
 	loadingRules := kclientcmd.NewDefaultClientConfigLoadingRules()
 	loadingRules.DefaultClientConfig = &kclientcmd.DefaultClientConfig
@@ -82,6 +85,13 @@ func main() {
 	if showVersion {
 		internal.Version.Print("Icinga Kubernetes")
 		os.Exit(0)
+	}
+
+	if removeCluster != "" {
+		if err := runClusterRemoval(context.Background(), glue, removeCluster); err != nil {
+			klog.Fatal(err)
+		}
+		return
 	}
 
 	klog.Infof("Starting Icinga for Kubernetes (%s)", internal.Version.Version)
@@ -696,6 +706,53 @@ func main() {
 	if err := g.Wait(); err != nil {
 		klog.Fatal(err)
 	}
+}
+
+func runClusterRemoval(ctx context.Context, glue daemon.ConfigFlagGlue, clusterUuidText string) error {
+	parsedUuid, err := uuid.Parse(clusterUuidText)
+	if err != nil {
+		return errors.Wrapf(err, "invalid cluster UUID %q", clusterUuidText)
+	}
+
+	clusterUuid := types.UUID{UUID: parsedUuid}
+
+	var cfg daemon.Config
+
+	if err := config.Load(&cfg, config.LoadOptions{
+		Flags: glue,
+		EnvOptions: config.EnvOptions{
+			Prefix: "ICINGA_FOR_KUBERNETES_",
+		},
+	}); err != nil {
+		return errors.Wrap(err, "can't create configuration")
+	}
+
+	logs, err := logging.NewLoggingFromConfig("Icinga Kubernetes", cfg.Logging)
+	if err != nil {
+		return errors.Wrap(err, "cannot configure logging")
+	}
+
+	db, err := database.NewDbFromConfig(&cfg.Database, logs.GetChildLogger("database"), database.RetryConnectorCallbacks{})
+	if err != nil {
+		return errors.Wrap(err, "cannot create database connection")
+	}
+
+	kdb, err := kdatabase.NewFromSqlxDb(&cfg.Database, klog.NewKlogr().WithName("database"), db.DB)
+	if err != nil {
+		return err
+	}
+
+	if !kdb.Connect() {
+		return errors.New("cannot connect to database")
+	}
+
+	if err := internal.RemoveCluster(ctx, kdb, clusterUuid); err != nil {
+		return errors.Wrapf(err, "cannot remove cluster %s", clusterUuid.String())
+	}
+
+	klog.Infof("Removed cluster %s", clusterUuid.String())
+
+	return nil
 }
 
 // dbHasSchema queries via db whether the database dbName has a table named "kubernetes_schema".
