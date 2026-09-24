@@ -15,6 +15,7 @@ import (
 	"github.com/icinga/icinga-go-library/periodic"
 	"github.com/icinga/icinga-go-library/retry"
 	"github.com/icinga/icinga-go-library/strcase"
+	"github.com/icinga/icinga-go-library/types"
 	"github.com/jmoiron/sqlx"
 	"github.com/jmoiron/sqlx/reflectx"
 	"github.com/pkg/errors"
@@ -311,11 +312,58 @@ func (db *Database) GetSemaphoreForTable(table string) *semaphore.Weighted {
 	}
 }
 
+// streamChildIds streams the ids of the rows of child that reference one
+// of the parent ids through the foreign key of relation into childIds.
+func (db *Database) streamChildIds(
+	ctx context.Context, child any, relation Relation, parentIds <-chan any, childIds chan<- any,
+) error {
+	query := fmt.Sprintf(
+		`SELECT uuid FROM %s WHERE %s IN (?)`,
+		db.QuoteIdentifier(TableName(child)),
+		relation.ForeignKey(),
+	)
+
+	for batch := range com.Bulk(ctx, parentIds, db.Options.MaxPlaceholdersPerStatement, com.NeverSplit[any]) {
+		var ids []types.UUID
+
+		stmt, args, err := sqlx.In(query, batch)
+		if err != nil {
+			return errors.Wrapf(err, "cannot build placeholders for %q", query)
+		}
+
+		if err := retry.WithBackoff(
+			ctx,
+			func(ctx context.Context) error {
+				ids = nil
+
+				return db.SelectContext(ctx, &ids, db.Rebind(stmt), args...)
+			},
+			IsRetryable,
+			backoff.NewExponentialWithJitter(1*time.Millisecond, 1*time.Second),
+			retry.Settings{},
+		); err != nil {
+			return CantPerformQuery(err, query)
+		}
+
+		for _, id := range ids {
+			select {
+			case childIds <- id:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+	}
+
+	return ctx.Err()
+}
+
 // DeleteStreamed bulk deletes the specified ids via BulkExec.
 // The delete statement is created using BuildDeleteStmt with the passed entityType.
 // Bulk size is controlled via Options.MaxPlaceholdersPerStatement and
 // concurrency is controlled via Options.MaxConnectionsPerTable.
-// IDs for which the query ran successfully will be passed to onSuccess.
+// With cascading, related entities that have relations themselves are deleted
+// recursively by their own ids. IDs for which the query ran successfully will
+// be passed to onSuccess.
 func (db *Database) DeleteStreamed(
 	ctx context.Context, from any, ids <-chan any, features ...Feature,
 ) error {
@@ -324,19 +372,30 @@ func (db *Database) DeleteStreamed(
 	if relations, ok := from.(HasRelations); ok && f.cascading {
 		var g *errgroup.Group
 		g, ctx = errgroup.WithContext(ctx)
-		streams := make(map[string]chan any, len(relations.Relations()))
+		streams := make([]chan any, 0, len(relations.Relations()))
 		for _, relation := range relations.Relations() {
 			if !relation.CascadeDelete() {
 				continue
 			}
 
 			ch := make(chan any)
-			g.Go(func() error {
-				defer close(ch)
+			if child, ok := relation.NewEntity().(HasRelations); ok {
+				childIds := make(chan any)
+				g.Go(func() error {
+					defer close(childIds)
 
-				return db.DeleteStreamed(ctx, relation, ch, features...)
-			})
-			streams[TableName(relation)] = ch
+					return db.streamChildIds(ctx, child, relation, ch, childIds)
+				})
+				g.Go(func() error {
+					// onSuccess expects ids of the entity the deletion started from, not those of its children.
+					return db.DeleteStreamed(ctx, child, childIds, f.withoutOnSuccess())
+				})
+			} else {
+				g.Go(func() error {
+					return db.DeleteStreamed(ctx, relation, ch, features...)
+				})
+			}
+			streams = append(streams, ch)
 		}
 
 		source := ids
@@ -372,6 +431,12 @@ func (db *Database) DeleteStreamed(
 		})
 
 		g.Go(func() error {
+			defer func() {
+				for _, ch := range streams {
+					close(ch)
+				}
+			}()
+
 			for {
 				select {
 				case entity, more := <-dup:
@@ -437,10 +502,14 @@ func (db *Database) UpsertStreamed(
 		g, ctx = errgroup.WithContext(ctx)
 		streams := make(map[string]chan any, len(relations.Relations()))
 		for _, relation := range relations.Relations() {
+			// Relations to the same table share its stream,
+			// as the entities are looked up by table name.
+			if _, exists := streams[TableName(relation)]; exists {
+				continue
+			}
+
 			ch := make(chan any)
 			g.Go(func() error {
-				defer close(ch)
-
 				return db.UpsertStreamed(ctx, ch, WithCascading())
 			})
 			streams[TableName(relation)] = ch
@@ -479,6 +548,15 @@ func (db *Database) UpsertStreamed(
 		})
 
 		g.Go(func() error {
+			var senders sync.WaitGroup
+
+			defer func() {
+				senders.Wait()
+				for _, ch := range streams {
+					close(ch)
+				}
+			}()
+
 			for {
 				select {
 				case entity, more := <-dup:
@@ -487,7 +565,10 @@ func (db *Database) UpsertStreamed(
 					}
 
 					for _, relation := range entity.(HasRelations).Relations() {
+						senders.Add(1)
 						g.Go(func() error {
+							defer senders.Done()
+
 							return relation.StreamInto(ctx, streams[TableName(relation)])
 						})
 					}
