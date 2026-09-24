@@ -292,6 +292,9 @@ func (n *Node) Relations() []database.Relation {
 		database.HasMany(n.Annotations, database.WithoutCascadeDelete()),
 		database.HasMany(n.NodeAnnotations, fk),
 		database.HasMany(n.Favorites, database.WithForeignKey("resource_uuid")),
+
+		// Delete-only relations.
+		database.HasMany([]PrometheusNodeMetric(nil), fk),
 	}
 }
 
