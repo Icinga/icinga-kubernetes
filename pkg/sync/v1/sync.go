@@ -48,7 +48,7 @@ func (s *Sync) Run(ctx context.Context, features ...Feature) error {
 		}
 	}
 
-	return s.sync(ctx, controller, synced, features...)
+	return s.sync(ctx, controller, synced, with)
 }
 
 // warmup returns the UUIDs of the entities already synced to the database,
@@ -131,7 +131,7 @@ func (s *Sync) deleteVanished(ctx context.Context, sink *Sink, synced map[string
 	return nil
 }
 
-func (s *Sync) sync(ctx context.Context, c *Controller, synced map[string]types.UUID, features ...Feature) error {
+func (s *Sync) sync(ctx context.Context, c *Controller, synced map[string]types.UUID, with *Features) error {
 	sink := NewSink(func(i *Item) any {
 		entity := s.factory()
 		entity.Obtain(*i.Item, cluster.ClusterUuidFromContext(ctx))
@@ -140,8 +140,6 @@ func (s *Sync) sync(ctx context.Context, c *Controller, synced map[string]types.
 	}, func(k any) any {
 		return k
 	})
-
-	with := NewFeatures(features...)
 
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
@@ -152,8 +150,11 @@ func (s *Sync) sync(ctx context.Context, c *Controller, synced map[string]types.
 	})
 	g.Go(func() error {
 		return s.db.UpsertStreamed(
-			ctx, sink.UpsertCh(),
-			database.WithCascading(), database.WithOnSuccess(with.OnUpsert()))
+			ctx,
+			sink.UpsertCh(),
+			database.WithCascading(),
+			database.WithOnSuccess(with.OnUpsert()),
+		)
 	})
 	g.Go(func() error {
 		if with.NoDelete() {
@@ -170,8 +171,13 @@ func (s *Sync) sync(ctx context.Context, c *Controller, synced map[string]types.
 			}
 		} else {
 			return s.db.DeleteStreamed(
-				ctx, s.factory(), sink.DeleteCh(),
-				database.WithBlocking(), database.WithCascading(), database.WithOnSuccess(with.OnDelete()))
+				ctx,
+				s.factory(),
+				sink.DeleteCh(),
+				database.WithBlocking(),
+				database.WithCascading(),
+				database.WithOnSuccess(with.OnDelete()),
+			)
 		}
 	})
 
