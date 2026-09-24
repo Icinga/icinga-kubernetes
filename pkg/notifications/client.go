@@ -100,7 +100,7 @@ func (c *Client) ProcessEvent(ctx context.Context, event Event) error {
 		return nil
 	}
 
-	return errors.New("Received three rule updates from Icinga Notifications in a row")
+	return errors.New("received three rule updates from Icinga Notifications in a row")
 }
 
 // Stream consumes the items from the given `entities` chan and triggers

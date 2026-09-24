@@ -546,7 +546,7 @@ func (pms *PromMetricSync) Pods(ctx context.Context, informer kcache.SharedIndex
 
 func (pms *PromMetricSync) Containers(ctx context.Context, informer kcache.SharedIndexInformer) error {
 	if !kcache.WaitForCacheSync(ctx.Done(), informer.HasSynced) {
-		pms.logger.Fatal("timed out waiting for caches to sync")
+		pms.logger.Fatal("Timed out waiting for caches to sync")
 	}
 
 	upsertMetrics := make(chan database.Entity)
@@ -593,7 +593,7 @@ func (pms *PromMetricSync) Containers(ctx context.Context, informer kcache.Share
 
 func (pms *PromMetricSync) Clusters(ctx context.Context, informer kcache.SharedIndexInformer) error {
 	if !kcache.WaitForCacheSync(ctx.Done(), informer.HasSynced) {
-		pms.logger.Fatal("timed out waiting for caches to sync")
+		pms.logger.Fatal("Timed out waiting for caches to sync")
 	}
 
 	upsertMetrics := make(chan database.Entity)
