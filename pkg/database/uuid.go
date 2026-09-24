@@ -7,7 +7,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// UUID is like uuid.UUID, but marshals itself binarily (not like xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx) in SQL context.
+// UUID is like uuid.UUID, but marshals itself binarily
+// (not like xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx) in SQL context.
 type UUID struct {
 	uuid.UUID
 }

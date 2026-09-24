@@ -112,9 +112,10 @@ func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *metrics.
 	return nil
 }
 
-// AutoDetectPrometheus tries to auto-detect the Prometheus service in the monitoring namespace and
-// if found sets the URL in the supplied Prometheus configuration. The first service with the label
-// "app.kubernetes.io/name=prometheus" is used. Until now the ServiceTypes ClusterIP and NodePort are supported.
+// AutoDetectPrometheus tries to auto-detect the Prometheus service in the
+// monitoring namespace and if found sets the URL in the supplied Prometheus
+// configuration. The first service with the label "app.kubernetes.io/name=prometheus"
+// is used. Until now the ServiceTypes ClusterIP and NodePort are supported.
 func AutoDetectPrometheus(ctx context.Context, clientset *kubernetes.Clientset, config *metrics.PrometheusConfig) error {
 	services, err := clientset.CoreV1().Services("monitoring").List(ctx, kmetav1.ListOptions{
 		LabelSelector: "app.kubernetes.io/name=prometheus",
@@ -130,8 +131,8 @@ func AutoDetectPrometheus(ctx context.Context, clientset *kubernetes.Clientset, 
 	var ip string
 	var port int32
 
-	// Check if we are running in a Kubernetes cluster. If so, use the
-	// service's ClusterIP. Otherwise, use the API Server's IP and NodePort.
+	// Check if we are running in a Kubernetes cluster. If so, use the service's
+	// ClusterIP. Otherwise, use the API Server's IP and NodePort.
 	if _, err = rest.InClusterConfig(); err == nil {
 		for _, service := range services.Items {
 			if service.Spec.Type == v1.ServiceTypeClusterIP {

@@ -32,9 +32,10 @@ DELETE FROM %[2]s WHERE %[1]s IN (SELECT %[1]s FROM rows)`, stmt.PK, stmt.Table,
 	}
 }
 
-// CleanupOlderThan deletes all rows with the specified statement that are older than the given time.
-// Deletes a maximum of as many rows per round as defined in count. Actually deleted rows will be passed to onSuccess.
-// Returns the total number of rows deleted.
+// CleanupOlderThan deletes all rows with the specified statement that are older
+// than the given time. Deletes a maximum of as many rows per round as defined
+// in count. Actually deleted rows will be passed to onSuccess. Returns the total
+// number of rows deleted.
 func (db *Database) CleanupOlderThan(
 	ctx context.Context, stmt CleanupStmt,
 	count uint64, olderThan time.Time, onSuccess ...OnSuccess[struct{}],

@@ -12,9 +12,9 @@ type contextKey string
 // clusterUuidContextKey is the key for Cluster values in contexts.
 var clusterUuidContextKey = contextKey("cluster_uuid")
 
-// NewClusterUuidContext creates a new context that carries the provided cluster UUID.
-// The new context is derived from the given parent context and associates the cluster UUID
-// with a predefined key (clusterContextKey).
+// NewClusterUuidContext creates a new context that carries the provided cluster
+// UUID. The new context is derived from the given parent context and associates
+// the cluster UUID with a predefined key (clusterContextKey).
 func NewClusterUuidContext(parent context.Context, clusterUuid types.UUID) context.Context {
 	return context.WithValue(parent, clusterUuidContextKey, clusterUuid)
 }

@@ -61,7 +61,8 @@ func (c RetryConnector) Driver() driver.Driver {
 	return c.driver
 }
 
-// Driver wraps a driver.Driver that also must implement driver.DriverContext with logging capabilities and provides our RetryConnector.
+// Driver wraps a driver.Driver that also must implement driver.DriverContext
+// with logging capabilities and provides our RetryConnector.
 type Driver struct {
 	ctxDriver
 	Logger logr.Logger
@@ -88,7 +89,8 @@ func RegisterDrivers(logger logr.Logger) {
 	sqlx.BindDriver(PostgreSQL, sqlx.DOLLAR)
 }
 
-// ctxDriver helps ensure that we only support drivers that implement driver.Driver and driver.DriverContext.
+// ctxDriver helps ensure that we only support drivers that implement
+// driver.Driver and driver.DriverContext.
 type ctxDriver interface {
 	driver.Driver
 	driver.DriverContext

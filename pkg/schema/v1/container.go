@@ -115,9 +115,11 @@ func (c *ContainerCommon) Relations() []database.Relation {
 		database.HasMany(c.Devices, fk),
 		database.HasMany(c.Mounts, fk),
 
-		// Allow to automatically remove the logs when a container is deleted. Otherwise, we will have some dangling
-		// container logs in the database if the logs aren't deleted before removing the container, since any error
-		// can interrupt the deletion process of the logs when using the `on success` mechanism.
+		// Allow to automatically remove the logs when a container is deleted.
+		// Otherwise, we will have some dangling container logs in the database
+		// if the logs aren't deleted before removing the container, since any
+		// error can interrupt the deletion process of the logs when using the
+		// `on success` mechanism.
 		database.HasOne(ContainerLog{}, fk),
 	}
 }
@@ -275,7 +277,8 @@ func (cl *ContainerLog) Upsert() any {
 	return cl.ContainerLogMeta
 }
 
-// syncContainerLogs fetches the logs from the kubernetes API for the given container and syncs to the database.
+// syncContainerLogs fetches the logs from the kubernetes API for the given
+// container and syncs to the database.
 func (cl *ContainerLog) syncContainerLogs(ctx context.Context, clientset *kubernetes.Clientset, db *database.Database) error {
 	logOptions := &kcorev1.PodLogOptions{Container: cl.ContainerName}
 	if !cl.LastUpdate.Time().IsZero() {
@@ -449,10 +452,12 @@ func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStat
 		container.Name, reason)
 }
 
-// SyncContainers consumes from the `upsertPods` and `deletePods` chans concurrently and schedules a job for
-// each of the containers (drawn from `upsertPods`) that periodically syncs the container logs with the database.
-// When pods are deleted, their IDs are streamed through the `deletePods` chan, and this fetches all the container
-// IDs matching the respective pod ID from the database and initiates a container deletion stream that cleans up all
+// SyncContainers consumes from the `upsertPods` and `deletePods` chans
+// concurrently and schedules a job for each of the containers (drawn from
+// `upsertPods`) that periodically syncs the container logs with the database.
+// When pods are deleted, their IDs are streamed through the `deletePods` chan,
+// and this fetches all the container IDs matching the respective pod ID from
+// the database and initiates a container deletion stream that cleans up all
 // container-related resources.
 func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Group, upsertPods, deletePods <-chan any) {
 	type containerFingerprint struct {
@@ -466,8 +471,8 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 	close(err)
 	com.ErrgroupReceive(g, err)
 
-	// Use buffered channel here not to block the goroutines, as they can stream container ids
-	// from multiple pods concurrently.
+	// Use buffered channel here not to block the goroutines, as they can stream
+	// container ids from multiple pods concurrently.
 	containerIds := make(chan any, db.Options.MaxPlaceholdersPerStatement)
 	g.Go(func() error {
 		return db.DeleteStreamed(ctx, &Container{}, containerIds, database.WithCascading())
@@ -495,8 +500,10 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 
 				meta := &containerFingerprint{PodUuid: podUuid.(types.UUID)}
 				if _, ok := deletedPodIds[meta.PodUuid.String()]; ok {
-					// Due to the recursive relation resolution in the `DB#DeleteStreamed()` method, we may get the
-					// same pod ID multiple times since they all share the same `on success` handler.
+					// Due to the recursive relation resolution in the
+					// `DB#DeleteStreamed()` method, we may get the same pod ID
+					// multiple times since they all share the same `on success`
+					// handler.
 					break
 				}
 				deletedPodIds[meta.PodUuid.String()] = true
@@ -616,8 +623,9 @@ func warmup(ctx context.Context, db *database.Database) error {
 	return g.Wait()
 }
 
-// truncate truncates a UTF-8 string from the front to ensure it does not exceed the given byte length.
-// It also removes content before the first newline character if one is found in the truncated string.
+// truncate truncates a UTF-8 string from the front to ensure it does not
+// exceed the given byte length. It also removes content before the first
+// newline character if one is found in the truncated string.
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s
