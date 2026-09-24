@@ -9,11 +9,11 @@ import (
 	"sync"
 
 	"github.com/icinga/icinga-go-library/database"
+	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-go-library/notifications/source"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/pkg/errors"
-	"k8s.io/klog/v2"
 )
 
 type Client struct {
@@ -21,11 +21,12 @@ type Client struct {
 	rawClient http.Client
 	webUrl    *url.URL
 	db        *database.DB
+	logger    *logging.Logger
 	mu        sync.Mutex
 	rulesInfo *source.RulesInfo
 }
 
-func NewClient(name string, config Config, db *database.DB) (*Client, error) {
+func NewClient(name string, config Config, db *database.DB, logger *logging.Logger) (*Client, error) {
 	baseUrl, err := url.Parse(config.Url)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to parse url")
@@ -55,6 +56,7 @@ func NewClient(name string, config Config, db *database.DB) (*Client, error) {
 		webUrl:    webUrl,
 		rulesInfo: &source.RulesInfo{},
 		db:        db,
+		logger:    logger,
 		rawClient: http.Client{Transport: transport},
 	}, nil
 }
@@ -73,7 +75,7 @@ func (c *Client) ProcessEvent(ctx context.Context, event Event) error {
 			event.Uuid,
 			event.ClusterUuid)
 		if err != nil {
-			klog.Errorf("Cannot evaluate rules for event, assuming no rule matched: %v", err)
+			c.logger.Errorf("Cannot evaluate rules for event, assuming no rule matched: %v", err)
 			eventRuleIds = []string{}
 		}
 
@@ -82,7 +84,7 @@ func (c *Client) ProcessEvent(ctx context.Context, event Event) error {
 
 		newEventRules, err := c.client.ProcessEvent(ctx, ev)
 		if errors.Is(err, source.ErrRulesOutdated) {
-			klog.Infof("Received a rule update from Icinga Notifications, resubmitting event (old_rules_version: %q, new_rules_version: %q)",
+			c.logger.Infof("Received a rule update from Icinga Notifications, resubmitting event (old_rules_version: %q, new_rules_version: %q)",
 				c.rulesInfo.Version,
 				newEventRules.Version)
 
@@ -93,7 +95,7 @@ func (c *Client) ProcessEvent(ctx context.Context, event Event) error {
 			return errors.Wrapf(err, "cannot submit event to Icinga Notifications (matched_rules: %v, rules_version: %q)", eventRuleIds, c.rulesInfo.Version)
 		}
 
-		klog.V(2).Infof("Successfully submitted event to Icinga Notifications (matched_rules: %v)", eventRuleIds)
+		c.logger.Debugf("Successfully submitted event to Icinga Notifications (matched_rules: %v)", eventRuleIds)
 
 		return nil
 	}
@@ -112,12 +114,12 @@ func (c *Client) Stream(ctx context.Context, entities <-chan any) error {
 
 			event, err := entity.(Marshaler).MarshalEvent()
 			if err != nil {
-				klog.Errorf("Cannot marshal event: %v", err)
+				c.logger.Errorf("Cannot marshal event: %v", err)
 				continue
 			}
 
 			if err := c.ProcessEvent(ctx, event); err != nil {
-				klog.Errorf("Cannot process event: %v", err)
+				c.logger.Errorf("Cannot process event: %v", err)
 			}
 		case <-ctx.Done():
 			return ctx.Err()

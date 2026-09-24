@@ -4,15 +4,16 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
-	"fmt"
 	"time"
 
-	"github.com/go-logr/logr"
 	"github.com/go-sql-driver/mysql"
 	"github.com/icinga/icinga-go-library/backoff"
+	"github.com/icinga/icinga-go-library/database"
+	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-go-library/retry"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 )
 
 const MySQL = "icinga-mysql"
@@ -41,14 +42,16 @@ func (c RetryConnector) Connect(ctx context.Context) (driver.Conn, error) {
 			Timeout: timeout,
 			OnRetryableError: func(_ time.Duration, _ uint64, err, lastErr error) {
 				if lastErr == nil || err.Error() != lastErr.Error() {
-					c.driver.Logger.Info("Cannot connect to database. Retrying", "error", err)
+					c.driver.Logger.Warnw("Cannot connect to database. Retrying", zap.Error(err))
 				}
 			},
 			OnSuccess: func(elapsed time.Duration, attempt uint64, _ error) {
 				if attempt > 1 {
-					c.driver.Logger.Info("Reconnected to database")
-					// c.driver.Logger.Info(1, "Reconnected to database",
-					// 	zap.Duration("after", elapsed), zap.Uint64("attempts", attempt+1))
+					c.driver.Logger.Infow(
+						"Reconnected to database",
+						zap.Duration("after", elapsed),
+						zap.Uint64("attempts", attempt),
+					)
 				}
 			},
 		},
@@ -64,7 +67,7 @@ func (c RetryConnector) Driver() driver.Driver {
 // Driver wraps a driver.Driver that also must implement driver.DriverContext with logging capabilities and provides our RetryConnector.
 type Driver struct {
 	ctxDriver
-	Logger logr.Logger
+	Logger *logging.Logger
 }
 
 // OpenConnector implements the DriverContext interface.
@@ -81,10 +84,10 @@ func (d Driver) OpenConnector(name string) (driver.Connector, error) {
 }
 
 // RegisterDrivers makes our database Driver(s) available under the name "icinga-*sql".
-func RegisterDrivers(logger logr.Logger) {
+func RegisterDrivers(logger *logging.Logger) {
 	sql.Register(MySQL, &Driver{ctxDriver: &mysql.MySQLDriver{}, Logger: logger})
 	sql.Register(PostgreSQL, &Driver{ctxDriver: &PgSQLDriver{}, Logger: logger})
-	_ = mysql.SetLogger(mysqlLogger(func(v ...any) { fmt.Println(v...) }))
+	_ = mysql.SetLogger(database.MysqlFuncLogger(logger.Debug))
 	sqlx.BindDriver(PostgreSQL, sqlx.DOLLAR)
 }
 
@@ -92,14 +95,6 @@ func RegisterDrivers(logger logr.Logger) {
 type ctxDriver interface {
 	driver.Driver
 	driver.DriverContext
-}
-
-// mysqlLogger is an adapter that allows ordinary functions to be used as a logger for mysql.SetLogger.
-type mysqlLogger func(v ...any)
-
-// Print implements the mysql.Logger interface.
-func (log mysqlLogger) Print(v ...any) {
-	log(v)
 }
 
 func shouldRetry(err error) bool {
