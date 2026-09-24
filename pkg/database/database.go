@@ -360,12 +360,11 @@ func (db *Database) streamChildIds(
 }
 
 // DeleteStreamed bulk deletes the specified ids via BulkExec. The delete
-// statement is created using BuildDeleteStmt with the passed entityType.
-// Bulk size is controlled via Options.MaxPlaceholdersPerStatement and
-// concurrency is controlled via Options.MaxConnectionsPerTable.
-// With cascading, related entities that have relations themselves are deleted
-// recursively by their own ids. IDs for which the query ran successfully will
-// be passed to onSuccess.
+// statement is created using BuildDeleteStmt(from). Bulk size is controlled
+// via Options.MaxPlaceholdersPerStatement and concurrency is controlled via
+// Options.MaxConnectionsPerTable. With cascading, related entities that have
+// relations themselves are deleted recursively by their own ids. IDs for which
+// the query ran successfully will be passed to onSuccess.
 func (db *Database) DeleteStreamed(
 	ctx context.Context, from any, ids <-chan any, features ...Feature,
 ) error {

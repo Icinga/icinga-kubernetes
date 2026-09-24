@@ -592,7 +592,7 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 	})
 }
 
-// warmup fetches all container logs from the database and caches them in the containerlogs variable.
+// warmup fetches all container logs from the database and caches them in the containerLogs variable.
 func warmup(ctx context.Context, db *database.Database) error {
 	g, ctx := errgroup.WithContext(ctx)
 
