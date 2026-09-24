@@ -207,7 +207,7 @@ func (db *Database) BulkExec(
 
 							return nil
 						},
-						IsRetryable,
+						retry.Retryable,
 						backoff.NewExponentialWithJitter(1*time.Millisecond, 1*time.Second),
 						retry.Settings{},
 					)
@@ -286,7 +286,7 @@ func (db *Database) NamedBulkExec(
 
 								return nil
 							},
-							IsRetryable,
+							retry.Retryable,
 							backoff.NewExponentialWithJitter(1*time.Millisecond, 1*time.Second),
 							retry.Settings{},
 						)
@@ -341,7 +341,7 @@ func (db *Database) streamChildIds(
 
 				return db.SelectContext(ctx, &ids, db.Rebind(stmt), args...)
 			},
-			IsRetryable,
+			retry.Retryable,
 			backoff.NewExponentialWithJitter(1*time.Millisecond, 1*time.Second),
 			retry.Settings{},
 		); err != nil {
