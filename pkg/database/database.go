@@ -372,7 +372,7 @@ func (db *Database) DeleteStreamed(
 	if relations, ok := from.(HasRelations); ok && f.cascading {
 		var g *errgroup.Group
 		g, ctx = errgroup.WithContext(ctx)
-		streams := make(map[string]chan any, len(relations.Relations()))
+		streams := make([]chan any, 0, len(relations.Relations()))
 		for _, relation := range relations.Relations() {
 			if !relation.CascadeDelete() {
 				continue
@@ -395,7 +395,7 @@ func (db *Database) DeleteStreamed(
 					return db.DeleteStreamed(ctx, relation, ch, features...)
 				})
 			}
-			streams[TableName(relation)] = ch
+			streams = append(streams, ch)
 		}
 
 		source := ids
