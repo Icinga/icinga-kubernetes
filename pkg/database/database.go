@@ -502,6 +502,12 @@ func (db *Database) UpsertStreamed(
 		g, ctx = errgroup.WithContext(ctx)
 		streams := make(map[string]chan any, len(relations.Relations()))
 		for _, relation := range relations.Relations() {
+			// Relations to the same table share its stream,
+			// as the entities are looked up by table name.
+			if _, exists := streams[TableName(relation)]; exists {
+				continue
+			}
+
 			ch := make(chan any)
 			g.Go(func() error {
 				return db.UpsertStreamed(ctx, ch, WithCascading())
