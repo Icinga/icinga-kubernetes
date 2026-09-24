@@ -12,7 +12,8 @@ type PrometheusConfig struct {
 	Password string `yaml:"password" env:"PASSWORD"`
 }
 
-// Validate checks constraints in the supplied Prometheus configuration and returns an error if they are violated.
+// Validate checks constraints in the supplied Prometheus configuration and
+// returns an error if they are violated.
 func (c *PrometheusConfig) Validate() error {
 	if c.Url != "" {
 		if (c.Username == "") != (c.Password == "") {

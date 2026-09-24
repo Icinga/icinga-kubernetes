@@ -15,7 +15,8 @@ type Config struct {
 	KubernetesWebUrl string `yaml:"kubernetes_web_url" env:"KUBERNETES_WEB_URL" default:"http://localhost/icingaweb2/kubernetes"`
 }
 
-// Validate checks constraints in the supplied configuration and returns an error if they are violated.
+// Validate checks constraints in the supplied configuration and returns
+// an error if they are violated.
 func (c *Config) Validate() error {
 	if c.Url != "" || c.Username != "" || c.Password != "" {
 		if c.Url == "" || c.Username == "" || c.Password == "" {

@@ -101,7 +101,8 @@ func (c *Client) ProcessEvent(ctx context.Context, event Event) error {
 	return errors.New("Received three rule updates from Icinga Notifications in a row")
 }
 
-// Stream consumes the items from the given `entities` chan and triggers a notifications event for each of them.
+// Stream consumes the items from the given `entities` chan and triggers
+// a notifications event for each of them.
 func (c *Client) Stream(ctx context.Context, entities <-chan any) error {
 	for {
 		select {

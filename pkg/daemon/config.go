@@ -7,8 +7,8 @@ import (
 	"github.com/icinga/icinga-kubernetes/pkg/notifications"
 )
 
-// DefaultConfigPath specifies the default location of Icinga for Kubernetes's config.yml
-// if not set via command line flag.
+// DefaultConfigPath specifies the default location of Icinga for Kubernetes's
+// config.yml if not set via command line flag.
 const DefaultConfigPath = "./config.yml"
 
 // Config defines Icinga Kubernetes config.
@@ -19,7 +19,8 @@ type Config struct {
 	Prometheus    metrics.PrometheusConfig `yaml:"prometheus" envPrefix:"PROMETHEUS_"`
 }
 
-// Validate checks constraints in the supplied configuration and returns an error if they are violated.
+// Validate checks constraints in the supplied configuration and returns
+// an error if they are violated.
 func (c *Config) Validate() error {
 	if err := c.Database.Validate(); err != nil {
 		return err
@@ -44,8 +45,8 @@ type ConfigFlagGlue struct {
 	Config string
 }
 
-// GetConfigPath retrieves the path to the configuration file.
-// It returns the path specified via the command line, or DefaultConfigPath if none is provided.
+// GetConfigPath retrieves the path to the configuration file. It returns the
+// path specified via the command line, or DefaultConfigPath if none is provided.
 func (f ConfigFlagGlue) GetConfigPath() string {
 	if f.Config == "" {
 		return DefaultConfigPath

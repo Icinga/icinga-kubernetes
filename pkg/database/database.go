@@ -25,8 +25,8 @@ import (
 
 var registerDriversOnce sync.Once
 
-// Database is a wrapper around sqlx.DB with bulk execution,
-// statement building, streaming and logging capabilities.
+// Database is a wrapper around sqlx.DB with bulk execution, statement building,
+// streaming and logging capabilities.
 type Database struct {
 	*sqlx.DB
 	*Quoter
@@ -61,8 +61,8 @@ func NewFromSqlxDb(c *database.Config, log logr.Logger, otherDB *sqlx.DB) (*Data
 	}, nil
 }
 
-// BatchSizeByPlaceholders returns how often the specified number of placeholders fits
-// into Options.MaxPlaceholdersPerStatement, but at least 1.
+// BatchSizeByPlaceholders returns how often the specified number of placeholders
+// fits into Options.MaxPlaceholdersPerStatement, but at least 1.
 func (db *Database) BatchSizeByPlaceholders(n int) int {
 	s := db.Options.MaxPlaceholdersPerStatement / n
 	if s > 0 {
@@ -88,8 +88,8 @@ func (db *Database) BuildDeleteStmt(from any) string {
 	)
 }
 
-// BuildSelectStmt returns a SELECT query that creates the FROM part from the given table struct
-// and the column list from the specified columns struct.
+// BuildSelectStmt returns a SELECT query that creates the FROM part from the
+// given table struct and the column list from the specified columns struct.
 func (db *Database) BuildSelectStmt(table any, columns any) string {
 	q := fmt.Sprintf(
 		"SELECT %s FROM %s",
@@ -146,11 +146,12 @@ func (db *Database) BuildUpsertStmt(subject any) (stmt string, placeholders int)
 	), len(insertColumns)
 }
 
-// BulkExec bulk executes queries with a single slice placeholder in the form of `IN (?)`.
-// Takes in up to the number of arguments specified in count from the arg stream,
-// derives and expands a query and executes it with this set of arguments until the arg stream has been processed.
-// The derived queries are executed in a separate goroutine with a weighting of 1
-// and can be executed concurrently to the extent allowed by the semaphore passed in sem.
+// BulkExec bulk executes queries with a single slice placeholder in the form
+// of `IN (?)`. Takes in up to the number of arguments specified in count from
+// the arg stream, derives and expands a query and executes it with this set of
+// arguments until the arg stream has been processed. The derived queries are
+// executed in a separate goroutine with a weighting of 1 and can be executed
+// concurrently to the extent allowed by the semaphore passed in sem.
 // Arguments for which the query ran successfully will be passed to onSuccess.
 func (db *Database) BulkExec(
 	ctx context.Context, query string, count int, sem *semaphore.Weighted, arg <-chan any, features ...Feature,
@@ -230,13 +231,14 @@ func (db *Database) Connect() bool {
 	return true
 }
 
-// NamedBulkExec bulk executes queries with named placeholders in a VALUES clause most likely
-// in the format INSERT ... VALUES. Takes in up to the number of entities specified in count
-// from the arg stream, derives and executes a new query with the VALUES clause expanded to
-// this set of arguments, until the arg stream has been processed.
-// The queries are executed in a separate goroutine with a weighting of 1
-// and can be executed concurrently to the extent allowed by the semaphore passed in sem.
-// Entities for which the query ran successfully will be passed to onSuccess.
+// NamedBulkExec bulk executes queries with named placeholders in a VALUES
+// clause most likely in the format INSERT ... VALUES. Takes in up to the number
+// of entities specified in count from the arg stream, derives and executes a new
+// query with the VALUES clause expanded to this set of arguments, until the arg
+// stream has been processed. The queries are executed in a separate goroutine
+// with a weighting of 1 and can be executed concurrently to the extent allowed
+// by the semaphore passed in sem. Entities for which the query ran successfully
+// will be passed to onSuccess.
 func (db *Database) NamedBulkExec(
 	ctx context.Context, query string, count int, sem *semaphore.Weighted, arg <-chan any,
 	splitPolicyFactory com.BulkChunkSplitPolicyFactory[any], features ...Feature,
@@ -312,8 +314,8 @@ func (db *Database) GetSemaphoreForTable(table string) *semaphore.Weighted {
 	}
 }
 
-// streamChildIds streams the ids of the rows of child that reference one
-// of the parent ids through the foreign key of relation into childIds.
+// streamChildIds streams the ids of the rows of child that reference one of the
+// parent ids through the foreign key of relation into childIds.
 func (db *Database) streamChildIds(
 	ctx context.Context, child any, relation Relation, parentIds <-chan any, childIds chan<- any,
 ) error {
@@ -357,13 +359,12 @@ func (db *Database) streamChildIds(
 	return ctx.Err()
 }
 
-// DeleteStreamed bulk deletes the specified ids via BulkExec.
-// The delete statement is created using BuildDeleteStmt with the passed entityType.
-// Bulk size is controlled via Options.MaxPlaceholdersPerStatement and
-// concurrency is controlled via Options.MaxConnectionsPerTable.
-// With cascading, related entities that have relations themselves are deleted
-// recursively by their own ids. IDs for which the query ran successfully will
-// be passed to onSuccess.
+// DeleteStreamed bulk deletes the specified ids via BulkExec. The delete
+// statement is created using BuildDeleteStmt(from). Bulk size is controlled
+// via Options.MaxPlaceholdersPerStatement and concurrency is controlled via
+// Options.MaxConnectionsPerTable. With cascading, related entities that have
+// relations themselves are deleted recursively by their own ids. IDs for which
+// the query ran successfully will be passed to onSuccess.
 func (db *Database) DeleteStreamed(
 	ctx context.Context, from any, ids <-chan any, features ...Feature,
 ) error {
@@ -387,7 +388,8 @@ func (db *Database) DeleteStreamed(
 					return db.streamChildIds(ctx, child, relation, ch, childIds)
 				})
 				g.Go(func() error {
-					// onSuccess expects ids of the entity the deletion started from, not those of its children.
+					// onSuccess expects ids of the entity the deletion started
+					// from, not those of its children.
 					return db.DeleteStreamed(ctx, child, childIds, f.withoutOnSuccess())
 				})
 			} else {
@@ -482,9 +484,10 @@ func (db *Database) DeleteStreamed(
 }
 
 // UpsertStreamed bulk upserts the specified entities via NamedBulkExec.
-// The upsert statement is created using BuildUpsertStmt with the first entity from the entities stream.
-// Bulk size is controlled via Options.MaxPlaceholdersPerStatement and
-// concurrency is controlled via Options.MaxConnectionsPerTable.
+// The upsert statement is created using BuildUpsertStmt with the first
+// entity from the entities stream. Bulk size is controlled via
+// Options.MaxPlaceholdersPerStatement and concurrency is controlled
+// via Options.MaxConnectionsPerTable.
 func (db *Database) UpsertStreamed(
 	ctx context.Context, entities <-chan any, features ...Feature,
 ) error {
@@ -590,9 +593,9 @@ func (db *Database) UpsertStreamed(
 		ctx, stmt, db.BatchSizeByPlaceholders(placeholders), sem, forward, com.NeverSplit[any], features...)
 }
 
-// YieldAll executes the query with the supplied scope,
-// scans each resulting row into an entity returned by the factory function,
-// and streams them into a returned channel.
+// YieldAll executes the query with the supplied scope, scans each resulting
+// row into an entity returned by the factory function, and streams them into
+// a returned channel.
 func (db *Database) YieldAll(ctx context.Context, factoryFunc func() (any, error), query string, scope ...any) (<-chan any, <-chan error) {
 	g, ctx := errgroup.WithContext(ctx)
 	entities := make(chan any, 1)
