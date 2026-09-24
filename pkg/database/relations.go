@@ -3,6 +3,8 @@ package database
 import (
 	"context"
 	"reflect"
+
+	"github.com/icinga/icinga-go-library/database"
 )
 
 type Relation interface {
@@ -65,7 +67,7 @@ func (r *relation[T]) WithoutCascadeDelete() {
 }
 
 func (r *relation[T]) TableName() string {
-	return TableName(*new(T))
+	return database.TableName(*new(T))
 }
 
 func (r *relation[T]) NewEntity() any {

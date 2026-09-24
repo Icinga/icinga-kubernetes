@@ -84,7 +84,7 @@ func (db *Database) BuildDeleteStmt(from any) string {
 
 	return fmt.Sprintf(
 		`DELETE FROM %s WHERE %s IN (?)`,
-		db.QuoteIdentifier(TableName(from)),
+		db.QuoteIdentifier(database.TableName(from)),
 		column,
 	)
 }
@@ -95,7 +95,7 @@ func (db *Database) BuildSelectStmt(table any, columns any) string {
 	q := fmt.Sprintf(
 		"SELECT %s FROM %s",
 		db.QuoteColumns(db.columnMap.Columns(columns)),
-		db.QuoteIdentifier(TableName(table)),
+		db.QuoteIdentifier(database.TableName(table)),
 	)
 
 	return q
@@ -105,7 +105,7 @@ func (db *Database) BuildSelectStmt(table any, columns any) string {
 func (db *Database) BuildUpsertStmt(subject any) (stmt string, placeholders int) {
 	var updateColumns []string
 	insertColumns := db.columnMap.Columns(subject)
-	table := TableName(subject)
+	table := database.TableName(subject)
 
 	if upserter, ok := subject.(database.Upserter); ok {
 		upsert := upserter.Upsert()
@@ -322,7 +322,7 @@ func (db *Database) streamChildIds(
 ) error {
 	query := fmt.Sprintf(
 		`SELECT uuid FROM %s WHERE %s IN (?)`,
-		db.QuoteIdentifier(TableName(child)),
+		db.QuoteIdentifier(database.TableName(child)),
 		relation.ForeignKey(),
 	)
 
@@ -465,7 +465,7 @@ func (db *Database) DeleteStreamed(
 				ctx,
 				db.BuildDeleteStmt(from),
 				db.Options.MaxPlaceholdersPerStatement,
-				db.GetSemaphoreForTable(TableName(from)),
+				db.GetSemaphoreForTable(database.TableName(from)),
 				ids,
 				features...,
 			)
@@ -478,7 +478,7 @@ func (db *Database) DeleteStreamed(
 		ctx,
 		db.BuildDeleteStmt(from),
 		db.Options.MaxPlaceholdersPerStatement,
-		db.GetSemaphoreForTable(TableName(from)),
+		db.GetSemaphoreForTable(database.TableName(from)),
 		ids,
 		features...,
 	)
@@ -497,7 +497,7 @@ func (db *Database) UpsertStreamed(
 		return errors.Wrap(err, "cannot copy first entity")
 	}
 
-	sem := db.GetSemaphoreForTable(TableName(first))
+	sem := db.GetSemaphoreForTable(database.TableName(first))
 	stmt, placeholders := db.BuildUpsertStmt(first)
 	with := NewFeatures(features...)
 
@@ -508,7 +508,7 @@ func (db *Database) UpsertStreamed(
 		for _, relation := range relations.Relations() {
 			// Relations to the same table share its stream,
 			// as the entities are looked up by table name.
-			if _, exists := streams[TableName(relation)]; exists {
+			if _, exists := streams[database.TableName(relation)]; exists {
 				continue
 			}
 
@@ -516,7 +516,7 @@ func (db *Database) UpsertStreamed(
 			g.Go(func() error {
 				return db.UpsertStreamed(ctx, ch, WithCascading())
 			})
-			streams[TableName(relation)] = ch
+			streams[database.TableName(relation)] = ch
 		}
 
 		source := forward
@@ -573,7 +573,7 @@ func (db *Database) UpsertStreamed(
 						g.Go(func() error {
 							defer senders.Done()
 
-							return relation.StreamInto(ctx, streams[TableName(relation)])
+							return relation.StreamInto(ctx, streams[database.TableName(relation)])
 						})
 					}
 				case <-ctx.Done():
