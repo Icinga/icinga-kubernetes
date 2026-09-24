@@ -107,7 +107,7 @@ The configurations set by environment variables override the ones set by YAML.
 
 Starting from Icinga for Kubernetes version 0.3.0, multi-cluster support has
 been streamlined through systemd instantiated services. This approach allows
-you to run Icinga for Kubernetes components outside of the Kubernetes clusters
+you to run Icinga for Kubernetes components outside the Kubernetes clusters
 themselves while enabling you to monitor multiple Kubernetes clusters.
 By leveraging systemd, you can manage separate instances of Icinga for Kubernetes,
 each connecting to a different cluster, without the need to install components

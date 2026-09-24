@@ -55,7 +55,7 @@ and all available settings are detailed under [Configuration](03-Configuration.m
 
 #### Installing via Package
 
-To install Icinga for Kubernetes outside of a Kubernetes cluster, it is recommended
+To install Icinga for Kubernetes outside a Kubernetes cluster, it is recommended
 to use prebuilt packages available for all supported platforms from our official
 release [repository](https://packages.icinga.com). Follow the steps provided for
 your target operating system to set up the repository and install
@@ -133,7 +133,7 @@ ICINGA_FOR_KUBERNETES_PROMETHEUS_URL=http://localhost:9090
 
 You can also explicitly define which environment files should be used to start
 service instances. For this, you can adjust the `/etc/default/icinga-kubernetes`
-file. More about the this can be found under [Configuration](03-Configuration.md#service-configuration).
+file. More about this can be found under [Configuration](03-Configuration.md#service-configuration).
 
 ##### Running Icinga for Kubernetes
 
@@ -155,14 +155,14 @@ systemctl stop icinga-kubernetes
 #### Using a Container
 
 Before running Icinga for Kubernetes, create a local `config.yml` using
-[the sample configuration](../config.example.yml) adjust the database
+[the sample configuration](../config.example.yml), adjust the database
 credentials and, if necessary, the connection configuration. The configuration
 file explains general settings. All available settings can be found under
 [Configuration](03-Configuration.md).
 
 With locally accessible [kubeconfig](https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/)
 and `config.yml` files, run the `icinga/icinga-kubernetes` image using a container
-runtime of you choice, e.g. Docker:
+runtime of your choice, e.g. Docker:
 
 ```bash
 export KUBECONFIG=$HOME/.kube/config
@@ -195,7 +195,7 @@ go build -o icinga-kubernetes cmd/icinga-kubernetes/main.go
 ##### Configuring Icinga for Kubernetes
 
 Before running Icinga for Kubernetes, create a local `config.yml` using
-[the sample configuration](../config.example.yml) adjust the database credentials
+[the sample configuration](../config.example.yml), adjust the database credentials
 and, if necessary, the connection configuration. The configuration file explains
 general settings. All available settings can be found under
 [Configuration](03-Configuration.md).
