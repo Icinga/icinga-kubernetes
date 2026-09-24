@@ -7,6 +7,7 @@ import (
 
 	"github.com/icinga/icinga-go-library/backoff"
 	"github.com/icinga/icinga-go-library/com"
+	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-go-library/periodic"
 	"github.com/icinga/icinga-go-library/retry"
@@ -58,7 +59,7 @@ func (db *Database) CleanupOlderThan(
 					Time: types.UnixMilli(olderThan),
 				})
 				if err != nil {
-					return CantPerformQuery(err, q)
+					return database.CantPerformQuery(err, q)
 				}
 
 				rowsDeleted, err = rs.RowsAffected()

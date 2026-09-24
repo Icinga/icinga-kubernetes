@@ -7,16 +7,12 @@ import (
 	"strings"
 
 	"github.com/go-sql-driver/mysql"
+	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/lib/pq"
 	"github.com/pkg/errors"
 )
-
-// CantPerformQuery wraps the given error with the specified query that cannot be executed.
-func CantPerformQuery(err error, q string) error {
-	return errors.Wrapf(err, "cannot perform %q", q)
-}
 
 func IsUnixAddr(host string) bool {
 	return strings.HasPrefix(host, "/")
@@ -87,7 +83,7 @@ func IsRetryable(err error) bool {
 
 // TableName returns the table of t.
 func TableName(t any) string {
-	if tn, ok := t.(TableNamer); ok {
+	if tn, ok := t.(database.TableNamer); ok {
 		return tn.TableName()
 	}
 

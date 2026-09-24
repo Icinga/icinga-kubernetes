@@ -107,7 +107,7 @@ func (db *Database) BuildUpsertStmt(subject any) (stmt string, placeholders int)
 	insertColumns := db.columnMap.Columns(subject)
 	table := TableName(subject)
 
-	if upserter, ok := subject.(Upserter); ok {
+	if upserter, ok := subject.(database.Upserter); ok {
 		upsert := upserter.Upsert()
 		if sliceofcolumns, ok := upsert.([]any); ok {
 			for _, columns := range sliceofcolumns {
@@ -194,7 +194,7 @@ func (db *Database) BulkExec(
 							stmt = db.Rebind(stmt)
 							_, err = db.ExecContext(ctx, stmt, args...)
 							if err != nil {
-								return CantPerformQuery(err, query)
+								return database.CantPerformQuery(err, query)
 							}
 
 							counter.Add(uint64(len(b)))
@@ -273,7 +273,7 @@ func (db *Database) NamedBulkExec(
 							func(ctx context.Context) error {
 								_, err := db.NamedExecContext(ctx, query, b)
 								if err != nil {
-									return CantPerformQuery(err, query)
+									return database.CantPerformQuery(err, query)
 								}
 
 								counter.Add(uint64(len(b)))
@@ -345,7 +345,7 @@ func (db *Database) streamChildIds(
 			backoff.NewExponentialWithJitter(1*time.Millisecond, 1*time.Second),
 			retry.Settings{},
 		); err != nil {
-			return CantPerformQuery(err, query)
+			return database.CantPerformQuery(err, query)
 		}
 
 		for _, id := range ids {
@@ -609,7 +609,7 @@ func (db *Database) YieldAll(ctx context.Context, factoryFunc func() (any, error
 
 		rows, err := db.query(ctx, query, scope...)
 		if err != nil {
-			return CantPerformQuery(err, query)
+			return database.CantPerformQuery(err, query)
 		}
 
 		defer func() { _ = rows.Close() }()

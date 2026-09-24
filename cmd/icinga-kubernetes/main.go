@@ -170,7 +170,7 @@ func main() {
 				query := "SELECT version FROM kubernetes_schema ORDER BY id DESC LIMIT 1"
 				err = kdb.QueryRowxContext(ctx, query).Scan(&version)
 				if err != nil {
-					err = kdatabase.CantPerformQuery(err, query)
+					err = database.CantPerformQuery(err, query)
 				}
 				return
 			},
