@@ -3,8 +3,9 @@ package v1
 import (
 	"strings"
 
+	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-kubernetes/pkg/database"
+	kdatabase "github.com/icinga/icinga-kubernetes/pkg/database"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -26,9 +27,33 @@ type SecretLabel struct {
 	LabelUuid  types.UUID
 }
 
+func (s SecretLabel) ID() database.ID {
+	return compoundId{id: s.SecretUuid.String() + s.LabelUuid.String()}
+}
+
+func (s SecretLabel) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (s SecretLabel) Fingerprint() database.Fingerprinter {
+	return s
+}
+
 type SecretAnnotation struct {
 	SecretUuid     types.UUID
 	AnnotationUuid types.UUID
+}
+
+func (s SecretAnnotation) ID() database.ID {
+	return compoundId{id: s.SecretUuid.String() + s.AnnotationUuid.String()}
+}
+
+func (s SecretAnnotation) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (s SecretAnnotation) Fingerprint() database.Fingerprinter {
+	return s
 }
 
 func NewSecret() Resource {
@@ -86,15 +111,15 @@ func (s *Secret) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	}
 }
 
-func (s *Secret) Relations() []database.Relation {
-	fk := database.WithForeignKey("secret_uuid")
+func (s *Secret) Relations() []kdatabase.Relation {
+	fk := kdatabase.WithForeignKey("secret_uuid")
 
-	return []database.Relation{
-		database.HasMany(s.ResourceLabels, database.WithForeignKey("resource_uuid")),
-		database.HasMany(s.Labels, database.WithoutCascadeDelete()),
-		database.HasMany(s.SecretLabels, fk),
-		database.HasMany(s.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
-		database.HasMany(s.Annotations, database.WithoutCascadeDelete()),
-		database.HasMany(s.SecretAnnotations, fk),
+	return []kdatabase.Relation{
+		kdatabase.HasMany(s.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(s.Labels, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(s.SecretLabels, fk),
+		kdatabase.HasMany(s.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(s.Annotations, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(s.SecretAnnotations, fk),
 	}
 }

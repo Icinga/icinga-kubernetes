@@ -5,9 +5,10 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-kubernetes/pkg/database"
+	kdatabase "github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/notifications"
 	kappsv1 "k8s.io/api/apps/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -51,6 +52,18 @@ type DaemonSetCondition struct {
 	Message        string
 }
 
+func (d DaemonSetCondition) ID() database.ID {
+	return compoundId{id: d.DaemonSetUuid.String() + d.Type}
+}
+
+func (d DaemonSetCondition) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (d DaemonSetCondition) Fingerprint() database.Fingerprinter {
+	return d
+}
+
 type DaemonSetOwner struct {
 	DaemonSetUuid      types.UUID
 	OwnerUuid          types.UUID
@@ -61,14 +74,50 @@ type DaemonSetOwner struct {
 	BlockOwnerDeletion types.Bool
 }
 
+func (d DaemonSetOwner) ID() database.ID {
+	return compoundId{id: d.DaemonSetUuid.String() + d.OwnerUuid.String()}
+}
+
+func (d DaemonSetOwner) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (d DaemonSetOwner) Fingerprint() database.Fingerprinter {
+	return d
+}
+
 type DaemonSetLabel struct {
 	DaemonSetUuid types.UUID
 	LabelUuid     types.UUID
 }
 
+func (d DaemonSetLabel) ID() database.ID {
+	return compoundId{id: d.DaemonSetUuid.String() + d.LabelUuid.String()}
+}
+
+func (d DaemonSetLabel) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (d DaemonSetLabel) Fingerprint() database.Fingerprinter {
+	return d
+}
+
 type DaemonSetAnnotation struct {
 	DaemonSetUuid  types.UUID
 	AnnotationUuid types.UUID
+}
+
+func (d DaemonSetAnnotation) ID() database.ID {
+	return compoundId{id: d.DaemonSetUuid.String() + d.AnnotationUuid.String()}
+}
+
+func (d DaemonSetAnnotation) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (d DaemonSetAnnotation) Fingerprint() database.Fingerprinter {
+	return d
 }
 
 func NewDaemonSet() Resource {
@@ -210,18 +259,18 @@ func (d *DaemonSet) getIcingaState() (IcingaState, string) {
 	}
 }
 
-func (d *DaemonSet) Relations() []database.Relation {
-	fk := database.WithForeignKey("daemon_set_uuid")
+func (d *DaemonSet) Relations() []kdatabase.Relation {
+	fk := kdatabase.WithForeignKey("daemon_set_uuid")
 
-	return []database.Relation{
-		database.HasMany(d.Conditions, fk),
-		database.HasMany(d.Owners, fk),
-		database.HasMany(d.ResourceLabels, database.WithForeignKey("resource_uuid")),
-		database.HasMany(d.Labels, database.WithoutCascadeDelete()),
-		database.HasMany(d.DaemonSetLabels, fk),
-		database.HasMany(d.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
-		database.HasMany(d.Annotations, database.WithoutCascadeDelete()),
-		database.HasMany(d.DaemonSetAnnotations, fk),
-		database.HasMany(d.Favorites, database.WithForeignKey("resource_uuid")),
+	return []kdatabase.Relation{
+		kdatabase.HasMany(d.Conditions, fk),
+		kdatabase.HasMany(d.Owners, fk),
+		kdatabase.HasMany(d.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(d.Labels, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(d.DaemonSetLabels, fk),
+		kdatabase.HasMany(d.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(d.Annotations, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(d.DaemonSetAnnotations, fk),
+		kdatabase.HasMany(d.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

@@ -13,9 +13,10 @@ import (
 
 	"github.com/go-co-op/gocron"
 	"github.com/icinga/icinga-go-library/com"
+	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/cluster"
-	"github.com/icinga/icinga-kubernetes/pkg/database"
+	kdatabase "github.com/icinga/icinga-kubernetes/pkg/database"
 	"golang.org/x/sync/errgroup"
 	kcorev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -56,6 +57,18 @@ type ContainerCommon struct {
 	IcingaStateReason string
 	Devices           []ContainerDevice `db:"-"`
 	Mounts            []ContainerMount  `db:"-"`
+}
+
+func (c ContainerCommon) ID() database.ID {
+	return c.Uuid
+}
+
+func (c ContainerCommon) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (c ContainerCommon) Fingerprint() database.Fingerprinter {
+	return c
 }
 
 func (c *ContainerCommon) Obtain(podUuid types.UUID, container kcorev1.Container, status kcorev1.ContainerStatus) {
@@ -109,19 +122,19 @@ func (c *ContainerCommon) Obtain(podUuid types.UUID, container kcorev1.Container
 	}
 }
 
-func (c *ContainerCommon) Relations() []database.Relation {
-	fk := database.WithForeignKey("container_uuid")
+func (c *ContainerCommon) Relations() []kdatabase.Relation {
+	fk := kdatabase.WithForeignKey("container_uuid")
 
-	return []database.Relation{
-		database.HasMany(c.Devices, fk),
-		database.HasMany(c.Mounts, fk),
+	return []kdatabase.Relation{
+		kdatabase.HasMany(c.Devices, fk),
+		kdatabase.HasMany(c.Mounts, fk),
 
 		// Allow to automatically remove the logs when a container is deleted.
 		// Otherwise, we will have some dangling container logs in the database
 		// if the logs aren't deleted before removing the container, since any
 		// error can interrupt the deletion process of the logs when using the
 		// `on success` mechanism.
-		database.HasOne(ContainerLog{}, fk),
+		kdatabase.HasOne(ContainerLog{}, fk),
 	}
 }
 
@@ -237,6 +250,18 @@ type ContainerDevice struct {
 	Path          string
 }
 
+func (c ContainerDevice) ID() database.ID {
+	return compoundId{id: c.ContainerUuid.String() + c.Name}
+}
+
+func (c ContainerDevice) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (c ContainerDevice) Fingerprint() database.Fingerprinter {
+	return c
+}
+
 type ContainerMount struct {
 	ContainerUuid types.UUID
 	PodUuid       types.UUID
@@ -244,6 +269,18 @@ type ContainerMount struct {
 	Path          string
 	SubPath       sql.NullString
 	ReadOnly      types.Bool
+}
+
+func (c ContainerMount) ID() database.ID {
+	return compoundId{id: c.ContainerUuid.String() + c.VolumeName}
+}
+
+func (c ContainerMount) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (c ContainerMount) Fingerprint() database.Fingerprinter {
+	return c
 }
 
 type ContainerLogMeta struct {
@@ -259,6 +296,18 @@ type ContainerLog struct {
 	Namespace     string `db:"-"`
 	PodName       string `db:"-"`
 	ContainerName string `db:"-"`
+}
+
+func (cl ContainerLog) ID() database.ID {
+	return cl.ContainerUuid
+}
+
+func (cl ContainerLog) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (cl ContainerLog) Fingerprint() database.Fingerprinter {
+	return cl
 }
 
 type ContainerStateReasonAndMassage [2]string
@@ -280,7 +329,7 @@ func (cl *ContainerLog) Upsert() any {
 
 // syncContainerLogs fetches the logs from the kubernetes API for the given
 // container and syncs to the database.
-func (cl *ContainerLog) syncContainerLogs(ctx context.Context, clientset *kubernetes.Clientset, db *database.DB) error {
+func (cl *ContainerLog) syncContainerLogs(ctx context.Context, clientset *kubernetes.Clientset, db *kdatabase.DB) error {
 	logOptions := &kcorev1.PodLogOptions{Container: cl.ContainerName}
 	if !cl.LastUpdate.Time().IsZero() {
 		sinceSeconds := int64(time.Since(cl.LastUpdate.Time()).Seconds())
@@ -460,7 +509,7 @@ func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStat
 // and this fetches all the container IDs matching the respective pod ID from
 // the database and initiates a container deletion stream that cleans up all
 // container-related resources.
-func SyncContainers(ctx context.Context, db *database.DB, g *errgroup.Group, upsertPods, deletePods <-chan any) {
+func SyncContainers(ctx context.Context, db *kdatabase.DB, g *errgroup.Group, upsertPods, deletePods <-chan any) {
 	type containerFingerprint struct {
 		Uuid    types.UUID
 		PodUuid types.UUID
@@ -476,7 +525,7 @@ func SyncContainers(ctx context.Context, db *database.DB, g *errgroup.Group, ups
 	// container ids from multiple pods concurrently.
 	containerIds := make(chan any, db.Options.MaxPlaceholdersPerStatement)
 	g.Go(func() error {
-		return db.DeleteStreamed(ctx, &Container{}, containerIds, database.WithCascading())
+		return db.DeleteStreamed(ctx, &Container{}, containerIds, kdatabase.WithCascading())
 	})
 
 	g.Go(func() error {
@@ -593,7 +642,7 @@ func SyncContainers(ctx context.Context, db *database.DB, g *errgroup.Group, ups
 
 // warmup fetches the container logs of the current cluster's pods from the
 // database and caches them in the containerLogs variable.
-func warmup(ctx context.Context, db *database.DB) error {
+func warmup(ctx context.Context, db *kdatabase.DB) error {
 	g, ctx := errgroup.WithContext(ctx)
 
 	meta := struct{ ClusterUuid types.UUID }{ClusterUuid: cluster.ClusterUuidFromContext(ctx)}
@@ -651,5 +700,5 @@ func truncate(s string, n int) string {
 
 // Assert that the Container type satisfies the interface compliance.
 var (
-	_ database.HasRelations = (*ContainerCommon)(nil)
+	_ kdatabase.HasRelations = (*ContainerCommon)(nil)
 )

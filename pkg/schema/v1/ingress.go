@@ -4,8 +4,9 @@ import (
 	"database/sql"
 	"strings"
 
+	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-kubernetes/pkg/database"
+	kdatabase "github.com/icinga/icinga-kubernetes/pkg/database"
 	networkingv1 "k8s.io/api/networking/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kruntime "k8s.io/apimachinery/pkg/runtime"
@@ -35,6 +36,18 @@ type IngressTls struct {
 	TlsSecret   string
 }
 
+func (i IngressTls) ID() database.ID {
+	return i.IngressUuid
+}
+
+func (i IngressTls) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (i IngressTls) Fingerprint() database.Fingerprinter {
+	return i
+}
+
 type IngressBackendService struct {
 	ServiceUuid       types.UUID
 	IngressUuid       types.UUID
@@ -42,6 +55,18 @@ type IngressBackendService struct {
 	ServiceName       string
 	ServicePortName   string
 	ServicePortNumber int32
+}
+
+func (i IngressBackendService) ID() database.ID {
+	return compoundId{id: i.ServiceUuid.String() + i.IngressUuid.String()}
+}
+
+func (i IngressBackendService) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (i IngressBackendService) Fingerprint() database.Fingerprinter {
+	return i
 }
 
 type IngressBackendResource struct {
@@ -53,6 +78,18 @@ type IngressBackendResource struct {
 	Name            string
 }
 
+func (i IngressBackendResource) ID() database.ID {
+	return compoundId{id: i.ResourceUuid.String() + i.IngressUuid.String()}
+}
+
+func (i IngressBackendResource) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (i IngressBackendResource) Fingerprint() database.Fingerprinter {
+	return i
+}
+
 type IngressRule struct {
 	Uuid        types.UUID
 	BackendUuid types.UUID
@@ -62,14 +99,50 @@ type IngressRule struct {
 	PathType    string
 }
 
+func (i IngressRule) ID() database.ID {
+	return i.Uuid
+}
+
+func (i IngressRule) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (i IngressRule) Fingerprint() database.Fingerprinter {
+	return i
+}
+
 type IngressLabel struct {
 	IngressUuid types.UUID
 	LabelUuid   types.UUID
 }
 
+func (i IngressLabel) ID() database.ID {
+	return compoundId{id: i.IngressUuid.String() + i.LabelUuid.String()}
+}
+
+func (i IngressLabel) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (i IngressLabel) Fingerprint() database.Fingerprinter {
+	return i
+}
+
 type IngressAnnotation struct {
 	IngressUuid    types.UUID
 	AnnotationUuid types.UUID
+}
+
+func (i IngressAnnotation) ID() database.ID {
+	return compoundId{id: i.IngressUuid.String() + i.AnnotationUuid.String()}
+}
+
+func (i IngressAnnotation) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (i IngressAnnotation) Fingerprint() database.Fingerprinter {
+	return i
 }
 
 func NewIngress() Resource {
@@ -216,20 +289,20 @@ func (i *Ingress) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	i.Yaml = string(output)
 }
 
-func (i *Ingress) Relations() []database.Relation {
-	fk := database.WithForeignKey("ingress_uuid")
+func (i *Ingress) Relations() []kdatabase.Relation {
+	fk := kdatabase.WithForeignKey("ingress_uuid")
 
-	return []database.Relation{
-		database.HasMany(i.IngressTls, fk),
-		database.HasMany(i.IngressBackendService, fk),
-		database.HasMany(i.IngressBackendResource, fk),
-		database.HasMany(i.IngressRule, fk),
-		database.HasMany(i.ResourceLabels, database.WithForeignKey("resource_uuid")),
-		database.HasMany(i.Labels, database.WithoutCascadeDelete()),
-		database.HasMany(i.IngressLabels, fk),
-		database.HasMany(i.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
-		database.HasMany(i.Annotations, database.WithoutCascadeDelete()),
-		database.HasMany(i.IngressAnnotations, fk),
-		database.HasMany(i.Favorites, database.WithForeignKey("resource_uuid")),
+	return []kdatabase.Relation{
+		kdatabase.HasMany(i.IngressTls, fk),
+		kdatabase.HasMany(i.IngressBackendService, fk),
+		kdatabase.HasMany(i.IngressBackendResource, fk),
+		kdatabase.HasMany(i.IngressRule, fk),
+		kdatabase.HasMany(i.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(i.Labels, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(i.IngressLabels, fk),
+		kdatabase.HasMany(i.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(i.Annotations, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(i.IngressAnnotations, fk),
+		kdatabase.HasMany(i.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }
