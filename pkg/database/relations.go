@@ -12,11 +12,11 @@ type Relation interface {
 	SetForeignKey(fk string)
 	CascadeDelete() bool
 	WithoutCascadeDelete()
-	StreamInto(context.Context, chan any) error
+	StreamInto(context.Context, chan database.Entity) error
 	TableName() string
 	// NewEntity returns a pointer to a new zero value of the related entity
 	// type, even if the related entities are pointers themselves.
-	NewEntity() any
+	NewEntity() database.Entity
 }
 
 // HasRelations is implemented by entities whose related entities are upserted
@@ -45,7 +45,7 @@ func WithoutCascadeDelete() RelationOption {
 	}
 }
 
-type relation[T comparable] struct {
+type relation[T database.Entity] struct {
 	foreignKey           string
 	withoutCascadeDelete bool
 }
@@ -70,21 +70,21 @@ func (r *relation[T]) TableName() string {
 	return database.TableName(*new(T))
 }
 
-func (r *relation[T]) NewEntity() any {
+func (r *relation[T]) NewEntity() database.Entity {
 	t := reflect.TypeFor[T]()
 	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 
-	return reflect.New(t).Interface()
+	return reflect.New(t).Interface().(database.Entity)
 }
 
-type hasMany[T comparable] struct {
+type hasMany[T database.Entity] struct {
 	relation[T]
 	entities []T
 }
 
-func HasMany[T comparable](entities []T, options ...RelationOption) Relation {
+func HasMany[T database.Entity](entities []T, options ...RelationOption) Relation {
 	r := &hasMany[T]{entities: entities}
 
 	for _, o := range options {
@@ -94,7 +94,7 @@ func HasMany[T comparable](entities []T, options ...RelationOption) Relation {
 	return r
 }
 
-func (r *hasMany[T]) StreamInto(ctx context.Context, ch chan any) error {
+func (r *hasMany[T]) StreamInto(ctx context.Context, ch chan database.Entity) error {
 	for _, entity := range r.entities {
 		select {
 		case ch <- entity:
@@ -106,12 +106,21 @@ func (r *hasMany[T]) StreamInto(ctx context.Context, ch chan any) error {
 	return nil
 }
 
-type hasOne[T comparable] struct {
+// comparableEntity constrains the type of the entity related by HasOne. It
+// must be comparable, as HasOne skips an entity that equals the zero value of
+// its type, and implement database.Entity, as StreamInto sends it into the
+// stream that UpsertStreamed writes to the database.
+type comparableEntity interface {
+	comparable
+	database.Entity
+}
+
+type hasOne[T comparableEntity] struct {
 	relation[T]
 	entity T
 }
 
-func HasOne[T comparable](entity T, options ...RelationOption) Relation {
+func HasOne[T comparableEntity](entity T, options ...RelationOption) Relation {
 	r := &hasOne[T]{entity: entity}
 
 	for _, o := range options {
@@ -121,7 +130,7 @@ func HasOne[T comparable](entity T, options ...RelationOption) Relation {
 	return r
 }
 
-func (r *hasOne[T]) StreamInto(ctx context.Context, ch chan any) error {
+func (r *hasOne[T]) StreamInto(ctx context.Context, ch chan database.Entity) error {
 	if r.entity != Zero[T]() {
 		select {
 		case ch <- r.entity:

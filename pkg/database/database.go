@@ -142,73 +142,6 @@ func (db *DB) Connect() bool {
 	return true
 }
 
-// NamedBulkExec bulk executes queries with named placeholders in a VALUES
-// clause most likely in the format INSERT ... VALUES. Takes in up to the number
-// of entities specified in count from the arg stream, derives and executes a new
-// query with the VALUES clause expanded to this set of arguments, until the arg
-// stream has been processed. The queries are executed in a separate goroutine
-// with a weighting of 1 and can be executed concurrently to the extent allowed
-// by the semaphore passed in sem. Entities for which the query ran successfully
-// will be passed to onSuccess.
-func (db *DB) NamedBulkExec(
-	ctx context.Context, query string, count int, sem *semaphore.Weighted, arg <-chan any,
-	splitPolicyFactory com.BulkChunkSplitPolicyFactory[any], onSuccess ...database.OnSuccess[any],
-) error {
-	var counter com.Counter
-	defer db.Log(ctx, query, &counter).Stop()
-
-	g, ctx := errgroup.WithContext(ctx)
-	bulk := com.Bulk(ctx, arg, count, splitPolicyFactory)
-
-	g.Go(func() error {
-		for {
-			select {
-			case b, ok := <-bulk:
-				if !ok {
-					return nil
-				}
-
-				if err := sem.Acquire(ctx, 1); err != nil {
-					return errors.Wrap(err, "cannot acquire semaphore")
-				}
-
-				g.Go(func(b []any) func() error {
-					return func() error {
-						defer sem.Release(1)
-
-						return retry.WithBackoff(
-							ctx,
-							func(ctx context.Context) error {
-								_, err := db.NamedExecContext(ctx, query, b)
-								if err != nil {
-									return database.CantPerformQuery(err, query)
-								}
-
-								counter.Add(uint64(len(b)))
-
-								for _, onSuccess := range onSuccess {
-									if err := onSuccess(ctx, b); err != nil {
-										return err
-									}
-								}
-
-								return nil
-							},
-							retry.Retryable,
-							backoff.DefaultBackoff,
-							db.GetDefaultRetrySettings(),
-						)
-					}
-				}(b))
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		}
-	})
-
-	return g.Wait()
-}
-
 // streamChildIds streams the ids of the rows of child that reference one of the
 // parent ids through the foreign key of relation into childIds.
 func (db *DB) streamChildIds(
@@ -384,7 +317,7 @@ func (db *DB) DeleteStreamed(
 // Options.MaxPlaceholdersPerStatement and concurrency is controlled
 // via Options.MaxConnectionsPerTable.
 func (db *DB) UpsertStreamed(
-	ctx context.Context, entities <-chan any, features ...Feature,
+	ctx context.Context, entities <-chan database.Entity, features ...Feature,
 ) error {
 	first, forward, err := com.CopyFirst(ctx, entities)
 	if first == nil {
@@ -395,15 +328,22 @@ func (db *DB) UpsertStreamed(
 	stmt, placeholders := db.BuildUpsertStmt(first)
 	with := NewFeatures(features...)
 
-	var onSuccess []database.OnSuccess[any]
+	var onSuccess []database.OnSuccess[database.Entity]
 	if with.onSuccess != nil {
-		onSuccess = append(onSuccess, with.onSuccess)
+		onSuccess = append(onSuccess, func(ctx context.Context, entities []database.Entity) error {
+			rows := make([]any, 0, len(entities))
+			for _, entity := range entities {
+				rows = append(rows, entity)
+			}
+
+			return with.onSuccess(ctx, rows)
+		})
 	}
 
 	if relations, ok := first.(HasRelations); ok && with.cascading {
 		var g *errgroup.Group
 		g, ctx = errgroup.WithContext(ctx)
-		streams := make(map[string]chan any, len(relations.Relations()))
+		streams := make(map[string]chan database.Entity, len(relations.Relations()))
 		for _, relation := range relations.Relations() {
 			// Relations to the same table share its stream,
 			// as the entities are looked up by table name.
@@ -411,7 +351,7 @@ func (db *DB) UpsertStreamed(
 				continue
 			}
 
-			ch := make(chan any)
+			ch := make(chan database.Entity)
 			g.Go(func() error {
 				return db.UpsertStreamed(ctx, ch, WithCascading())
 			})
@@ -419,8 +359,8 @@ func (db *DB) UpsertStreamed(
 		}
 
 		source := forward
-		forward := make(chan any)
-		dup := make(chan any)
+		forward := make(chan database.Entity)
+		dup := make(chan database.Entity)
 
 		g.Go(func() error {
 			defer close(forward)
@@ -483,12 +423,12 @@ func (db *DB) UpsertStreamed(
 
 		g.Go(func() error {
 			return db.NamedBulkExec(
-				ctx, stmt, db.BatchSizeByPlaceholders(placeholders), sem, forward, com.NeverSplit[any], onSuccess...)
+				ctx, stmt, db.BatchSizeByPlaceholders(placeholders), sem, forward, com.NeverSplit[database.Entity], onSuccess...)
 		})
 
 		return g.Wait()
 	}
 
 	return db.NamedBulkExec(
-		ctx, stmt, db.BatchSizeByPlaceholders(placeholders), sem, forward, com.NeverSplit[any], onSuccess...)
+		ctx, stmt, db.BatchSizeByPlaceholders(placeholders), sem, forward, com.NeverSplit[database.Entity], onSuccess...)
 }

@@ -350,7 +350,7 @@ func (cl *ContainerLog) syncContainerLogs(ctx context.Context, clientset *kubern
 
 	cl.LastUpdate = types.UnixMilli(time.Now())
 	cl.Logs = truncate(cl.Logs+string(logs), MaxLogLength)
-	entities := make(chan any, 1)
+	entities := make(chan database.Entity, 1)
 	entities <- cl
 	close(entities)
 

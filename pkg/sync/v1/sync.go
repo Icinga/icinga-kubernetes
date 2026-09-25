@@ -131,7 +131,7 @@ func (s *Sync) deleteVanished(ctx context.Context, sink *Sink, synced map[string
 }
 
 func (s *Sync) sync(ctx context.Context, c *Controller, synced map[string]types.UUID, with *Features) error {
-	sink := NewSink(func(i *Item) any {
+	sink := NewSink(func(i *Item) database.Entity {
 		entity := s.factory()
 		entity.Obtain(*i.Item, cluster.ClusterUuidFromContext(ctx))
 

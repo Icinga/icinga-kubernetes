@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/icinga/icinga-go-library/database"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -15,15 +16,15 @@ type Item struct {
 type Sink struct {
 	delete     chan any
 	deleteFunc func(any) any
-	upsert     chan any
-	upsertFunc func(*Item) any
+	upsert     chan database.Entity
+	upsertFunc func(*Item) database.Entity
 }
 
-func NewSink(upsertFunc func(*Item) any, deleteFunc func(any) any) *Sink {
+func NewSink(upsertFunc func(*Item) database.Entity, deleteFunc func(any) any) *Sink {
 	return &Sink{
 		delete:     make(chan any),
 		deleteFunc: deleteFunc,
-		upsert:     make(chan any),
+		upsert:     make(chan database.Entity),
 		upsertFunc: upsertFunc,
 	}
 }
@@ -62,6 +63,6 @@ func (s *Sink) Upsert(ctx context.Context, item *Item) error {
 	}
 }
 
-func (s *Sink) UpsertCh() <-chan any {
+func (s *Sink) UpsertCh() <-chan database.Entity {
 	return s.upsert
 }

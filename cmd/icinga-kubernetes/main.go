@@ -729,7 +729,7 @@ func dbHasSchema(db *kdatabase.DB, dbName string) (bool, error) {
 }
 
 func SyncServicePods(ctx context.Context, db *kdatabase.DB, serviceList corev1.ServiceInformer, podList corev1.PodInformer) error {
-	servicePods := make(chan any)
+	servicePods := make(chan database.Entity)
 
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
