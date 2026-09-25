@@ -24,8 +24,6 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-var registerDriversOnce sync.Once
-
 // Database is a wrapper around sqlx.DB with bulk execution, statement building,
 // streaming and logging capabilities.
 type Database struct {
@@ -45,11 +43,7 @@ type Database struct {
 // For MySQL, the connections of otherDB must use the ANSI_QUOTES SQL mode,
 // since the built statements quote identifiers with double quotes.
 func NewFromSqlxDb(c *database.Config, log *logging.Logger, otherDB *sqlx.DB) (*Database, error) {
-	registerDriversOnce.Do(func() {
-		RegisterDrivers(log)
-	})
-
-	db := sqlx.NewDb(otherDB.DB, "icinga-"+c.Type)
+	db := sqlx.NewDb(otherDB.DB, otherDB.DriverName())
 
 	db.Mapper = reflectx.NewMapperFunc("db", strcase.Snake)
 
@@ -122,10 +116,10 @@ func (db *Database) BuildUpsertStmt(subject any) (stmt string, placeholders int)
 
 	var clause, setFormat string
 	switch db.DriverName() {
-	case MySQL:
+	case database.MySQL:
 		clause = "ON DUPLICATE KEY UPDATE"
 		setFormat = `"%[1]s" = VALUES("%[1]s")`
-	case PostgreSQL:
+	case database.PostgreSQL:
 		clause = fmt.Sprintf("ON CONFLICT ON CONSTRAINT pk_%s DO UPDATE SET", table)
 		setFormat = `"%[1]s" = EXCLUDED."%[1]s"`
 	}
