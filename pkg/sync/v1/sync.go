@@ -15,14 +15,14 @@ import (
 )
 
 type Sync struct {
-	db       *database.Database
+	db       *database.DB
 	informer cache.SharedIndexInformer
 	log      *logging.Logger
 	factory  func() schemav1.Resource
 }
 
 func NewSync(
-	db *database.Database,
+	db *database.DB,
 	informer cache.SharedIndexInformer,
 	log *logging.Logger,
 	factory func() schemav1.Resource,

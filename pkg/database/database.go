@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"strings"
 	"sync"
 	"time"
 
@@ -12,63 +11,40 @@ import (
 	"github.com/icinga/icinga-go-library/com"
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/logging"
-	"github.com/icinga/icinga-go-library/periodic"
 	"github.com/icinga/icinga-go-library/retry"
-	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/jmoiron/sqlx"
-	"github.com/jmoiron/sqlx/reflectx"
 	"github.com/pkg/errors"
-	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 )
 
-// Database is a wrapper around sqlx.DB with bulk execution, statement building,
-// streaming and logging capabilities.
-type Database struct {
-	*sqlx.DB
-
-	Options database.Options
+// DB is a wrapper around database.DB with additional relation handling.
+type DB struct {
+	*database.DB
 
 	log *logging.Logger
-
-	columnMap database.ColumnMap
-
-	tableSemaphores   map[string]*semaphore.Weighted
-	tableSemaphoresMu sync.Mutex
 }
 
-// NewFromSqlxDb returns a new Database connection from the given sqlx.DB.
-// For MySQL, the connections of otherDB must use the ANSI_QUOTES SQL mode,
-// since the built statements quote identifiers with double quotes.
-func NewFromSqlxDb(c *database.Config, log *logging.Logger, otherDB *sqlx.DB) (*Database, error) {
-	db := sqlx.NewDb(otherDB.DB, otherDB.DriverName())
+// NewFromConfig returns a new DB for the database configured in cfg. It uses
+// NewDbFromConfig of icinga-go-library, which also sets the ANSI_QUOTES SQL
+// mode for MySQL that the built statements rely on. No connection is opened
+// yet, so use Connect to check that the database is reachable. All database
+// logs go to log.
+func NewFromConfig(cfg *database.Config, log *logging.Logger) (*DB, error) {
+	db, err := database.NewDbFromConfig(cfg, log, database.RetryConnectorCallbacks{})
+	if err != nil {
+		return nil, err
+	}
 
-	db.Mapper = reflectx.NewMapperFunc("db", strcase.Snake)
-
-	return &Database{
-		DB:              db,
-		log:             log,
-		columnMap:       database.NewColumnMap(db.Mapper),
-		Options:         c.Options,
-		tableSemaphores: make(map[string]*semaphore.Weighted),
+	return &DB{
+		DB:  db,
+		log: log,
 	}, nil
 }
 
-// BatchSizeByPlaceholders returns how often the specified number of placeholders
-// fits into Options.MaxPlaceholdersPerStatement, but at least 1.
-func (db *Database) BatchSizeByPlaceholders(n int) int {
-	s := db.Options.MaxPlaceholdersPerStatement / n
-	if s > 0 {
-		return s
-	}
-
-	return 1
-}
-
 // BuildDeleteStmt returns a DELETE statement for the given struct.
-func (db *Database) BuildDeleteStmt(from any) string {
+func (db *DB) BuildDeleteStmt(from any) string {
 	var column string
 	if relation, ok := from.(Relation); ok {
 		column = relation.ForeignKey()
@@ -83,63 +59,6 @@ func (db *Database) BuildDeleteStmt(from any) string {
 	)
 }
 
-// BuildSelectStmt returns a SELECT query that creates the FROM part from the
-// given table struct and the column list from the specified columns struct.
-func (db *Database) BuildSelectStmt(table any, columns any) string {
-	q := fmt.Sprintf(
-		`SELECT "%s" FROM "%s"`,
-		strings.Join(db.columnMap.Columns(columns), `", "`),
-		database.TableName(table),
-	)
-
-	return q
-}
-
-// BuildUpsertStmt returns an upsert statement for the given struct.
-func (db *Database) BuildUpsertStmt(subject any) (stmt string, placeholders int) {
-	var updateColumns []string
-	insertColumns := db.columnMap.Columns(subject)
-	table := database.TableName(subject)
-
-	if upserter, ok := subject.(database.Upserter); ok {
-		upsert := upserter.Upsert()
-		if sliceofcolumns, ok := upsert.([]any); ok {
-			for _, columns := range sliceofcolumns {
-				updateColumns = append(updateColumns, db.columnMap.Columns(columns)...)
-			}
-		} else {
-			updateColumns = db.columnMap.Columns(upsert)
-		}
-	} else {
-		updateColumns = insertColumns
-	}
-
-	var clause, setFormat string
-	switch db.DriverName() {
-	case database.MySQL:
-		clause = "ON DUPLICATE KEY UPDATE"
-		setFormat = `"%[1]s" = VALUES("%[1]s")`
-	case database.PostgreSQL:
-		clause = fmt.Sprintf("ON CONFLICT ON CONSTRAINT pk_%s DO UPDATE SET", table)
-		setFormat = `"%[1]s" = EXCLUDED."%[1]s"`
-	}
-
-	set := make([]string, 0, len(updateColumns))
-
-	for _, col := range updateColumns {
-		set = append(set, fmt.Sprintf(setFormat, col))
-	}
-
-	return fmt.Sprintf(
-		`INSERT INTO "%s" ("%s") VALUES (%s) %s %s`,
-		table,
-		strings.Join(insertColumns, `", "`),
-		fmt.Sprintf(":%s", strings.Join(insertColumns, ", :")),
-		clause,
-		strings.Join(set, ", "),
-	), len(insertColumns)
-}
-
 // BulkExec bulk executes queries with a single slice placeholder in the form
 // of `IN (?)`. Takes in up to the number of arguments specified in count from
 // the arg stream, derives and expands a query and executes it with this set of
@@ -147,13 +66,13 @@ func (db *Database) BuildUpsertStmt(subject any) (stmt string, placeholders int)
 // executed in a separate goroutine with a weighting of 1 and can be executed
 // concurrently to the extent allowed by the semaphore passed in sem.
 // Arguments for which the query ran successfully will be passed to onSuccess.
-func (db *Database) BulkExec(
+func (db *DB) BulkExec(
 	ctx context.Context, query string, count int, sem *semaphore.Weighted, arg <-chan any, features ...Feature,
 ) error {
-	g, ctx := errgroup.WithContext(ctx)
-
 	var counter com.Counter
-	defer db.periodicLog(ctx, query, &counter).Stop()
+	defer db.Log(ctx, query, &counter).Stop()
+
+	g, ctx := errgroup.WithContext(ctx)
 
 	f := NewFeatures(features...)
 	var n int64
@@ -214,7 +133,7 @@ func (db *Database) BulkExec(
 	return g.Wait()
 }
 
-func (db *Database) Connect() bool {
+func (db *DB) Connect() bool {
 	db.log.Info("Connecting to database")
 	if err := db.Ping(); err != nil {
 		db.log.Errorw("Cannot connect to database", logging.Error(err))
@@ -233,17 +152,15 @@ func (db *Database) Connect() bool {
 // with a weighting of 1 and can be executed concurrently to the extent allowed
 // by the semaphore passed in sem. Entities for which the query ran successfully
 // will be passed to onSuccess.
-func (db *Database) NamedBulkExec(
+func (db *DB) NamedBulkExec(
 	ctx context.Context, query string, count int, sem *semaphore.Weighted, arg <-chan any,
-	splitPolicyFactory com.BulkChunkSplitPolicyFactory[any], features ...Feature,
+	splitPolicyFactory com.BulkChunkSplitPolicyFactory[any], onSuccess ...database.OnSuccess[any],
 ) error {
-	g, ctx := errgroup.WithContext(ctx)
-
 	var counter com.Counter
-	defer db.periodicLog(ctx, query, &counter).Stop()
+	defer db.Log(ctx, query, &counter).Stop()
 
+	g, ctx := errgroup.WithContext(ctx)
 	bulk := com.Bulk(ctx, arg, count, splitPolicyFactory)
-	with := NewFeatures(features...)
 
 	g.Go(func() error {
 		for {
@@ -271,8 +188,8 @@ func (db *Database) NamedBulkExec(
 
 								counter.Add(uint64(len(b)))
 
-								if with.onSuccess != nil {
-									if err := with.onSuccess(ctx, b); err != nil {
+								for _, onSuccess := range onSuccess {
+									if err := onSuccess(ctx, b); err != nil {
 										return err
 									}
 								}
@@ -294,23 +211,9 @@ func (db *Database) NamedBulkExec(
 	return g.Wait()
 }
 
-func (db *Database) GetSemaphoreForTable(table string) *semaphore.Weighted {
-	db.tableSemaphoresMu.Lock()
-	defer db.tableSemaphoresMu.Unlock()
-
-	if sem, ok := db.tableSemaphores[table]; ok {
-		return sem
-	} else {
-		sem = semaphore.NewWeighted(int64(db.Options.MaxConnectionsPerTable))
-		db.tableSemaphores[table] = sem
-
-		return sem
-	}
-}
-
 // streamChildIds streams the ids of the rows of child that reference one of the
 // parent ids through the foreign key of relation into childIds.
-func (db *Database) streamChildIds(
+func (db *DB) streamChildIds(
 	ctx context.Context, child any, relation Relation, parentIds <-chan any, childIds chan<- any,
 ) error {
 	query := fmt.Sprintf(
@@ -359,7 +262,7 @@ func (db *Database) streamChildIds(
 // Options.MaxConnectionsPerTable. With cascading, related entities that have
 // relations themselves are deleted recursively by their own ids. IDs for which
 // the query ran successfully will be passed to onSuccess.
-func (db *Database) DeleteStreamed(
+func (db *DB) DeleteStreamed(
 	ctx context.Context, from any, ids <-chan any, features ...Feature,
 ) error {
 	f := NewFeatures(features...)
@@ -482,7 +385,7 @@ func (db *Database) DeleteStreamed(
 // entity from the entities stream. Bulk size is controlled via
 // Options.MaxPlaceholdersPerStatement and concurrency is controlled
 // via Options.MaxConnectionsPerTable.
-func (db *Database) UpsertStreamed(
+func (db *DB) UpsertStreamed(
 	ctx context.Context, entities <-chan any, features ...Feature,
 ) error {
 	first, forward, err := com.CopyFirst(ctx, entities)
@@ -493,6 +396,11 @@ func (db *Database) UpsertStreamed(
 	sem := db.GetSemaphoreForTable(database.TableName(first))
 	stmt, placeholders := db.BuildUpsertStmt(first)
 	with := NewFeatures(features...)
+
+	var onSuccess []database.OnSuccess[any]
+	if with.onSuccess != nil {
+		onSuccess = append(onSuccess, with.onSuccess)
+	}
 
 	if relations, ok := first.(HasRelations); ok && with.cascading {
 		var g *errgroup.Group
@@ -577,20 +485,20 @@ func (db *Database) UpsertStreamed(
 
 		g.Go(func() error {
 			return db.NamedBulkExec(
-				ctx, stmt, db.BatchSizeByPlaceholders(placeholders), sem, forward, com.NeverSplit[any], features...)
+				ctx, stmt, db.BatchSizeByPlaceholders(placeholders), sem, forward, com.NeverSplit[any], onSuccess...)
 		})
 
 		return g.Wait()
 	}
 
 	return db.NamedBulkExec(
-		ctx, stmt, db.BatchSizeByPlaceholders(placeholders), sem, forward, com.NeverSplit[any], features...)
+		ctx, stmt, db.BatchSizeByPlaceholders(placeholders), sem, forward, com.NeverSplit[any], onSuccess...)
 }
 
 // YieldAll executes the query with the supplied scope, scans each resulting
 // row into an entity returned by the factory function, and streams them into
 // a returned channel.
-func (db *Database) YieldAll(ctx context.Context, factoryFunc func() (any, error), query string, scope ...any) (<-chan any, <-chan error) {
+func (db *DB) YieldAll(ctx context.Context, factoryFunc func() (any, error), query string, scope ...any) (<-chan any, <-chan error) {
 	g, ctx := errgroup.WithContext(ctx)
 	entities := make(chan any, 1)
 
@@ -598,7 +506,7 @@ func (db *Database) YieldAll(ctx context.Context, factoryFunc func() (any, error
 		defer close(entities)
 
 		var counter com.Counter
-		defer db.periodicLog(ctx, query, &counter).Stop()
+		defer db.Log(ctx, query, &counter).Stop()
 
 		rows, err := db.query(ctx, query, scope...)
 		if err != nil {
@@ -631,22 +539,7 @@ func (db *Database) YieldAll(ctx context.Context, factoryFunc func() (any, error
 	return entities, com.WaitAsync(g)
 }
 
-func (db *Database) periodicLog(ctx context.Context, query string, counter *com.Counter) periodic.Stopper {
-	return periodic.Start(ctx, db.log.Interval(), func(tick periodic.Tick) {
-		if count := counter.Reset(); count > 0 {
-			db.log.Debugw("Executed", zap.String("query", query), zap.Uint64("rows", count))
-		}
-	}, periodic.OnStop(func(tick periodic.Tick) {
-		db.log.Debugw(
-			"Finished executing",
-			zap.String("query", query),
-			zap.Uint64("rows", counter.Total()),
-			zap.Duration("duration", tick.Elapsed),
-		)
-	}))
-}
-
-func (db *Database) query(ctx context.Context, query string, scope ...any) (rows *sqlx.Rows, err error) {
+func (db *DB) query(ctx context.Context, query string, scope ...any) (rows *sqlx.Rows, err error) {
 	if len(scope) == 1 && IsStruct(scope[0]) {
 		rows, err = db.NamedQueryContext(ctx, query, scope[0])
 	} else {

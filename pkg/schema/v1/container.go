@@ -279,7 +279,7 @@ func (cl *ContainerLog) Upsert() any {
 
 // syncContainerLogs fetches the logs from the kubernetes API for the given
 // container and syncs to the database.
-func (cl *ContainerLog) syncContainerLogs(ctx context.Context, clientset *kubernetes.Clientset, db *database.Database) error {
+func (cl *ContainerLog) syncContainerLogs(ctx context.Context, clientset *kubernetes.Clientset, db *database.DB) error {
 	logOptions := &kcorev1.PodLogOptions{Container: cl.ContainerName}
 	if !cl.LastUpdate.Time().IsZero() {
 		sinceSeconds := int64(time.Since(cl.LastUpdate.Time()).Seconds())
@@ -459,7 +459,7 @@ func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStat
 // and this fetches all the container IDs matching the respective pod ID from
 // the database and initiates a container deletion stream that cleans up all
 // container-related resources.
-func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Group, upsertPods, deletePods <-chan any) {
+func SyncContainers(ctx context.Context, db *database.DB, g *errgroup.Group, upsertPods, deletePods <-chan any) {
 	type containerFingerprint struct {
 		Uuid    types.UUID
 		PodUuid types.UUID
@@ -593,7 +593,7 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 }
 
 // warmup fetches all container logs from the database and caches them in the containerLogs variable.
-func warmup(ctx context.Context, db *database.Database) error {
+func warmup(ctx context.Context, db *database.DB) error {
 	g, ctx := errgroup.WithContext(ctx)
 
 	entities, errs := db.YieldAll(ctx, func() (any, error) {

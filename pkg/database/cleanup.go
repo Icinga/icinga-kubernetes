@@ -41,14 +41,14 @@ type cleanupWhere struct {
 
 // Cleanup deletes rows older than a given time in batches of limited size.
 type Cleanup struct {
-	db  *database.DB
+	db  *DB
 	log *logging.Logger
 }
 
 // NewCleanup returns a new Cleanup that deletes rows through db. Retried
 // queries are logged to log, while the progress of each cleanup is logged
 // through the logger of db.
-func NewCleanup(db *database.DB, log *logging.Logger) *Cleanup {
+func NewCleanup(db *DB, log *logging.Logger) *Cleanup {
 	return &Cleanup{
 		db:  db,
 		log: log,
