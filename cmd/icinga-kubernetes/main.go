@@ -666,7 +666,7 @@ func main() {
 		return cachev1.Multiplexers().Run(ctx)
 	})
 
-	cleanup := kdatabase.NewCleanup(db, logs.GetChildLogger("cleanup"))
+	cleanup := kdatabase.NewCleanup(db)
 
 	g.Go(func() error {
 		return cleanup.PeriodicCleanup(ctx, kdatabase.CleanupStmt{

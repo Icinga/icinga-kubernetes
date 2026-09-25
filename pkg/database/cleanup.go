@@ -8,11 +8,9 @@ import (
 	"github.com/icinga/icinga-go-library/backoff"
 	"github.com/icinga/icinga-go-library/com"
 	"github.com/icinga/icinga-go-library/database"
-	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-go-library/periodic"
 	"github.com/icinga/icinga-go-library/retry"
 	"github.com/icinga/icinga-go-library/types"
-	"go.uber.org/zap"
 )
 
 // CleanupStmt defines information needed to compose cleanup statements.
@@ -41,17 +39,13 @@ type cleanupWhere struct {
 
 // Cleanup deletes rows older than a given time in batches of limited size.
 type Cleanup struct {
-	db  *DB
-	log *logging.Logger
+	db *DB
 }
 
-// NewCleanup returns a new Cleanup that deletes rows through db. Retried
-// queries are logged to log, while the progress of each cleanup is logged
-// through the logger of db.
-func NewCleanup(db *DB, log *logging.Logger) *Cleanup {
+// NewCleanup returns a new Cleanup that deletes rows through db.
+func NewCleanup(db *DB) *Cleanup {
 	return &Cleanup{
-		db:  db,
-		log: log,
+		db: db,
 	}
 }
 
@@ -86,25 +80,8 @@ func (c *Cleanup) CleanupOlderThan(
 				return err
 			},
 			retry.Retryable,
-			backoff.NewExponentialWithJitter(1*time.Millisecond, 1*time.Second),
-			retry.Settings{
-				Timeout: retry.DefaultTimeout,
-				OnRetryableError: func(_ time.Duration, _ uint64, err, lastErr error) {
-					if lastErr == nil || err.Error() != lastErr.Error() {
-						c.log.Warnw("Cannot execute query. Retrying", logging.Error(err))
-					}
-				},
-				OnSuccess: func(elapsed time.Duration, attempt uint64, lastErr error) {
-					if attempt > 1 {
-						c.log.Infow(
-							"Query retried successfully after error",
-							zap.Duration("after", elapsed),
-							zap.Uint64("attempts", attempt),
-							logging.Error(lastErr),
-						)
-					}
-				},
-			},
+			backoff.DefaultBackoff,
+			c.db.GetDefaultRetrySettings(),
 		)
 		if err != nil {
 			return 0, err

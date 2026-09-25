@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
-	"time"
 
 	"github.com/icinga/icinga-go-library/backoff"
 	"github.com/icinga/icinga-go-library/com"
@@ -120,8 +119,8 @@ func (db *DB) BulkExec(
 							return nil
 						},
 						retry.Retryable,
-						backoff.NewExponentialWithJitter(1*time.Millisecond, 1*time.Second),
-						retry.Settings{},
+						backoff.DefaultBackoff,
+						db.GetDefaultRetrySettings(),
 					)
 				}
 			}(b))
@@ -197,8 +196,8 @@ func (db *DB) NamedBulkExec(
 								return nil
 							},
 							retry.Retryable,
-							backoff.NewExponentialWithJitter(1*time.Millisecond, 1*time.Second),
-							retry.Settings{},
+							backoff.DefaultBackoff,
+							db.GetDefaultRetrySettings(),
 						)
 					}
 				}(b))
@@ -238,8 +237,8 @@ func (db *DB) streamChildIds(
 				return db.SelectContext(ctx, &ids, db.Rebind(stmt), args...)
 			},
 			retry.Retryable,
-			backoff.NewExponentialWithJitter(1*time.Millisecond, 1*time.Second),
-			retry.Settings{},
+			backoff.DefaultBackoff,
+			db.GetDefaultRetrySettings(),
 		); err != nil {
 			return database.CantPerformQuery(err, query)
 		}
