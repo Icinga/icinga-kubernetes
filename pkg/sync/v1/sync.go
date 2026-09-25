@@ -4,10 +4,11 @@ import (
 	"context"
 
 	"github.com/icinga/icinga-go-library/com"
+	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/cluster"
-	"github.com/icinga/icinga-kubernetes/pkg/database"
+	kdatabase "github.com/icinga/icinga-kubernetes/pkg/database"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
 	"golang.org/x/sync/errgroup"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,14 +16,14 @@ import (
 )
 
 type Sync struct {
-	db       *database.DB
+	db       *kdatabase.DB
 	informer cache.SharedIndexInformer
 	log      *logging.Logger
 	factory  func() schemav1.Resource
 }
 
 func NewSync(
-	db *database.DB,
+	db *kdatabase.DB,
 	informer cache.SharedIndexInformer,
 	log *logging.Logger,
 	factory func() schemav1.Resource,
@@ -60,7 +61,7 @@ func (s *Sync) warmup(ctx context.Context) (map[string]types.UUID, error) {
 	meta := &schemav1.Meta{ClusterUuid: cluster.ClusterUuidFromContext(ctx)}
 	query := s.db.BuildSelectStmt(s.factory(), meta) + ` WHERE cluster_uuid=:cluster_uuid`
 
-	entities, errs := s.db.YieldAll(ctx, func() any { return s.factory() }, query, meta)
+	entities, errs := s.db.YieldAll(ctx, func() database.Entity { return s.factory() }, query, meta)
 
 	// Let errors from YieldAll() cancel the group.
 	com.ErrgroupReceive(g, errs)
@@ -150,8 +151,8 @@ func (s *Sync) sync(ctx context.Context, c *Controller, synced map[string]types.
 		return s.db.UpsertStreamed(
 			ctx,
 			sink.UpsertCh(),
-			database.WithCascading(),
-			database.WithOnSuccess(with.OnUpsert()),
+			kdatabase.WithCascading(),
+			kdatabase.WithOnSuccess(with.OnUpsert()),
 		)
 	})
 	g.Go(func() error {
@@ -172,9 +173,9 @@ func (s *Sync) sync(ctx context.Context, c *Controller, synced map[string]types.
 				ctx,
 				s.factory(),
 				sink.DeleteCh(),
-				database.WithBlocking(),
-				database.WithCascading(),
-				database.WithOnSuccess(with.OnDelete()),
+				kdatabase.WithBlocking(),
+				kdatabase.WithCascading(),
+				kdatabase.WithOnSuccess(with.OnDelete()),
 			)
 		}
 	})

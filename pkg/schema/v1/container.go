@@ -558,7 +558,7 @@ func SyncContainers(ctx context.Context, db *kdatabase.DB, g *errgroup.Group, up
 				}
 				deletedPodIds[meta.PodUuid.String()] = true
 
-				entities, errs := db.YieldAll(ctx, func() any { return &Container{} }, query, meta)
+				entities, errs := db.YieldAll(ctx, func() database.Entity { return &Container{} }, query, meta)
 				com.ErrgroupReceive(g, errs)
 
 				g.Go(func() error {
@@ -649,7 +649,7 @@ func warmup(ctx context.Context, db *kdatabase.DB) error {
 	query := db.BuildSelectStmt(ContainerLog{}, ContainerLog{}) +
 		` WHERE pod_uuid IN (SELECT uuid FROM pod WHERE cluster_uuid = :cluster_uuid)`
 
-	entities, errs := db.YieldAll(ctx, func() any { return &ContainerLog{} }, query, meta)
+	entities, errs := db.YieldAll(ctx, func() database.Entity { return &ContainerLog{} }, query, meta)
 	com.ErrgroupReceive(g, errs)
 
 	g.Go(func() error {
