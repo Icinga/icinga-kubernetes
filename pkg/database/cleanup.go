@@ -60,7 +60,7 @@ func NewCleanup(db *database.DB, log *logging.Logger) *Cleanup {
 // in count. Actually deleted rows will be passed to onSuccess. Returns the total
 // number of rows deleted.
 func (c *Cleanup) CleanupOlderThan(
-	ctx context.Context, stmt CleanupStmt, count uint64, olderThan time.Time, onSuccess ...OnSuccess[struct{}],
+	ctx context.Context, stmt CleanupStmt, count uint64, olderThan time.Time, onSuccess ...database.OnSuccess[struct{}],
 ) (uint64, error) {
 	var counter com.Counter
 
