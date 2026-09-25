@@ -14,6 +14,7 @@ import (
 	"github.com/go-co-op/gocron"
 	"github.com/icinga/icinga-go-library/com"
 	"github.com/icinga/icinga-go-library/types"
+	"github.com/icinga/icinga-kubernetes/pkg/cluster"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
 	"golang.org/x/sync/errgroup"
 	kcorev1 "k8s.io/api/core/v1"
@@ -590,13 +591,16 @@ func SyncContainers(ctx context.Context, db *database.DB, g *errgroup.Group, ups
 	})
 }
 
-// warmup fetches all container logs from the database and caches them in the containerLogs variable.
+// warmup fetches the container logs of the current cluster's pods from the
+// database and caches them in the containerLogs variable.
 func warmup(ctx context.Context, db *database.DB) error {
 	g, ctx := errgroup.WithContext(ctx)
 
-	entities, errs := db.YieldAll(
-		ctx, func() any { return &ContainerLog{} }, db.BuildSelectStmt(ContainerLog{}, ContainerLog{}), struct{}{},
-	)
+	meta := struct{ ClusterUuid types.UUID }{ClusterUuid: cluster.ClusterUuidFromContext(ctx)}
+	query := db.BuildSelectStmt(ContainerLog{}, ContainerLog{}) +
+		` WHERE pod_uuid IN (SELECT uuid FROM pod WHERE cluster_uuid = :cluster_uuid)`
+
+	entities, errs := db.YieldAll(ctx, func() any { return &ContainerLog{} }, query, meta)
 	com.ErrgroupReceive(g, errs)
 
 	g.Go(func() error {
