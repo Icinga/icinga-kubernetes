@@ -60,9 +60,7 @@ func (s *Sync) warmup(ctx context.Context) (map[string]types.UUID, error) {
 	meta := &schemav1.Meta{ClusterUuid: cluster.ClusterUuidFromContext(ctx)}
 	query := s.db.BuildSelectStmt(s.factory(), meta) + ` WHERE cluster_uuid=:cluster_uuid`
 
-	entities, errs := s.db.YieldAll(ctx, func() (any, error) {
-		return s.factory(), nil
-	}, query, meta)
+	entities, errs := s.db.YieldAll(ctx, func() any { return s.factory() }, query, meta)
 
 	// Let errors from YieldAll() cancel the group.
 	com.ErrgroupReceive(g, errs)

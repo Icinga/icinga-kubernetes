@@ -508,9 +508,7 @@ func SyncContainers(ctx context.Context, db *database.DB, g *errgroup.Group, ups
 				}
 				deletedPodIds[meta.PodUuid.String()] = true
 
-				entities, errs := db.YieldAll(ctx, func() (any, error) {
-					return &Container{}, nil
-				}, query, meta)
+				entities, errs := db.YieldAll(ctx, func() any { return &Container{} }, query, meta)
 				com.ErrgroupReceive(g, errs)
 
 				g.Go(func() error {
@@ -596,9 +594,9 @@ func SyncContainers(ctx context.Context, db *database.DB, g *errgroup.Group, ups
 func warmup(ctx context.Context, db *database.DB) error {
 	g, ctx := errgroup.WithContext(ctx)
 
-	entities, errs := db.YieldAll(ctx, func() (any, error) {
-		return &ContainerLog{}, nil
-	}, db.BuildSelectStmt(ContainerLog{}, ContainerLog{}))
+	entities, errs := db.YieldAll(
+		ctx, func() any { return &ContainerLog{} }, db.BuildSelectStmt(ContainerLog{}, ContainerLog{}), struct{}{},
+	)
 	com.ErrgroupReceive(g, errs)
 
 	g.Go(func() error {

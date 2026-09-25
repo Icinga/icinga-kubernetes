@@ -3,7 +3,6 @@ package database
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"sync"
 
 	"github.com/icinga/icinga-go-library/backoff"
@@ -497,17 +496,16 @@ func (db *DB) UpsertStreamed(
 // YieldAll executes the query with the supplied scope, scans each resulting
 // row into an entity returned by the factory function, and streams them into
 // a returned channel.
-func (db *DB) YieldAll(ctx context.Context, factoryFunc func() (any, error), query string, scope ...any) (<-chan any, <-chan error) {
+func (db *DB) YieldAll(ctx context.Context, factoryFunc func() any, query string, scope any) (<-chan any, <-chan error) {
 	g, ctx := errgroup.WithContext(ctx)
 	entities := make(chan any, 1)
 
 	g.Go(func() error {
-		defer close(entities)
-
 		var counter com.Counter
 		defer db.Log(ctx, query, &counter).Stop()
+		defer close(entities)
 
-		rows, err := db.query(ctx, query, scope...)
+		rows, err := db.NamedQueryContext(ctx, query, scope)
 		if err != nil {
 			return database.CantPerformQuery(err, query)
 		}
@@ -515,10 +513,7 @@ func (db *DB) YieldAll(ctx context.Context, factoryFunc func() (any, error), que
 		defer func() { _ = rows.Close() }()
 
 		for rows.Next() {
-			e, err := factoryFunc()
-			if err != nil {
-				return errors.Wrap(err, "cannot create entity")
-			}
+			e := factoryFunc()
 
 			if err = rows.StructScan(e); err != nil {
 				return errors.Wrapf(err, "cannot store query result into a %T: %s", e, query)
@@ -536,26 +531,4 @@ func (db *DB) YieldAll(ctx context.Context, factoryFunc func() (any, error), que
 	})
 
 	return entities, com.WaitAsync(g)
-}
-
-func (db *DB) query(ctx context.Context, query string, scope ...any) (rows *sqlx.Rows, err error) {
-	if len(scope) == 1 && IsStruct(scope[0]) {
-		rows, err = db.NamedQueryContext(ctx, query, scope[0])
-	} else {
-		rows, err = db.QueryxContext(ctx, db.Rebind(query), scope...)
-	}
-
-	return
-}
-
-func IsStruct(subject any) bool {
-	v := reflect.ValueOf(subject)
-	switch v.Kind() {
-	case reflect.Pointer:
-		return v.Elem().Kind() == reflect.Struct
-	case reflect.Struct:
-		return true
-	default:
-		return false
-	}
 }
