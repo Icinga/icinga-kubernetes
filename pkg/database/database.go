@@ -14,7 +14,6 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
-	"golang.org/x/sync/semaphore"
 )
 
 // DB is a wrapper around database.DB with additional relation handling.
@@ -55,80 +54,6 @@ func (db *DB) BuildDeleteStmt(from any) string {
 		database.TableName(from),
 		column,
 	)
-}
-
-// BulkExec bulk executes queries with a single slice placeholder in the form
-// of `IN (?)`. Takes in up to the number of arguments specified in count from
-// the arg stream, derives and expands a query and executes it with this set of
-// arguments until the arg stream has been processed. The derived queries are
-// executed in a separate goroutine with a weighting of 1 and can be executed
-// concurrently to the extent allowed by the semaphore passed in sem.
-// Arguments for which the query ran successfully will be passed to onSuccess.
-func (db *DB) BulkExec(
-	ctx context.Context, query string, count int, sem *semaphore.Weighted, arg <-chan any, features ...Feature,
-) error {
-	var counter com.Counter
-	defer db.Log(ctx, query, &counter).Stop()
-
-	g, ctx := errgroup.WithContext(ctx)
-
-	f := NewFeatures(features...)
-	var n int64
-	if f.blocking {
-		n = int64(db.Options.MaxConnectionsPerTable)
-	} else {
-		n = 1
-	}
-
-	bulk := com.Bulk(ctx, arg, count, com.NeverSplit[any])
-	g.Go(func() error {
-		g, ctx := errgroup.WithContext(ctx)
-
-		for b := range bulk {
-			if err := sem.Acquire(ctx, n); err != nil {
-				return errors.Wrap(err, "cannot acquire semaphore")
-			}
-
-			g.Go(func(b []any) func() error {
-				return func() error {
-					defer sem.Release(n)
-
-					return retry.WithBackoff(
-						ctx,
-						func(context.Context) error {
-							stmt, args, err := sqlx.In(query, b)
-							if err != nil {
-								return errors.Wrapf(err, "cannot build placeholders for %q", query)
-							}
-
-							stmt = db.Rebind(stmt)
-							_, err = db.ExecContext(ctx, stmt, args...)
-							if err != nil {
-								return database.CantPerformQuery(err, query)
-							}
-
-							counter.Add(uint64(len(b)))
-
-							if f.onSuccess != nil {
-								if err := f.onSuccess(ctx, b); err != nil {
-									return err
-								}
-							}
-
-							return nil
-						},
-						retry.Retryable,
-						backoff.DefaultBackoff,
-						db.GetDefaultRetrySettings(),
-					)
-				}
-			}(b))
-		}
-
-		return g.Wait()
-	})
-
-	return g.Wait()
 }
 
 func (db *DB) Connect() bool {
@@ -197,6 +122,11 @@ func (db *DB) DeleteStreamed(
 	ctx context.Context, from any, ids <-chan any, features ...Feature,
 ) error {
 	f := NewFeatures(features...)
+
+	var onSuccess []database.OnSuccess[any]
+	if f.onSuccess != nil {
+		onSuccess = append(onSuccess, f.onSuccess)
+	}
 
 	if relations, ok := from.(HasRelations); ok && f.cascading {
 		var g *errgroup.Group
@@ -294,7 +224,7 @@ func (db *DB) DeleteStreamed(
 				db.Options.MaxPlaceholdersPerStatement,
 				db.GetSemaphoreForTable(database.TableName(from)),
 				ids,
-				features...,
+				onSuccess...,
 			)
 		})
 
@@ -307,7 +237,7 @@ func (db *DB) DeleteStreamed(
 		db.Options.MaxPlaceholdersPerStatement,
 		db.GetSemaphoreForTable(database.TableName(from)),
 		ids,
-		features...,
+		onSuccess...,
 	)
 }
 

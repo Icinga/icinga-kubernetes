@@ -7,7 +7,6 @@ import (
 type Feature func(*Features)
 
 type Features struct {
-	blocking  bool
 	cascading bool
 	onSuccess database.OnSuccess[any]
 }
@@ -19,12 +18,6 @@ func NewFeatures(features ...Feature) *Features {
 	}
 
 	return f
-}
-
-func WithBlocking() Feature {
-	return func(f *Features) {
-		f.blocking = true
-	}
 }
 
 func WithCascading() Feature {

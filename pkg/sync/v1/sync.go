@@ -173,7 +173,6 @@ func (s *Sync) sync(ctx context.Context, c *Controller, synced map[string]types.
 				ctx,
 				s.factory(),
 				sink.DeleteCh(),
-				kdatabase.WithBlocking(),
 				kdatabase.WithCascading(),
 				kdatabase.WithOnSuccess(with.OnDelete()),
 			)
