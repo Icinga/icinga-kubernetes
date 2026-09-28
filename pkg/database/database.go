@@ -241,24 +241,14 @@ func (db *DB) DeleteStreamedCascading(
 //
 // onSuccess receives only the entities from entities.
 func (db *DB) UpsertStreamedCascading(
-	ctx context.Context, entities <-chan database.Entity, onSuccess ...database.OnSuccess[any],
+	ctx context.Context, entities <-chan database.Entity, onSuccess ...database.OnSuccess[database.Entity],
 ) error {
 	first, forward, err := com.CopyFirst(ctx, entities)
 	if err != nil {
 		return errors.Wrap(err, "cannot copy first entity")
 	}
 
-	var forwardOnSuccess []database.OnSuccess[database.Entity]
-	for _, fn := range withoutNil(onSuccess) {
-		forwardOnSuccess = append(forwardOnSuccess, func(ctx context.Context, entities []database.Entity) error {
-			rows := make([]any, 0, len(entities))
-			for _, entity := range entities {
-				rows = append(rows, entity)
-			}
-
-			return fn(ctx, rows)
-		})
-	}
+	forwardOnSuccess := withoutNil(onSuccess)
 
 	relations, ok := first.(HasRelations)
 	if !ok {

@@ -509,7 +509,9 @@ func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStat
 // and this fetches all the container IDs matching the respective pod ID from
 // the database and initiates a container deletion stream that cleans up all
 // container-related resources.
-func SyncContainers(ctx context.Context, db *kdatabase.DB, g *errgroup.Group, upsertPods, deletePods <-chan any) {
+func SyncContainers(
+	ctx context.Context, db *kdatabase.DB, g *errgroup.Group, upsertPods <-chan database.Entity, deletePods <-chan any,
+) {
 	type containerFingerprint struct {
 		Uuid    types.UUID
 		PodUuid types.UUID
