@@ -67,14 +67,12 @@ func (db *DB) Connect() bool {
 	return true
 }
 
-// streamChildIds streams the ids of the rows of child that reference one of the
+// streamChildIds streams the ids of the related rows that reference one of the
 // parent ids through the foreign key of relation into childIds.
-func (db *DB) streamChildIds(
-	ctx context.Context, child any, relation Relation, parentIds <-chan any, childIds chan<- any,
-) error {
+func (db *DB) streamChildIds(ctx context.Context, relation Relation, parentIds <-chan any, childIds chan<- any) error {
 	query := fmt.Sprintf(
 		`SELECT uuid FROM "%s" WHERE %s IN (?)`,
-		database.TableName(child),
+		database.TableName(relation),
 		relation.ForeignKey(),
 	)
 
@@ -143,7 +141,7 @@ func (db *DB) DeleteStreamed(
 				g.Go(func() error {
 					defer close(childIds)
 
-					return db.streamChildIds(ctx, child, relation, ch, childIds)
+					return db.streamChildIds(ctx, relation, ch, childIds)
 				})
 				g.Go(func() error {
 					// onSuccess expects ids of the entity the deletion started
