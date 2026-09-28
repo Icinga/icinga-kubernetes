@@ -110,125 +110,13 @@ func (db *DB) streamChildIds(ctx context.Context, relation Relation, parentIds <
 	return ctx.Err()
 }
 
-// DeleteStreamed bulk deletes the specified ids via BulkExec. The delete
-// statement is created using BuildDeleteStmt(from). Bulk size is controlled
-// via Options.MaxPlaceholdersPerStatement and concurrency is controlled via
-// Options.MaxConnectionsPerTable. With cascading, related entities that have
-// relations themselves are deleted recursively by their own ids. IDs for which
-// the query ran successfully will be passed to onSuccess.
-func (db *DB) DeleteStreamed(
-	ctx context.Context, from any, ids <-chan any, features ...Feature,
-) error {
-	f := NewFeatures(features...)
-
-	var onSuccess []database.OnSuccess[any]
-	if f.onSuccess != nil {
-		onSuccess = append(onSuccess, f.onSuccess)
-	}
-
-	if relations, ok := from.(HasRelations); ok && f.cascading {
-		var g *errgroup.Group
-		g, ctx = errgroup.WithContext(ctx)
-		streams := make([]chan any, 0, len(relations.Relations()))
-		for _, relation := range relations.Relations() {
-			if !relation.CascadeDelete() {
-				continue
-			}
-
-			ch := make(chan any)
-			if child, ok := relation.NewEntity().(HasRelations); ok {
-				childIds := make(chan any)
-				g.Go(func() error {
-					defer close(childIds)
-
-					return db.streamChildIds(ctx, relation, ch, childIds)
-				})
-				g.Go(func() error {
-					// onSuccess expects ids of the entity the deletion started
-					// from, not those of its children.
-					return db.DeleteStreamed(ctx, child, childIds, f.withoutOnSuccess())
-				})
-			} else {
-				g.Go(func() error {
-					return db.DeleteStreamed(ctx, relation, ch, features...)
-				})
-			}
-			streams = append(streams, ch)
-		}
-
-		source := ids
-		ids := make(chan any)
-		dup := make(chan any)
-
-		g.Go(func() error {
-			defer close(ids)
-			defer close(dup)
-
-			for {
-				select {
-				case entity, more := <-source:
-					if !more {
-						return nil
-					}
-
-					select {
-					case ids <- entity:
-					case <-ctx.Done():
-						return ctx.Err()
-					}
-
-					select {
-					case dup <- entity:
-					case <-ctx.Done():
-						return ctx.Err()
-					}
-				case <-ctx.Done():
-					return ctx.Err()
-				}
-			}
-		})
-
-		g.Go(func() error {
-			defer func() {
-				for _, ch := range streams {
-					close(ch)
-				}
-			}()
-
-			for {
-				select {
-				case entity, more := <-dup:
-					if !more {
-						return nil
-					}
-
-					for _, ch := range streams {
-						select {
-						case ch <- entity:
-						case <-ctx.Done():
-							return ctx.Err()
-						}
-					}
-				case <-ctx.Done():
-					return ctx.Err()
-				}
-			}
-		})
-
-		g.Go(func() error {
-			return db.BulkExec(
-				ctx,
-				db.BuildDeleteStmt(from),
-				db.Options.MaxPlaceholdersPerStatement,
-				db.GetSemaphoreForTable(database.TableName(from)),
-				ids,
-				onSuccess...,
-			)
-		})
-
-		return g.Wait()
-	}
-
+// deleteStreamed deletes the rows of from, an entity or a relation, whose uuid
+// or, for a relation, whose foreign key is one of ids.
+//
+// It replaces DeleteStreamed of icinga-go-library, which always deletes by an
+// id column and only takes entities. Defining BuildDeleteStmt locally does not
+// change that, as the library's DeleteStreamed always calls its own.
+func (db *DB) deleteStreamed(ctx context.Context, from any, ids <-chan any, onSuccess ...database.OnSuccess[any]) error {
 	return db.BulkExec(
 		ctx,
 		db.BuildDeleteStmt(from),
@@ -239,124 +127,237 @@ func (db *DB) DeleteStreamed(
 	)
 }
 
-// UpsertStreamed bulk upserts the specified entities via NamedBulkExec.
-// The upsert statement is created using BuildUpsertStmt with the first
-// entity from the entities stream. Bulk size is controlled via
-// Options.MaxPlaceholdersPerStatement and concurrency is controlled
-// via Options.MaxConnectionsPerTable.
-func (db *DB) UpsertStreamed(
-	ctx context.Context, entities <-chan database.Entity, features ...Feature,
+// DeleteStreamedCascading deletes the rows of from whose uuid is one of ids
+// and, recursively, the related rows of each relation that cascades on delete.
+// All tables are deleted concurrently and in no particular order.
+//
+// onSuccess receives the ids once the rows of from are deleted.
+func (db *DB) DeleteStreamedCascading(
+	ctx context.Context, from database.Entity, ids <-chan any, onSuccess ...database.OnSuccess[any],
+) error {
+	forwardOnSuccess := withoutNil(onSuccess)
+
+	relations, ok := from.(HasRelations)
+	if !ok {
+		return db.deleteStreamed(ctx, from, ids, forwardOnSuccess...)
+	}
+
+	g, ctx := errgroup.WithContext(ctx)
+	streams := make([]chan any, 0, len(relations.Relations()))
+	for _, rel := range relations.Relations() {
+		if !rel.CascadeDelete() {
+			continue
+		}
+
+		ch := make(chan any)
+		child := rel.NewEntity()
+		if _, ok := child.(HasRelations); ok {
+			childIds := make(chan any)
+			g.Go(func() error {
+				defer close(childIds)
+
+				return db.streamChildIds(ctx, rel, ch, childIds)
+			})
+			g.Go(func() error {
+				return db.DeleteStreamedCascading(ctx, child, childIds)
+			})
+		} else {
+			g.Go(func() error {
+				return db.deleteStreamed(ctx, rel, ch)
+			})
+		}
+		streams = append(streams, ch)
+	}
+
+	parents := make(chan any)
+	dup := make(chan any)
+
+	g.Go(func() error {
+		defer close(parents)
+		defer close(dup)
+
+		for {
+			select {
+			case entity, more := <-ids:
+				if !more {
+					return nil
+				}
+
+				select {
+				case parents <- entity:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+
+				select {
+				case dup <- entity:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+	})
+
+	g.Go(func() error {
+		defer func() {
+			for _, ch := range streams {
+				close(ch)
+			}
+		}()
+
+		for {
+			select {
+			case entity, more := <-dup:
+				if !more {
+					return nil
+				}
+
+				for _, ch := range streams {
+					select {
+					case ch <- entity:
+					case <-ctx.Done():
+						return ctx.Err()
+					}
+				}
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+	})
+
+	g.Go(func() error {
+		return db.deleteStreamed(ctx, from, parents, forwardOnSuccess...)
+	})
+
+	return g.Wait()
+}
+
+// UpsertStreamedCascading upserts entities and, recursively, the entities of
+// their relations. All tables are upserted concurrently and in no particular
+// order, each with a statement built from its first entity, so a stream must
+// carry a single type.
+//
+// onSuccess receives only the entities from entities.
+func (db *DB) UpsertStreamedCascading(
+	ctx context.Context, entities <-chan database.Entity, onSuccess ...database.OnSuccess[any],
 ) error {
 	first, forward, err := com.CopyFirst(ctx, entities)
-	if first == nil {
+	if err != nil {
 		return errors.Wrap(err, "cannot copy first entity")
 	}
 
-	sem := db.GetSemaphoreForTable(database.TableName(first))
-	stmt, placeholders := db.BuildUpsertStmt(first)
-	with := NewFeatures(features...)
-
-	var onSuccess []database.OnSuccess[database.Entity]
-	if with.onSuccess != nil {
-		onSuccess = append(onSuccess, func(ctx context.Context, entities []database.Entity) error {
+	var forwardOnSuccess []database.OnSuccess[database.Entity]
+	for _, fn := range withoutNil(onSuccess) {
+		forwardOnSuccess = append(forwardOnSuccess, func(ctx context.Context, entities []database.Entity) error {
 			rows := make([]any, 0, len(entities))
 			for _, entity := range entities {
 				rows = append(rows, entity)
 			}
 
-			return with.onSuccess(ctx, rows)
+			return fn(ctx, rows)
 		})
 	}
 
-	if relations, ok := first.(HasRelations); ok && with.cascading {
-		var g *errgroup.Group
-		g, ctx = errgroup.WithContext(ctx)
-		streams := make(map[string]chan database.Entity, len(relations.Relations()))
-		for _, relation := range relations.Relations() {
-			// Relations to the same table share its stream,
-			// as the entities are looked up by table name.
-			if _, exists := streams[database.TableName(relation)]; exists {
-				continue
-			}
+	relations, ok := first.(HasRelations)
+	if !ok {
+		return db.UpsertStreamed(ctx, forward, forwardOnSuccess...)
+	}
 
-			ch := make(chan database.Entity)
-			g.Go(func() error {
-				return db.UpsertStreamed(ctx, ch, WithCascading())
-			})
-			streams[database.TableName(relation)] = ch
+	g, ctx := errgroup.WithContext(ctx)
+	streams := make(map[string]chan database.Entity, len(relations.Relations()))
+	for _, rel := range relations.Relations() {
+		// Relations to the same table share its stream,
+		// as the entities are looked up by table name.
+		if _, exists := streams[database.TableName(rel)]; exists {
+			continue
 		}
 
-		source := forward
-		forward := make(chan database.Entity)
-		dup := make(chan database.Entity)
-
+		ch := make(chan database.Entity)
 		g.Go(func() error {
-			defer close(forward)
-			defer close(dup)
-
-			for {
-				select {
-				case entity, more := <-source:
-					if !more {
-						return nil
-					}
-
-					select {
-					case forward <- entity:
-					case <-ctx.Done():
-						return ctx.Err()
-					}
-
-					select {
-					case dup <- entity:
-					case <-ctx.Done():
-						return ctx.Err()
-					}
-				case <-ctx.Done():
-					return ctx.Err()
-				}
-			}
+			return db.UpsertStreamedCascading(ctx, ch)
 		})
-
-		g.Go(func() error {
-			var senders sync.WaitGroup
-
-			defer func() {
-				senders.Wait()
-				for _, ch := range streams {
-					close(ch)
-				}
-			}()
-
-			for {
-				select {
-				case entity, more := <-dup:
-					if !more {
-						return nil
-					}
-
-					for _, relation := range entity.(HasRelations).Relations() {
-						senders.Add(1)
-						g.Go(func() error {
-							defer senders.Done()
-
-							return relation.StreamInto(ctx, streams[database.TableName(relation)])
-						})
-					}
-				case <-ctx.Done():
-					return ctx.Err()
-				}
-			}
-		})
-
-		g.Go(func() error {
-			return db.NamedBulkExec(
-				ctx, stmt, db.BatchSizeByPlaceholders(placeholders), sem, forward, com.NeverSplit[database.Entity], onSuccess...)
-		})
-
-		return g.Wait()
+		streams[database.TableName(rel)] = ch
 	}
 
-	return db.NamedBulkExec(
-		ctx, stmt, db.BatchSizeByPlaceholders(placeholders), sem, forward, com.NeverSplit[database.Entity], onSuccess...)
+	parents := make(chan database.Entity)
+	dup := make(chan database.Entity)
+
+	g.Go(func() error {
+		defer close(parents)
+		defer close(dup)
+
+		for {
+			select {
+			case entity, more := <-forward:
+				if !more {
+					return nil
+				}
+
+				select {
+				case parents <- entity:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+
+				select {
+				case dup <- entity:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+	})
+
+	g.Go(func() error {
+		var senders sync.WaitGroup
+
+		defer func() {
+			senders.Wait()
+			for _, ch := range streams {
+				close(ch)
+			}
+		}()
+
+		for {
+			select {
+			case entity, more := <-dup:
+				if !more {
+					return nil
+				}
+
+				for _, rel := range entity.(HasRelations).Relations() {
+					senders.Add(1)
+					g.Go(func() error {
+						defer senders.Done()
+
+						return rel.StreamInto(ctx, streams[database.TableName(rel)])
+					})
+				}
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+	})
+
+	g.Go(func() error {
+		return db.UpsertStreamed(ctx, parents, forwardOnSuccess...)
+	})
+
+	return g.Wait()
+}
+
+// withoutNil returns fns without nil callbacks, which the library would call nevertheless.
+func withoutNil[T any](fns []database.OnSuccess[T]) []database.OnSuccess[T] {
+	var output []database.OnSuccess[T]
+	for _, fn := range fns {
+		if fn != nil {
+			output = append(output, fn)
+		}
+	}
+
+	return output
 }

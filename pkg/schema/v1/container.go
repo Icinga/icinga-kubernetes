@@ -525,7 +525,7 @@ func SyncContainers(ctx context.Context, db *kdatabase.DB, g *errgroup.Group, up
 	// container ids from multiple pods concurrently.
 	containerIds := make(chan any, db.Options.MaxPlaceholdersPerStatement)
 	g.Go(func() error {
-		return db.DeleteStreamed(ctx, &Container{}, containerIds, kdatabase.WithCascading())
+		return db.DeleteStreamedCascading(ctx, &Container{}, containerIds)
 	})
 
 	g.Go(func() error {
@@ -550,10 +550,9 @@ func SyncContainers(ctx context.Context, db *kdatabase.DB, g *errgroup.Group, up
 
 				meta := &containerFingerprint{PodUuid: podUuid.(types.UUID)}
 				if _, ok := deletedPodIds[meta.PodUuid.String()]; ok {
-					// Due to the recursive relation resolution in the
-					// `DB#DeleteStreamed()` method, we may get the same pod ID
-					// multiple times since they all share the same `on success`
-					// handler.
+					// The controller deletes a pod once for each of its events
+					// still queued after the pod is gone, so the same pod ID may
+					// arrive here more than once.
 					break
 				}
 				deletedPodIds[meta.PodUuid.String()] = true

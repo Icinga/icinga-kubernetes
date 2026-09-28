@@ -22,11 +22,11 @@ type Relation interface {
 // HasRelations is implemented by entities whose related entities are upserted
 // and deleted along with them when cascading.
 //
-// DeleteStreamed calls Relations on zero values, so it must return the same
-// relations regardless of the entity's field values. Related entities that
+// DeleteStreamedCascading calls Relations on zero values, so it must return the
+// same relations regardless of the entity's field values. Related entities that
 // implement HasRelations themselves are deleted by their own ids, which requires
-// a uuid column in their table. DeleteStreamed sets up the whole cascade before
-// deleting anything, so relations must not form a cycle.
+// a uuid column in their table. DeleteStreamedCascading sets up the whole cascade
+// before deleting anything, so relations must not form a cycle.
 type HasRelations interface {
 	Relations() []Relation
 }
@@ -109,7 +109,7 @@ func (r *hasMany[T]) StreamInto(ctx context.Context, ch chan database.Entity) er
 // comparableEntity constrains the type of the entity related by HasOne. It
 // must be comparable, as HasOne skips an entity that equals the zero value of
 // its type, and implement database.Entity, as StreamInto sends it into the
-// stream that UpsertStreamed writes to the database.
+// stream that UpsertStreamedCascading writes to the database.
 type comparableEntity interface {
 	comparable
 	database.Entity
