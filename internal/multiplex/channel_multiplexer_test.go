@@ -50,3 +50,41 @@ func TestChannelMultiplexerFansOutAddedInputs(t *testing.T) {
 		}
 	})
 }
+
+// TestChannelMultiplexerReturnsOnceAddedInputsAreClosed covers Run, which used
+// to run until its context was done even after all its inputs were closed.
+// Closing only some of them mustn't end it.
+func TestChannelMultiplexerReturnsOnceAddedInputsAreClosed(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		first, second := make(chan int), make(chan int)
+		mux := NewChannelMux(first, second)
+		out := mux.Out()
+
+		errs := make(chan error, 1)
+		go func() { errs <- mux.Run(t.Context()) }()
+
+		close(first)
+		synctest.Wait()
+		select {
+		case err := <-errs:
+			t.Fatalf("Run returned %v before all its inputs were closed", err)
+		default:
+		}
+
+		second <- 1
+		if got := <-out; got != 1 {
+			t.Errorf("out received %d, want 1", got)
+		}
+
+		close(second)
+		synctest.Wait()
+		select {
+		case err := <-errs:
+			if err != nil {
+				t.Errorf("Run returned %v, want nil", err)
+			}
+		default:
+			t.Fatal("Run didn't return once its inputs were closed")
+		}
+	})
+}

@@ -3,6 +3,7 @@ package multiplex
 import (
 	"context"
 	"slices"
+	"sync"
 	"sync/atomic"
 
 	"golang.org/x/sync/errgroup"
@@ -11,7 +12,8 @@ import (
 // ChannelMultiplexer is a multiplexer for channels of variable types.
 // It fans out all input channels to all output channels.
 type ChannelMultiplexer[T any] interface {
-	// In adds the given input channel reading.
+	// In returns a new input channel. Run closes it on return, so its sender
+	// must not close it.
 	In() chan<- T
 
 	// AddIn registers the given input channel. Unlike channels returned by In,
@@ -25,6 +27,8 @@ type ChannelMultiplexer[T any] interface {
 	AddOut(chan<- T)
 
 	// Run starts multiplexing of all input channels to all output channels.
+	// It returns once the context is done or, if all input channels were
+	// added with AddIn, once they're all closed.
 	// Once run is called, cannot be modified and will panic.
 	Run(context.Context) error
 }
@@ -109,15 +113,17 @@ func (mux *channelMultiplexer[T]) Run(ctx context.Context) error {
 	g, ctx := errgroup.WithContext(ctx)
 
 	sink := make(chan T)
-	defer close(sink)
 
 	ins := slices.Clone(mux.inAdded)
 	for _, ch := range mux.in {
 		ins = append(ins, ch)
 	}
 
+	var readers sync.WaitGroup
 	for _, ch := range ins {
+		readers.Add(1)
 		g.Go(func() error {
+			defer readers.Done()
 			for {
 				select {
 				case spread, more := <-ch:
@@ -136,6 +142,15 @@ func (mux *channelMultiplexer[T]) Run(ctx context.Context) error {
 			}
 		})
 	}
+
+	// The readers are the only senders on sink. Closing it once they're done
+	// lets the fan-out below return, so Run ends when all inputs are closed.
+	g.Go(func() error {
+		readers.Wait()
+		close(sink)
+
+		return nil
+	})
 
 	outs := append(mux.outAdded, mux.out...)
 	g.Go(func() error {
