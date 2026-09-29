@@ -1,4 +1,4 @@
-package internal
+package multiplex
 
 import (
 	"context"

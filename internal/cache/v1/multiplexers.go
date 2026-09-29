@@ -3,13 +3,13 @@ package v1
 import (
 	"context"
 
-	"github.com/icinga/icinga-kubernetes/internal"
+	"github.com/icinga/icinga-kubernetes/internal/multiplex"
 	"golang.org/x/sync/errgroup"
 )
 
 type EventsMultiplexer interface {
-	UpsertEvents() internal.ChannelMultiplexer[any]
-	DeleteEvents() internal.ChannelMultiplexer[any]
+	UpsertEvents() multiplex.ChannelMultiplexer[any]
+	DeleteEvents() multiplex.ChannelMultiplexer[any]
 	Run(context.Context) error
 }
 
@@ -29,15 +29,15 @@ func Multiplexers() EventsMultiplexers {
 }
 
 type events struct {
-	upsertEvents internal.ChannelMultiplexer[any]
-	deleteEvents internal.ChannelMultiplexer[any]
+	upsertEvents multiplex.ChannelMultiplexer[any]
+	deleteEvents multiplex.ChannelMultiplexer[any]
 }
 
-func (e events) UpsertEvents() internal.ChannelMultiplexer[any] {
+func (e events) UpsertEvents() multiplex.ChannelMultiplexer[any] {
 	return e.upsertEvents
 }
 
-func (e events) DeleteEvents() internal.ChannelMultiplexer[any] {
+func (e events) DeleteEvents() multiplex.ChannelMultiplexer[any] {
 	return e.deleteEvents
 }
 
@@ -132,32 +132,32 @@ var m multiplexers
 func init() {
 	m = multiplexers{
 		daemonSets: events{
-			upsertEvents: internal.NewChannelMux[any](),
-			deleteEvents: internal.NewChannelMux[any](),
+			upsertEvents: multiplex.NewChannelMux[any](),
+			deleteEvents: multiplex.NewChannelMux[any](),
 		},
 		deployments: events{
-			upsertEvents: internal.NewChannelMux[any](),
-			deleteEvents: internal.NewChannelMux[any](),
+			upsertEvents: multiplex.NewChannelMux[any](),
+			deleteEvents: multiplex.NewChannelMux[any](),
 		},
 		nodes: events{
-			upsertEvents: internal.NewChannelMux[any](),
-			deleteEvents: internal.NewChannelMux[any](),
+			upsertEvents: multiplex.NewChannelMux[any](),
+			deleteEvents: multiplex.NewChannelMux[any](),
 		},
 		pods: events{
-			upsertEvents: internal.NewChannelMux[any](),
-			deleteEvents: internal.NewChannelMux[any](),
+			upsertEvents: multiplex.NewChannelMux[any](),
+			deleteEvents: multiplex.NewChannelMux[any](),
 		},
 		replicaSets: events{
-			upsertEvents: internal.NewChannelMux[any](),
-			deleteEvents: internal.NewChannelMux[any](),
+			upsertEvents: multiplex.NewChannelMux[any](),
+			deleteEvents: multiplex.NewChannelMux[any](),
 		},
 		services: events{
-			upsertEvents: internal.NewChannelMux[any](),
-			deleteEvents: internal.NewChannelMux[any](),
+			upsertEvents: multiplex.NewChannelMux[any](),
+			deleteEvents: multiplex.NewChannelMux[any](),
 		},
 		statefulSets: events{
-			upsertEvents: internal.NewChannelMux[any](),
-			deleteEvents: internal.NewChannelMux[any](),
+			upsertEvents: multiplex.NewChannelMux[any](),
+			deleteEvents: multiplex.NewChannelMux[any](),
 		},
 	}
 }
