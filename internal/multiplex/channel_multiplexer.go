@@ -13,13 +13,13 @@ type ChannelMultiplexer[T any] interface {
 	// In adds the given input channel reading.
 	In() chan<- T
 
-	AddIn(chan T)
+	AddIn(<-chan T)
 
 	// Out returns a new output channel that receives from all input channels.
 	Out() <-chan T
 
 	// AddOut registers the given output channel to receive from all input channels.
-	AddOut(chan T)
+	AddOut(chan<- T)
 
 	// Run starts multiplexing of all input channels to all output channels.
 	// Once run is called, cannot be modified and will panic.
@@ -27,7 +27,7 @@ type ChannelMultiplexer[T any] interface {
 }
 
 // NewChannelMux returns a new ChannelMultiplexer initialized with at least one input channel.
-func NewChannelMux[T any](inChannels ...chan T) ChannelMultiplexer[T] {
+func NewChannelMux[T any](inChannels ...<-chan T) ChannelMultiplexer[T] {
 	return &channelMultiplexer[T]{
 		inAdded: inChannels,
 	}
@@ -35,9 +35,9 @@ func NewChannelMux[T any](inChannels ...chan T) ChannelMultiplexer[T] {
 
 type channelMultiplexer[T any] struct {
 	in       []chan T
-	inAdded  []chan T
-	out      []chan T
-	outAdded []chan T
+	inAdded  []<-chan T
+	out      []chan<- T
+	outAdded []chan<- T
 	started  atomic.Bool
 }
 
@@ -53,7 +53,7 @@ func (mux *channelMultiplexer[T]) In() chan<- T {
 	return channel
 }
 
-func (mux *channelMultiplexer[T]) AddIn(channel chan T) {
+func (mux *channelMultiplexer[T]) AddIn(channel <-chan T) {
 	if mux.started.Load() {
 		panic("channelMultiplexer already started")
 	}
@@ -72,7 +72,7 @@ func (mux *channelMultiplexer[T]) Out() <-chan T {
 	return channel
 }
 
-func (mux *channelMultiplexer[T]) AddOut(channel chan T) {
+func (mux *channelMultiplexer[T]) AddOut(channel chan<- T) {
 	if mux.started.Load() {
 		panic("channelMultiplexer already started")
 	}
