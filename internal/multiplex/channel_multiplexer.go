@@ -2,6 +2,7 @@ package multiplex
 
 import (
 	"context"
+	"slices"
 	"sync/atomic"
 
 	"golang.org/x/sync/errgroup"
@@ -13,6 +14,8 @@ type ChannelMultiplexer[T any] interface {
 	// In adds the given input channel reading.
 	In() chan<- T
 
+	// AddIn registers the given input channel. Unlike channels returned by In,
+	// Run doesn't close it.
 	AddIn(<-chan T)
 
 	// Out returns a new output channel that receives from all input channels.
@@ -108,7 +111,12 @@ func (mux *channelMultiplexer[T]) Run(ctx context.Context) error {
 	sink := make(chan T)
 	defer close(sink)
 
+	ins := slices.Clone(mux.inAdded)
 	for _, ch := range mux.in {
+		ins = append(ins, ch)
+	}
+
+	for _, ch := range ins {
 		g.Go(func() error {
 			for {
 				select {
