@@ -11,6 +11,7 @@ import (
 	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-go-library/retry"
 	"github.com/icinga/icinga-go-library/types"
+	"github.com/icinga/icinga-kubernetes/internal/multiplex"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
@@ -169,36 +170,9 @@ func (db *DB) DeleteStreamedCascading(
 		streams = append(streams, ch)
 	}
 
-	parents := make(chan any)
-	dup := make(chan any)
-
-	g.Go(func() error {
-		defer close(parents)
-		defer close(dup)
-
-		for {
-			select {
-			case entity, more := <-ids:
-				if !more {
-					return nil
-				}
-
-				select {
-				case parents <- entity:
-				case <-ctx.Done():
-					return ctx.Err()
-				}
-
-				select {
-				case dup <- entity:
-				case <-ctx.Done():
-					return ctx.Err()
-				}
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		}
-	})
+	mux := multiplex.NewChannelMux(ids)
+	parents := mux.Out()
+	dup := mux.Out()
 
 	g.Go(func() error {
 		defer func() {
@@ -229,6 +203,10 @@ func (db *DB) DeleteStreamedCascading(
 
 	g.Go(func() error {
 		return db.deleteStreamed(ctx, from, parents, forwardOnSuccess...)
+	})
+
+	g.Go(func() error {
+		return mux.Run(ctx)
 	})
 
 	return g.Wait()
@@ -271,36 +249,9 @@ func (db *DB) UpsertStreamedCascading(
 		streams[database.TableName(rel)] = ch
 	}
 
-	parents := make(chan database.Entity)
-	dup := make(chan database.Entity)
-
-	g.Go(func() error {
-		defer close(parents)
-		defer close(dup)
-
-		for {
-			select {
-			case entity, more := <-forward:
-				if !more {
-					return nil
-				}
-
-				select {
-				case parents <- entity:
-				case <-ctx.Done():
-					return ctx.Err()
-				}
-
-				select {
-				case dup <- entity:
-				case <-ctx.Done():
-					return ctx.Err()
-				}
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		}
-	})
+	mux := multiplex.NewChannelMux(forward)
+	parents := mux.Out()
+	dup := mux.Out()
 
 	g.Go(func() error {
 		var senders sync.WaitGroup
@@ -335,6 +286,10 @@ func (db *DB) UpsertStreamedCascading(
 
 	g.Go(func() error {
 		return db.UpsertStreamed(ctx, parents, forwardOnSuccess...)
+	})
+
+	g.Go(func() error {
+		return mux.Run(ctx)
 	})
 
 	return g.Wait()
