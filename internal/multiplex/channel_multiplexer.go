@@ -33,7 +33,7 @@ type ChannelMultiplexer[T any] interface {
 	Run(context.Context) error
 }
 
-// NewChannelMux returns a new ChannelMultiplexer initialized with at least one input channel.
+// NewChannelMux returns a new ChannelMultiplexer reading from the given input channels.
 func NewChannelMux[T any](inChannels ...<-chan T) ChannelMultiplexer[T] {
 	return &channelMultiplexer[T]{
 		in: inChannels,
