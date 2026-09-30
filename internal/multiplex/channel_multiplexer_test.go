@@ -51,13 +51,15 @@ func TestChannelMultiplexerFansOutAddedInputs(t *testing.T) {
 	})
 }
 
-// TestChannelMultiplexerReturnsOnceAddedInputsAreClosed covers Run, which used
-// to run until its context was done even after all its inputs were closed.
-// Closing only some of them mustn't end it.
-func TestChannelMultiplexerReturnsOnceAddedInputsAreClosed(t *testing.T) {
+// TestChannelMultiplexerReturnsOnceInputsAreClosed covers Run, which used to
+// run until its context was done even after all its inputs were closed, and
+// to close the channels from In a second time on return. Closing only some
+// of the inputs mustn't end it.
+func TestChannelMultiplexerReturnsOnceInputsAreClosed(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		first, second := make(chan int), make(chan int)
-		mux := NewChannelMux(first, second)
+		first := make(chan int)
+		mux := NewChannelMux(first)
+		second := mux.In()
 		out := mux.Out()
 
 		errs := make(chan error, 1)
