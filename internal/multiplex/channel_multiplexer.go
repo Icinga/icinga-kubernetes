@@ -28,6 +28,7 @@ type ChannelMultiplexer[T any] interface {
 
 	// Run starts multiplexing of all input channels to all output channels.
 	// It returns once the context is done or all input channels are closed.
+	// It panics if there are output channels but no input channels.
 	// Once run is called, cannot be modified and will panic.
 	Run(context.Context) error
 }
@@ -93,7 +94,7 @@ func (mux *channelMultiplexer[T]) Run(ctx context.Context) error {
 
 	if len(mux.in) == 0 {
 		if len(mux.out)+len(mux.outAdded) > 0 {
-			panic("foobar")
+			panic("channelMultiplexer has output channels but no input channels")
 		}
 
 		return nil
