@@ -79,14 +79,66 @@ func TestChannelMultiplexerReturnsOnceInputsAreClosed(t *testing.T) {
 		}
 
 		close(second)
-		synctest.Wait()
+		requireReturnedNil(t, errs)
+	})
+}
+
+// TestChannelMultiplexerDoesNotCloseAddedOuts covers the channels passed to
+// AddOut, which other senders may share, so Run mustn't close them.
+func TestChannelMultiplexerDoesNotCloseAddedOuts(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		in, out := make(chan struct{}), make(chan struct{})
+		mux := NewChannelMux(in)
+		mux.AddOut(out)
+
+		errs := make(chan error, 1)
+		go func() { errs <- mux.Run(t.Context()) }()
+
+		close(in)
+		requireReturnedNil(t, errs)
+
 		select {
-		case err := <-errs:
-			if err != nil {
-				t.Errorf("Run returned %v, want nil", err)
-			}
+		case <-out:
+			t.Error("Run closed the channel passed to AddOut")
 		default:
-			t.Fatal("Run didn't return once its inputs were closed")
 		}
 	})
+}
+
+// TestChannelMultiplexerClosesChannelsFromOut covers the channels from Out,
+// whose only sender is Run, so it closes them once it returns.
+func TestChannelMultiplexerClosesChannelsFromOut(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		in := make(chan struct{})
+		mux := NewChannelMux(in)
+		out := mux.Out()
+
+		errs := make(chan error, 1)
+		go func() { errs <- mux.Run(t.Context()) }()
+
+		close(in)
+		requireReturnedNil(t, errs)
+
+		select {
+		case <-out:
+		default:
+			t.Error("Run didn't close the channel from Out")
+		}
+	})
+}
+
+// requireReturnedNil fails the test unless Run has returned nil by the time all
+// other goroutines in the bubble are blocked.
+func requireReturnedNil(t *testing.T, errs <-chan error) {
+	t.Helper()
+
+	synctest.Wait()
+	select {
+	case err := <-errs:
+		if err != nil {
+			t.Errorf("Run returned %v, want nil", err)
+		}
+	default:
+		t.Fatal("Run didn't return once its inputs were closed")
+	}
 }

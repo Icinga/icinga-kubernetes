@@ -18,9 +18,12 @@ type ChannelMultiplexer[T any] interface {
 	AddIn(<-chan T)
 
 	// Out returns a new output channel that receives from all input channels.
+	// Run closes it on return.
 	Out() <-chan T
 
-	// AddOut registers the given output channel to receive from all input channels.
+	// AddOut registers the given output channel to receive from all input
+	// channels. Run doesn't close it, as other senders may share it, so close
+	// it only once Run has returned.
 	AddOut(chan<- T)
 
 	// Run starts multiplexing of all input channels to all output channels.
