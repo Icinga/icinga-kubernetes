@@ -13,6 +13,41 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
+func TestShouldPurgeDeleted(t *testing.T) {
+	tests := []struct {
+		name     string
+		features []Feature
+		want     bool
+	}{
+		{name: "DisabledByDefault", want: false},
+		{name: "Enabled", features: []Feature{WithDeletedRetention(time.Hour)}, want: true},
+		{name: "NoDeleteWins", features: []Feature{WithDeletedRetention(time.Hour), WithNoDelete()}, want: false},
+		{name: "InvalidRetentionDelegatesToDatabase", features: []Feature{WithDeletedRetention(-time.Hour)}, want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := shouldPurgeDeleted(NewFeatures(tt.features...))
+			if got != tt.want {
+				t.Fatalf(
+					"expected purge decision %t, got %t",
+					tt.want,
+					got,
+				)
+			}
+		})
+	}
+}
+
+func TestBuildWarmupQueryExcludesDeleted(t *testing.T) {
+	const base = "SELECT uuid FROM pod"
+	const want = base + ` WHERE cluster_uuid=:cluster_uuid AND deleted IS NULL`
+
+	if got := buildWarmupQuery(base); got != want {
+		t.Fatalf("expected %q, got %q", want, got)
+	}
+}
+
 // TestSyncDeleteVanished covers the cleanup that used to run on the informer's
 // store, where it made listers panic on the entities warmup() had announced,
 // see https://github.com/Icinga/icinga-kubernetes/issues/208.

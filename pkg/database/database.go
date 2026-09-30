@@ -88,6 +88,14 @@ func (db *Database) BuildDeleteStmt(from any) string {
 	)
 }
 
+// BuildSoftDeleteStmt returns an UPDATE statement that marks rows as deleted.
+func (db *Database) BuildSoftDeleteStmt(from any) string {
+	return fmt.Sprintf(
+		`UPDATE %s SET deleted = UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000 WHERE uuid IN (?)`,
+		db.QuoteIdentifier(TableName(from)),
+	)
+}
+
 // BuildSelectStmt returns a SELECT query that creates the FROM part from the
 // given table struct and the column list from the specified columns struct.
 func (db *Database) BuildSelectStmt(table any, columns any) string {
@@ -375,7 +383,8 @@ func (db *Database) DeleteStreamed(
 		g, ctx = errgroup.WithContext(ctx)
 		streams := make([]chan any, 0, len(relations.Relations()))
 		for _, relation := range relations.Relations() {
-			if !relation.CascadeDelete() {
+			purge, purgeOk := relation.(cascadePurgeRelation)
+			if !relation.CascadeDelete() && !(f.purgeRelations && purgeOk && purge.CascadePurge()) {
 				continue
 			}
 
@@ -476,6 +485,22 @@ func (db *Database) DeleteStreamed(
 	return db.BulkExec(
 		ctx,
 		db.BuildDeleteStmt(from),
+		db.Options.MaxPlaceholdersPerStatement,
+		db.GetSemaphoreForTable(TableName(from)),
+		ids,
+		features...,
+	)
+}
+
+// SoftDeleteStreamed marks the specified ids as deleted via BulkExec.
+// The deleted timestamp is intentionally not part of the entity structs, so later
+// upserts cannot clear a previously recorded logical deletion.
+func (db *Database) SoftDeleteStreamed(
+	ctx context.Context, from any, ids <-chan any, features ...Feature,
+) error {
+	return db.BulkExec(
+		ctx,
+		db.BuildSoftDeleteStmt(from),
 		db.Options.MaxPlaceholdersPerStatement,
 		db.GetSemaphoreForTable(TableName(from)),
 		ids,

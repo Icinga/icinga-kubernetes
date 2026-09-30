@@ -21,6 +21,10 @@ database:
   # Database password.
   password: CHANGEME
 
+# Retention period for soft-deleted Kubernetes resources before physical purge.
+# Must be greater than zero.
+deleted_retention: 24h
+
 # Configuration for Prometheus metrics API.
 prometheus:
   # Prometheus server URL.

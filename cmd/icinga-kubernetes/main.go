@@ -32,7 +32,6 @@ import (
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
 	syncv1 "github.com/icinga/icinga-kubernetes/pkg/sync/v1"
 	k8sMysql "github.com/icinga/icinga-kubernetes/schema/mysql"
-	"github.com/jmoiron/sqlx"
 	"github.com/okzk/sdnotify"
 	"github.com/pkg/errors"
 	promapi "github.com/prometheus/client_golang/api"
@@ -328,7 +327,7 @@ func main() {
 
 			for kind, uuids := range uuidMap {
 				ng.Go(func() error {
-					q, args, err := sqlx.In(fmt.Sprintf("SELECT uuid FROM %s WHERE uuid IN (?)", kind), uuids)
+					q, args, err := internal.BuildActiveResourceQuery(kind, uuids)
 					if err != nil {
 						return err
 					}
@@ -455,10 +454,12 @@ func main() {
 		})
 	}
 
+	deletedRetentionFeature := syncv1.WithDeletedRetention(cfg.DeletedRetention)
+
 	g.Go(func() error {
 		s := syncv1.NewSync(kdb, factory.Core().V1().Namespaces().Informer(), log.WithName("namespaces"), schemav1.NewNamespace)
 
-		return s.Run(ctx)
+		return s.Run(ctx, deletedRetentionFeature)
 	})
 
 	wg := sync.WaitGroup{}
@@ -467,7 +468,7 @@ func main() {
 	g.Go(func() error {
 		s := syncv1.NewSync(kdb, factory.Core().V1().Nodes().Informer(), log.WithName("nodes"), schemav1.NewNode)
 
-		var forwardForNotifications []syncv1.Feature
+		forwardForNotifications := []syncv1.Feature{deletedRetentionFeature}
 		if cfg.Notifications.Url != "" {
 			forwardForNotifications = append(
 				forwardForNotifications,
@@ -498,6 +499,7 @@ func main() {
 
 		return s.Run(
 			ctx,
+			deletedRetentionFeature,
 			syncv1.WithOnUpsert(database.OnSuccessSendTo(cachev1.Multiplexers().Pods().UpsertEvents().In())),
 			syncv1.WithOnDelete(database.OnSuccessSendTo(cachev1.Multiplexers().Pods().DeleteEvents().In())),
 		)
@@ -507,7 +509,7 @@ func main() {
 	g.Go(func() error {
 		s := syncv1.NewSync(kdb, factory.Apps().V1().Deployments().Informer(), log.WithName("deployments"), schemav1.NewDeployment)
 
-		var forwardForNotifications []syncv1.Feature
+		forwardForNotifications := []syncv1.Feature{deletedRetentionFeature}
 		if cfg.Notifications.Url != "" {
 			forwardForNotifications = append(
 				forwardForNotifications,
@@ -525,7 +527,7 @@ func main() {
 	g.Go(func() error {
 		s := syncv1.NewSync(kdb, factory.Apps().V1().DaemonSets().Informer(), log.WithName("daemon-sets"), schemav1.NewDaemonSet)
 
-		var forwardForNotifications []syncv1.Feature
+		forwardForNotifications := []syncv1.Feature{deletedRetentionFeature}
 		if cfg.Notifications.Url != "" {
 			forwardForNotifications = append(
 				forwardForNotifications,
@@ -543,7 +545,7 @@ func main() {
 	g.Go(func() error {
 		s := syncv1.NewSync(kdb, factory.Apps().V1().ReplicaSets().Informer(), log.WithName("replica-sets"), schemav1.NewReplicaSet)
 
-		var forwardForNotifications []syncv1.Feature
+		forwardForNotifications := []syncv1.Feature{deletedRetentionFeature}
 		if cfg.Notifications.Url != "" {
 			forwardForNotifications = append(
 				forwardForNotifications,
@@ -561,7 +563,7 @@ func main() {
 	g.Go(func() error {
 		s := syncv1.NewSync(kdb, factory.Apps().V1().StatefulSets().Informer(), log.WithName("stateful-sets"), schemav1.NewStatefulSet)
 
-		var forwardForNotifications []syncv1.Feature
+		forwardForNotifications := []syncv1.Feature{deletedRetentionFeature}
 		if cfg.Notifications.Url != "" {
 			forwardForNotifications = append(
 				forwardForNotifications,
@@ -581,6 +583,7 @@ func main() {
 
 		return s.Run(
 			ctx,
+			deletedRetentionFeature,
 			syncv1.WithOnUpsert(database.OnSuccessSendTo(cachev1.Multiplexers().Services().UpsertEvents().In())),
 		)
 	})
@@ -588,18 +591,18 @@ func main() {
 	g.Go(func() error {
 		s := syncv1.NewSync(kdb, factory.Discovery().V1().EndpointSlices().Informer(), log.WithName("endpoints"), schemav1.NewEndpointSlice)
 
-		return s.Run(ctx)
+		return s.Run(ctx, deletedRetentionFeature)
 	})
 
 	g.Go(func() error {
 		s := syncv1.NewSync(kdb, factory.Core().V1().Secrets().Informer(), log.WithName("secrets"), schemav1.NewSecret)
-		return s.Run(ctx)
+		return s.Run(ctx, deletedRetentionFeature)
 	})
 
 	g.Go(func() error {
 		s := syncv1.NewSync(kdb, factory.Core().V1().ConfigMaps().Informer(), log.WithName("config-maps"), schemav1.NewConfigMap)
 
-		return s.Run(ctx)
+		return s.Run(ctx, deletedRetentionFeature)
 	})
 
 	g.Go(func() error {
@@ -611,31 +614,31 @@ func main() {
 	g.Go(func() error {
 		s := syncv1.NewSync(kdb, factory.Core().V1().PersistentVolumeClaims().Informer(), log.WithName("pvcs"), schemav1.NewPvc)
 
-		return s.Run(ctx)
+		return s.Run(ctx, deletedRetentionFeature)
 	})
 
 	g.Go(func() error {
 		s := syncv1.NewSync(kdb, factory.Core().V1().PersistentVolumes().Informer(), log.WithName("persistent-volumes"), schemav1.NewPersistentVolume)
 
-		return s.Run(ctx)
+		return s.Run(ctx, deletedRetentionFeature)
 	})
 
 	g.Go(func() error {
 		s := syncv1.NewSync(kdb, factory.Batch().V1().Jobs().Informer(), log.WithName("jobs"), schemav1.NewJob)
 
-		return s.Run(ctx)
+		return s.Run(ctx, deletedRetentionFeature)
 	})
 
 	g.Go(func() error {
 		s := syncv1.NewSync(kdb, factory.Batch().V1().CronJobs().Informer(), log.WithName("cron-jobs"), schemav1.NewCronJob)
 
-		return s.Run(ctx)
+		return s.Run(ctx, deletedRetentionFeature)
 	})
 
 	g.Go(func() error {
 		s := syncv1.NewSync(kdb, factory.Networking().V1().Ingresses().Informer(), log.WithName("ingresses"), schemav1.NewIngress)
 
-		return s.Run(ctx)
+		return s.Run(ctx, deletedRetentionFeature)
 	})
 
 	g.Go(func() error {

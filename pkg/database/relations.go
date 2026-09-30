@@ -31,6 +31,11 @@ type HasRelations interface {
 
 type RelationOption func(r Relation)
 
+type cascadePurgeRelation interface {
+	CascadePurge() bool
+	WithCascadePurge()
+}
+
 func WithForeignKey(fk string) RelationOption {
 	return func(r Relation) {
 		r.SetForeignKey(fk)
@@ -43,9 +48,18 @@ func WithoutCascadeDelete() RelationOption {
 	}
 }
 
+func WithCascadePurge() RelationOption {
+	return func(r Relation) {
+		if purge, ok := r.(cascadePurgeRelation); ok {
+			purge.WithCascadePurge()
+		}
+	}
+}
+
 type relation[T comparable] struct {
 	foreignKey           string
 	withoutCascadeDelete bool
+	cascadePurge         bool
 }
 
 func (r *relation[T]) ForeignKey() string {
@@ -62,6 +76,14 @@ func (r *relation[T]) CascadeDelete() bool {
 
 func (r *relation[T]) WithoutCascadeDelete() {
 	r.withoutCascadeDelete = true
+}
+
+func (r *relation[T]) CascadePurge() bool {
+	return r.cascadePurge
+}
+
+func (r *relation[T]) WithCascadePurge() {
+	r.cascadePurge = true
 }
 
 func (r *relation[T]) TableName() string {

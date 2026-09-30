@@ -39,6 +39,7 @@ CREATE TABLE config_map (
   resource_version varchar(255) NOT NULL,
   immutable enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
   created bigint unsigned NOT NULL,
+  deleted bigint unsigned NULL DEFAULT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
@@ -158,6 +159,7 @@ CREATE TABLE cron_job (
   icinga_state_reason text NOT NULL,
   yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
+  deleted bigint unsigned NULL DEFAULT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
@@ -193,6 +195,7 @@ CREATE TABLE daemon_set (
   icinga_state enum('unknown', 'ok', 'warning', 'critical') COLLATE utf8mb4_unicode_ci NOT NULL,
   icinga_state_reason text NOT NULL,
   created bigint unsigned NOT NULL,
+  deleted bigint unsigned NULL DEFAULT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
@@ -250,6 +253,7 @@ CREATE TABLE deployment (
   icinga_state enum('unknown', 'ok', 'warning', 'critical') COLLATE utf8mb4_unicode_ci NOT NULL,
   icinga_state_reason text NOT NULL,
   created bigint unsigned NOT NULL,
+  deleted bigint unsigned NULL DEFAULT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
@@ -312,6 +316,7 @@ CREATE TABLE endpoint_slice (
   resource_version varchar(255) NOT NULL,
   address_type enum('IPv4', 'IPv6', 'FQDN') COLLATE utf8mb4_general_ci NOT NULL,
   created bigint unsigned NOT NULL,
+  deleted bigint unsigned NULL DEFAULT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
@@ -368,6 +373,7 @@ CREATE TABLE ingress (
   resource_version varchar(255) NOT NULL,
   yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
+  deleted bigint unsigned NULL DEFAULT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
@@ -443,6 +449,7 @@ CREATE TABLE job (
   icinga_state enum('pending', 'ok', 'warning', 'critical', 'unknown') COLLATE utf8mb4_unicode_ci NOT NULL,
   icinga_state_reason text NOT NULL,
   created bigint unsigned NOT NULL,
+  deleted bigint unsigned NULL DEFAULT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
@@ -490,6 +497,7 @@ CREATE TABLE namespace (
   phase enum('Active', 'Terminating') COLLATE utf8mb4_unicode_ci NOT NULL,
   yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
+  deleted bigint unsigned NULL DEFAULT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
@@ -546,6 +554,7 @@ CREATE TABLE node (
   icinga_state enum('unknown', 'ok', 'warning', 'critical') COLLATE utf8mb4_unicode_ci NOT NULL,
   icinga_state_reason text NOT NULL,
   created bigint unsigned NOT NULL,
+  deleted bigint unsigned NULL DEFAULT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
@@ -599,6 +608,7 @@ CREATE TABLE persistent_volume (
   reclaim_policy enum('Recycle', 'Delete', 'Retain') COLLATE utf8mb4_unicode_ci NOT NULL,
   yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
+  deleted bigint unsigned NULL DEFAULT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
@@ -645,6 +655,7 @@ CREATE TABLE pod (
   qos enum('Guaranteed', 'Burstable', 'BestEffort') COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
+  deleted bigint unsigned NULL DEFAULT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
@@ -768,6 +779,7 @@ CREATE TABLE pvc (
   storage_class varchar(255) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
+  deleted bigint unsigned NULL DEFAULT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
@@ -811,6 +823,7 @@ CREATE TABLE replica_set (
   icinga_state enum('unknown', 'ok', 'warning', 'critical') COLLATE utf8mb4_unicode_ci NOT NULL,
   icinga_state_reason text NOT NULL,
   created bigint unsigned NOT NULL,
+  deleted bigint unsigned NULL DEFAULT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
@@ -857,6 +870,7 @@ CREATE TABLE secret (
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   immutable enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
   created bigint unsigned NOT NULL,
+  deleted bigint unsigned NULL DEFAULT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
@@ -902,6 +916,7 @@ CREATE TABLE service (
   internal_traffic_policy enum('Cluster', 'Local') COLLATE utf8mb4_unicode_ci NOT NULL,
   yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
+  deleted bigint unsigned NULL DEFAULT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
@@ -975,6 +990,7 @@ CREATE TABLE stateful_set (
   icinga_state enum('unknown', 'ok', 'warning', 'critical') COLLATE utf8mb4_unicode_ci NOT NULL,
   icinga_state_reason text NOT NULL,
   created bigint unsigned NOT NULL,
+  deleted bigint unsigned NULL DEFAULT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 

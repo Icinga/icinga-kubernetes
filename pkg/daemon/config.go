@@ -1,6 +1,9 @@
 package daemon
 
 import (
+	"errors"
+	"time"
+
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-kubernetes/pkg/metrics"
@@ -13,10 +16,11 @@ const DefaultConfigPath = "./config.yml"
 
 // Config defines Icinga Kubernetes config.
 type Config struct {
-	Database      database.Config          `yaml:"database" envPrefix:"DATABASE_"`
-	Logging       logging.Config           `yaml:"logging" envPrefix:"LOGGING_"`
-	Notifications notifications.Config     `yaml:"notifications" envPrefix:"NOTIFICATIONS_"`
-	Prometheus    metrics.PrometheusConfig `yaml:"prometheus" envPrefix:"PROMETHEUS_"`
+	Database         database.Config          `yaml:"database" envPrefix:"DATABASE_"`
+	DeletedRetention time.Duration            `yaml:"deleted_retention" env:"DELETED_RETENTION" default:"24h"`
+	Logging          logging.Config           `yaml:"logging" envPrefix:"LOGGING_"`
+	Notifications    notifications.Config     `yaml:"notifications" envPrefix:"NOTIFICATIONS_"`
+	Prometheus       metrics.PrometheusConfig `yaml:"prometheus" envPrefix:"PROMETHEUS_"`
 }
 
 // Validate checks constraints in the supplied configuration and returns
@@ -34,7 +38,19 @@ func (c *Config) Validate() error {
 		return err
 	}
 
-	return c.Notifications.Validate()
+	if err := c.Notifications.Validate(); err != nil {
+		return err
+	}
+
+	return validateDeletedRetention(c.DeletedRetention)
+}
+
+func validateDeletedRetention(retention time.Duration) error {
+	if retention <= 0 {
+		return errors.New("deleted retention must be greater than zero")
+	}
+
+	return nil
 }
 
 // ConfigFlagGlue provides a glue struct for the CLI config flag.

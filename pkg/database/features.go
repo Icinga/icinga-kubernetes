@@ -7,9 +7,10 @@ import (
 type Feature func(*Features)
 
 type Features struct {
-	blocking  bool
-	cascading bool
-	onSuccess database.OnSuccess[any]
+	blocking       bool
+	cascading      bool
+	purgeRelations bool
+	onSuccess      database.OnSuccess[any]
 }
 
 func NewFeatures(features ...Feature) *Features {
@@ -36,6 +37,12 @@ func WithCascading() Feature {
 func WithOnSuccess(fn database.OnSuccess[any]) Feature {
 	return func(f *Features) {
 		f.onSuccess = fn
+	}
+}
+
+func withPurgeRelations() Feature {
+	return func(f *Features) {
+		f.purgeRelations = true
 	}
 }
 

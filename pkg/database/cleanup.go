@@ -10,6 +10,7 @@ import (
 	"github.com/icinga/icinga-go-library/periodic"
 	"github.com/icinga/icinga-go-library/retry"
 	"github.com/icinga/icinga-go-library/types"
+	"golang.org/x/sync/errgroup"
 )
 
 // CleanupStmt defines information needed to compose cleanup statements.
@@ -102,6 +103,104 @@ func (db *Database) CleanupOlderThan(
 
 type cleanupWhere struct {
 	Time types.UnixMilli
+}
+
+type deletedPurgeCandidate struct {
+	Uuid types.UUID
+}
+
+type deletedPurgeWhere struct {
+	ClusterUuid types.UUID
+	Time        types.UnixMilli
+}
+
+func (db *Database) buildDeletedPurgeSelectStmt(from any) string {
+	return db.BuildSelectStmt(from, deletedPurgeCandidate{}) +
+		` WHERE cluster_uuid=:cluster_uuid AND deleted IS NOT NULL AND deleted < :time`
+}
+
+func (db *Database) purgeDeletedBefore(
+	ctx context.Context, from any, clusterUuid types.UUID, olderThan time.Time,
+) error {
+	g, ctx := errgroup.WithContext(ctx)
+
+	entities, errs := db.YieldAll(
+		ctx,
+		func() (any, error) {
+			return &deletedPurgeCandidate{}, nil
+		},
+		db.buildDeletedPurgeSelectStmt(from),
+		deletedPurgeWhere{
+			ClusterUuid: clusterUuid,
+			Time:        types.UnixMilli(olderThan),
+		},
+	)
+	com.ErrgroupReceive(g, errs)
+
+	ids := make(chan any)
+	g.Go(func() error {
+		defer close(ids)
+
+		for {
+			select {
+			case entity, more := <-entities:
+				if !more {
+					return nil
+				}
+
+				select {
+				case ids <- entity.(*deletedPurgeCandidate).Uuid:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+	})
+
+	g.Go(func() error {
+		return db.DeleteStreamed(
+			ctx,
+			from,
+			ids,
+			WithBlocking(),
+			WithCascading(),
+			withPurgeRelations(),
+		)
+	})
+
+	return g.Wait()
+}
+
+// PeriodicPurgeDeleted physically removes soft-deleted resources after retention.
+// Ordinary cascade relations remain authoritative, while purge-only relations
+// participate only in this physical lifecycle phase.
+func (db *Database) PeriodicPurgeDeleted(
+	ctx context.Context, from any, clusterUuid types.UUID, retention time.Duration,
+) error {
+	if retention <= 0 {
+		return fmt.Errorf("deleted retention must be greater than zero, got %s", retention)
+	}
+
+	errs := make(chan error, 1)
+	defer close(errs)
+
+	periodic.Start(ctx, time.Hour, func(tick periodic.Tick) {
+		if err := db.purgeDeletedBefore(ctx, from, clusterUuid, tick.Time.Add(-retention)); err != nil {
+			select {
+			case errs <- err:
+			case <-ctx.Done():
+			}
+		}
+	}, periodic.Immediate()).Stop()
+
+	select {
+	case err := <-errs:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (db *Database) PeriodicCleanup(ctx context.Context, stmt CleanupStmt) error {
