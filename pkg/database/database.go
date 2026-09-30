@@ -384,7 +384,7 @@ func (db *Database) DeleteStreamed(
 		streams := make([]chan any, 0, len(relations.Relations()))
 		for _, relation := range relations.Relations() {
 			purge, purgeOk := relation.(cascadePurgeRelation)
-			if !relation.CascadeDelete() && !(f.purgeRelations && purgeOk && purge.CascadePurge()) {
+			if !relation.CascadeDelete() && (!f.purgeRelations || !purgeOk || !purge.CascadePurge()) {
 				continue
 			}
 
