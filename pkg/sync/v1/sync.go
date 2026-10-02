@@ -48,7 +48,24 @@ func (s *Sync) Run(ctx context.Context, features ...Feature) error {
 		}
 	}
 
-	return s.sync(ctx, controller, synced, with)
+	g, ctx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		return s.sync(ctx, controller, synced, with)
+	})
+
+	if !with.NoDelete() && with.DeletedRetention() != 0 {
+		clusterUuid := cluster.ClusterUuidFromContext(ctx)
+		g.Go(func() error {
+			return s.db.PeriodicPurgeDeleted(
+				ctx,
+				s.factory(),
+				clusterUuid,
+				with.DeletedRetention(),
+			)
+		})
+	}
+
+	return g.Wait()
 }
 
 // warmup returns the UUIDs of the entities already synced to the database,
@@ -58,7 +75,7 @@ func (s *Sync) warmup(ctx context.Context) (map[string]types.UUID, error) {
 	g, ctx := errgroup.WithContext(ctx)
 
 	meta := &schemav1.Meta{ClusterUuid: cluster.ClusterUuidFromContext(ctx)}
-	query := s.db.BuildSelectStmt(s.factory(), meta) + ` WHERE cluster_uuid=:cluster_uuid`
+	query := s.db.BuildSelectStmt(s.factory(), meta) + ` WHERE cluster_uuid=:cluster_uuid AND deleted IS NULL`
 
 	entities, errs := s.db.YieldAll(ctx, func() (any, error) {
 		return s.factory(), nil
@@ -170,12 +187,11 @@ func (s *Sync) sync(ctx context.Context, c *Controller, synced map[string]types.
 
 			}
 		} else {
-			return s.db.DeleteStreamed(
+			return s.db.SoftDeleteStreamed(
 				ctx,
 				s.factory(),
 				sink.DeleteCh(),
 				database.WithBlocking(),
-				database.WithCascading(),
 				database.WithOnSuccess(with.OnDelete()),
 			)
 		}

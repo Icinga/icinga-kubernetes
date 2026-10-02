@@ -24,6 +24,12 @@ to view and work with the data.
 | ca       | **Optional.** Path to TLS CA certificate.                         |
 | insecure | **Optional.** Whether not to verify the peer.                     |
 
+## Deleted Resource Retention
+
+| Option            | Description                                                                                                                                    |
+|-------------------|------------------------------------------------------------------------------------------------------------------------------------------------|
+| deleted_retention | **Optional.** How long soft-deleted Kubernetes resources remain in the database before physical purge. Must be greater than zero. Defaults to `24h`. |
+
 ## Logging Configuration
 
 | Env      | Description                                                                                                                                                              |
@@ -76,6 +82,12 @@ The configurations set by environment variables override the ones set by YAML.
 | DATABASE_DATABASE | **Required.** Database name.                                      |
 | DATABASE_USER     | **Required.** Database username.                                  |
 | DATABASE_PASSWORD | **Optional.** Database password.                                  |
+
+## Deleted Resource Retention
+
+| Env               | Description                                                                                                                                    |
+|-------------------|------------------------------------------------------------------------------------------------------------------------------------------------|
+| DELETED_RETENTION | **Optional.** How long soft-deleted Kubernetes resources remain in the database before physical purge. Must be greater than zero. Defaults to `24h`. |
 
 ## Logging Configuration
 

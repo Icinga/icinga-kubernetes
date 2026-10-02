@@ -1,14 +1,19 @@
 package v1
 
-import "github.com/icinga/icinga-go-library/database"
+import (
+	"time"
+
+	"github.com/icinga/icinga-go-library/database"
+)
 
 type Feature func(*Features)
 
 type Features struct {
-	noDelete bool
-	noWarmup bool
-	onDelete database.OnSuccess[any]
-	onUpsert database.OnSuccess[any]
+	noDelete         bool
+	noWarmup         bool
+	deletedRetention time.Duration
+	onDelete         database.OnSuccess[any]
+	onUpsert         database.OnSuccess[any]
 }
 
 func NewFeatures(features ...Feature) *Features {
@@ -28,6 +33,10 @@ func (f *Features) NoWarmup() bool {
 	return f.noWarmup
 }
 
+func (f *Features) DeletedRetention() time.Duration {
+	return f.deletedRetention
+}
+
 func (f *Features) OnDelete() database.OnSuccess[any] {
 	return f.onDelete
 }
@@ -45,6 +54,12 @@ func WithNoDelete() Feature {
 func WithNoWarmup() Feature {
 	return func(f *Features) {
 		f.noWarmup = true
+	}
+}
+
+func WithDeletedRetention(retention time.Duration) Feature {
+	return func(f *Features) {
+		f.deletedRetention = retention
 	}
 }
 

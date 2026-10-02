@@ -415,9 +415,9 @@ func (p *Pod) Relations() []database.Relation {
 
 	return []database.Relation{
 		database.HasMany(p.Conditions, fk),
-		database.HasMany(p.Containers, database.WithoutCascadeDelete()),
-		database.HasMany(p.InitContainers, database.WithoutCascadeDelete()),
-		database.HasMany(p.SidecarContainers, database.WithoutCascadeDelete()),
+		database.HasMany(p.Containers, fk, database.WithoutCascadeDelete(), database.WithCascadePurge()),
+		database.HasMany(p.InitContainers, fk, database.WithoutCascadeDelete(), database.WithCascadePurge()),
+		database.HasMany(p.SidecarContainers, fk, database.WithoutCascadeDelete(), database.WithCascadePurge()),
 		database.HasMany(p.Owners, fk),
 		database.HasMany(p.ResourceLabels, database.WithForeignKey("resource_uuid")),
 		database.HasMany(p.Labels, database.WithoutCascadeDelete()),
