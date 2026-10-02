@@ -55,6 +55,7 @@ func main() {
 	var glue daemon.ConfigFlagGlue
 	var showVersion bool
 	var clusterName string
+	var removeCluster string
 
 	klog.InitFlags(nil)
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
@@ -62,6 +63,7 @@ func main() {
 	pflag.BoolVar(&showVersion, "version", false, "print version and exit")
 	pflag.StringVar(&glue.Config, "config", "", fmt.Sprintf("path to the config file (default: %s)", daemon.DefaultConfigPath))
 	pflag.StringVar(&clusterName, "cluster-name", "", "name of the current cluster")
+	pflag.StringVar(&removeCluster, "remove-cluster", "", "remove a cluster by UUID using database state only")
 
 	loadingRules := kclientcmd.NewDefaultClientConfigLoadingRules()
 	loadingRules.DefaultClientConfig = &kclientcmd.DefaultClientConfig
@@ -80,6 +82,41 @@ func main() {
 	}
 
 	klog.Infof("Starting Icinga for Kubernetes (%s)", internal.Version.Version)
+
+	log := klog.NewKlogr()
+
+	var cfg daemon.Config
+
+	if err := config.Load(&cfg, config.LoadOptions{
+		Flags:      glue,
+		EnvOptions: config.EnvOptions{Prefix: "ICINGA_FOR_KUBERNETES_"},
+	}); err != nil {
+		klog.Fatal(errors.Wrap(err, "can't create configuration"))
+	}
+
+	logs, err := logging.NewLoggingFromConfig("Icinga Kubernetes", cfg.Logging)
+	if err != nil {
+		klog.Fatal(errors.Wrap(err, "cannot configure logging"))
+	}
+
+	db, err := database.NewDbFromConfig(&cfg.Database, logs.GetChildLogger("database"), database.RetryConnectorCallbacks{})
+	if err != nil {
+		klog.Fatal("IGL_DATABASE: ", err)
+	}
+
+	dbLog := log.WithName("database")
+	kdb, err := kdatabase.NewFromSqlxDb(&cfg.Database, dbLog, db.DB)
+	if err != nil {
+		klog.Fatal(err)
+	}
+
+	if removeCluster != "" {
+		if err := runClusterRemoval(context.Background(), kdb, removeCluster); err != nil {
+			klog.Fatal(err)
+		}
+
+		return
+	}
 
 	kconfig, err := kclientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, overrides).ClientConfig()
 	if err != nil {
@@ -102,33 +139,6 @@ func main() {
 	}
 
 	klog.Infof("Connected to %s", kconfig.Host)
-
-	log := klog.NewKlogr()
-
-	var cfg daemon.Config
-
-	if err = config.Load(&cfg, config.LoadOptions{
-		Flags:      glue,
-		EnvOptions: config.EnvOptions{Prefix: "ICINGA_FOR_KUBERNETES_"},
-	}); err != nil {
-		klog.Fatal(errors.Wrap(err, "can't create configuration"))
-	}
-
-	logs, err := logging.NewLoggingFromConfig("Icinga Kubernetes", cfg.Logging)
-	if err != nil {
-		klog.Fatal(errors.Wrap(err, "cannot configure logging"))
-	}
-
-	db, err := database.NewDbFromConfig(&cfg.Database, logs.GetChildLogger("database"), database.RetryConnectorCallbacks{})
-	if err != nil {
-		klog.Fatal("IGL_DATABASE: ", err)
-	}
-
-	dbLog := log.WithName("database")
-	kdb, err := kdatabase.NewFromSqlxDb(&cfg.Database, dbLog, db.DB)
-	if err != nil {
-		klog.Fatal(err)
-	}
 
 	// When started by systemd, NOTIFY_SOCKET is set by systemd for Type=notify
 	// supervised services, which was the default setting for the Icinga for Kubernetes
@@ -689,6 +699,26 @@ func main() {
 	if err := g.Wait(); err != nil {
 		klog.Fatal(err)
 	}
+}
+
+func runClusterRemoval(ctx context.Context, kdb *kdatabase.Database, clusterUuidText string) error {
+	parsedUuid, err := uuid.Parse(clusterUuidText)
+	if err != nil {
+		return errors.Wrapf(err, "invalid cluster UUID %q", clusterUuidText)
+	}
+
+	if !kdb.Connect() {
+		return errors.New("cannot connect to database")
+	}
+
+	clusterUuid := types.UUID{UUID: parsedUuid}
+	if err := internal.RemoveCluster(ctx, kdb, clusterUuid); err != nil {
+		return errors.Wrapf(err, "cannot remove cluster %s", clusterUuid.String())
+	}
+
+	klog.Infof("Removed cluster %s", clusterUuid.String())
+
+	return nil
 }
 
 // dbHasSchema queries via db whether the database dbName has a table named "kubernetes_schema".
