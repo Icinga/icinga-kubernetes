@@ -35,10 +35,6 @@ func NewSync(
 	}
 }
 
-func shouldPurgeDeleted(with *Features) bool {
-	return !with.NoDelete() && with.DeletedRetention() != 0
-}
-
 func (s *Sync) Run(ctx context.Context, features ...Feature) error {
 	controller := NewController(s.informer, s.log.WithName("controller"))
 
@@ -57,7 +53,7 @@ func (s *Sync) Run(ctx context.Context, features ...Feature) error {
 		return s.sync(ctx, controller, synced, with)
 	})
 
-	if shouldPurgeDeleted(with) {
+	if !with.NoDelete() && with.DeletedRetention() != 0 {
 		clusterUuid := cluster.ClusterUuidFromContext(ctx)
 		g.Go(func() error {
 			return s.db.PeriodicPurgeDeleted(
@@ -72,10 +68,6 @@ func (s *Sync) Run(ctx context.Context, features ...Feature) error {
 	return g.Wait()
 }
 
-func buildWarmupQuery(base string) string {
-	return base + ` WHERE cluster_uuid=:cluster_uuid AND deleted IS NULL`
-}
-
 // warmup returns the UUIDs of the entities already synced to the database,
 // keyed the way the informer keys its store, so that deleteVanished() can tell
 // which of them are gone from the cluster.
@@ -83,7 +75,7 @@ func (s *Sync) warmup(ctx context.Context) (map[string]types.UUID, error) {
 	g, ctx := errgroup.WithContext(ctx)
 
 	meta := &schemav1.Meta{ClusterUuid: cluster.ClusterUuidFromContext(ctx)}
-	query := buildWarmupQuery(s.db.BuildSelectStmt(s.factory(), meta))
+	query := s.db.BuildSelectStmt(s.factory(), meta) + ` WHERE cluster_uuid=:cluster_uuid AND deleted IS NULL`
 
 	entities, errs := s.db.YieldAll(ctx, func() (any, error) {
 		return s.factory(), nil

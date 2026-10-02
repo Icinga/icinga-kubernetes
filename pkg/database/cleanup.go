@@ -13,11 +13,12 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// CleanupStmt defines information needed to compose cleanup statements.
+// CleanupStmt defines information needed to perform periodic cleanup.
 type CleanupStmt struct {
-	Table  string
-	PK     string
-	Column string
+	Table   string
+	PK      string
+	Column  string
+	cleanup func(context.Context, time.Time) error
 }
 
 // Build assembles the cleanup statement for the specified database driver with the given limit.
@@ -183,36 +184,23 @@ func (db *Database) PeriodicPurgeDeleted(
 		return fmt.Errorf("deleted retention must be greater than zero, got %s", retention)
 	}
 
-	errs := make(chan error, 1)
-	defer close(errs)
-
-	periodic.Start(ctx, time.Hour, func(tick periodic.Tick) {
-		if err := db.purgeDeletedBefore(ctx, from, clusterUuid, tick.Time.Add(-retention)); err != nil {
-			select {
-			case errs <- err:
-			case <-ctx.Done():
-			}
-		}
-	}, periodic.Immediate()).Stop()
-
-	select {
-	case err := <-errs:
-		return err
-	case <-ctx.Done():
-		return ctx.Err()
-	}
+	return db.PeriodicCleanup(ctx, CleanupStmt{
+		cleanup: func(ctx context.Context, now time.Time) error {
+			return db.purgeDeletedBefore(ctx, from, clusterUuid, now.Add(-retention))
+		},
+	})
 }
 
 func (db *Database) PeriodicCleanup(ctx context.Context, stmt CleanupStmt) error {
 	errs := make(chan error, 1)
-	defer close(errs)
 
-	periodic.Start(ctx, time.Hour, func(tick periodic.Tick) {
-		olderThan := tick.Time.AddDate(0, 0, -1)
-
-		_, err := db.CleanupOlderThan(
-			ctx, stmt, 5000, olderThan,
-		)
+	defer periodic.Start(ctx, time.Hour, func(tick periodic.Tick) {
+		var err error
+		if stmt.cleanup != nil {
+			err = stmt.cleanup(ctx, tick.Time)
+		} else {
+			_, err = db.CleanupOlderThan(ctx, stmt, 5000, tick.Time.AddDate(0, 0, -1))
+		}
 
 		if err != nil {
 			select {

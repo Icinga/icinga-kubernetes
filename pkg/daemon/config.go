@@ -42,11 +42,7 @@ func (c *Config) Validate() error {
 		return err
 	}
 
-	return validateDeletedRetention(c.DeletedRetention)
-}
-
-func validateDeletedRetention(retention time.Duration) error {
-	if retention <= 0 {
+	if c.DeletedRetention <= 0 {
 		return errors.New("deleted retention must be greater than zero")
 	}
 

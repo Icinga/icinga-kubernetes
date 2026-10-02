@@ -2,7 +2,9 @@ package database
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"time"
 
 	ingdatabase "github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/strcase"
@@ -59,5 +61,34 @@ func TestPeriodicPurgeDeletedRejectsZeroRetention(t *testing.T) {
 	err := db.PeriodicPurgeDeleted(context.Background(), "pod", types.UUID{}, 0)
 	if err == nil {
 		t.Fatal("expected zero deleted retention to be rejected")
+	}
+}
+
+func TestPeriodicCleanupUsesCustomCleanup(t *testing.T) {
+	wantErr := errors.New("custom cleanup failure")
+	called := make(chan time.Time, 1)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	db := &Database{}
+	err := db.PeriodicCleanup(ctx, CleanupStmt{
+		cleanup: func(_ context.Context, now time.Time) error {
+			called <- now
+			return wantErr
+		},
+	})
+
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("custom cleanup error: got %v, want %v", err, wantErr)
+	}
+
+	select {
+	case now := <-called:
+		if now.IsZero() {
+			t.Fatal("custom cleanup received zero tick time")
+		}
+	default:
+		t.Fatal("custom cleanup callback was not called")
 	}
 }

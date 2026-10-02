@@ -12,12 +12,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-// BuildActiveResourceQuery builds the notification orphan-check query for
-// resources that are still active in Kubernetes.
-func BuildActiveResourceQuery(kind string, uuids []types.UUID) (string, []any, error) {
-	return sqlx.In(fmt.Sprintf("SELECT uuid FROM %s WHERE uuid IN (?) AND deleted IS NULL", kind), uuids)
-}
-
 func SyncNotificationsConfig(ctx context.Context, db *database.DB, config *notifications.Config, clusterUuid types.UUID) error {
 	_true := types.Bool{Bool: true, Valid: true}
 

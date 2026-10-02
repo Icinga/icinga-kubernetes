@@ -89,8 +89,6 @@ The configurations set by environment variables override the ones set by YAML.
 |-------------------|------------------------------------------------------------------------------------------------------------------------------------------------|
 | DELETED_RETENTION | **Optional.** How long soft-deleted Kubernetes resources remain in the database before physical purge. Must be greater than zero. Defaults to `24h`. |
 
-The full environment variable is `ICINGA_FOR_KUBERNETES_DELETED_RETENTION`.
-
 ## Logging Configuration
 
 | Env              | Description                                                                                                                                                              |
