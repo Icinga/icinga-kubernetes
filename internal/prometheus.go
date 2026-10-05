@@ -8,7 +8,7 @@ import (
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/internal/metrics"
-	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
+	"github.com/icinga/icinga-kubernetes/pkg/schema"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
@@ -21,22 +21,22 @@ func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *metrics.
 	_true := types.Bool{Bool: true, Valid: true}
 
 	if config.Url != "" {
-		toDb := []schemav1.Config{
-			{ClusterUuid: clusterUuid, Key: schemav1.ConfigKeyPrometheusUrl, Value: config.Url, Locked: _true},
+		toDb := []schema.Config{
+			{ClusterUuid: clusterUuid, Key: schema.ConfigKeyPrometheusUrl, Value: config.Url, Locked: _true},
 		}
 
 		if config.Insecure != "" {
 			toDb = append(
 				toDb,
-				schemav1.Config{ClusterUuid: clusterUuid, Key: schemav1.ConfigKeyPrometheusInsecure, Value: config.Insecure, Locked: _true},
+				schema.Config{ClusterUuid: clusterUuid, Key: schema.ConfigKeyPrometheusInsecure, Value: config.Insecure, Locked: _true},
 			)
 		}
 
 		if config.Username != "" {
 			toDb = append(
 				toDb,
-				schemav1.Config{ClusterUuid: clusterUuid, Key: schemav1.ConfigKeyPrometheusUsername, Value: config.Username, Locked: _true},
-				schemav1.Config{ClusterUuid: clusterUuid, Key: schemav1.ConfigKeyPrometheusPassword, Value: config.Password, Locked: _true},
+				schema.Config{ClusterUuid: clusterUuid, Key: schema.ConfigKeyPrometheusUsername, Value: config.Username, Locked: _true},
+				schema.Config{ClusterUuid: clusterUuid, Key: schema.ConfigKeyPrometheusPassword, Value: config.Password, Locked: _true},
 			)
 		}
 
@@ -45,7 +45,7 @@ func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *metrics.
 				ctx,
 				fmt.Sprintf(
 					`DELETE FROM %q WHERE "cluster_uuid" = ? AND "key" LIKE ? AND "locked" = ?`,
-					database.TableName(&schemav1.Config{}),
+					database.TableName(&schema.Config{}),
 				),
 				clusterUuid,
 				`prometheus.%`,
@@ -54,7 +54,7 @@ func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *metrics.
 				return errors.Wrap(err, "cannot delete Prometheus config")
 			}
 
-			stmt, _ := db.BuildUpsertStmt(schemav1.Config{})
+			stmt, _ := db.BuildUpsertStmt(schema.Config{})
 			if _, err := tx.NamedExecContext(ctx, stmt, toDb); err != nil {
 				return errors.Wrap(err, "cannot upsert Prometheus config")
 			}
@@ -69,7 +69,7 @@ func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *metrics.
 				ctx,
 				fmt.Sprintf(
 					`DELETE FROM %q WHERE "cluster_uuid" = ? AND "key" LIKE ? AND "locked" = ?`,
-					database.TableName(&schemav1.Config{}),
+					database.TableName(&schema.Config{}),
 				),
 				clusterUuid,
 				`prometheus.%`,
@@ -78,25 +78,25 @@ func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *metrics.
 				return errors.Wrap(err, "cannot delete Prometheus config")
 			}
 
-			rows, err := tx.QueryxContext(ctx, db.BuildSelectStmt(&schemav1.Config{}, &schemav1.Config{}))
+			rows, err := tx.QueryxContext(ctx, db.BuildSelectStmt(&schema.Config{}, &schema.Config{}))
 			if err != nil {
 				return errors.Wrap(err, "cannot fetch Prometheus config from DB")
 			}
 
 			for rows.Next() {
-				var r schemav1.Config
+				var r schema.Config
 				if err := rows.StructScan(&r); err != nil {
 					return errors.Wrap(err, "cannot fetch Prometheus config from DB")
 				}
 
 				switch r.Key {
-				case schemav1.ConfigKeyPrometheusUrl:
+				case schema.ConfigKeyPrometheusUrl:
 					config.Url = r.Value
-				case schemav1.ConfigKeyPrometheusInsecure:
+				case schema.ConfigKeyPrometheusInsecure:
 					config.Insecure = r.Value
-				case schemav1.ConfigKeyPrometheusUsername:
+				case schema.ConfigKeyPrometheusUsername:
 					config.Username = r.Value
-				case schemav1.ConfigKeyPrometheusPassword:
+				case schema.ConfigKeyPrometheusPassword:
 					config.Password = r.Value
 				}
 			}

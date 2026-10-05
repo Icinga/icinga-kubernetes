@@ -1,4 +1,4 @@
-package v1
+package schema
 
 import (
 	"github.com/icinga/icinga-go-library/database"
@@ -6,7 +6,7 @@ import (
 	"github.com/icinga/icinga-kubernetes/internal/kdatabase"
 )
 
-type Annotation struct {
+type Label struct {
 	kdatabase.EntityStub
 	Uuid         types.UUID
 	ResourceUuid types.UUID
@@ -14,6 +14,6 @@ type Annotation struct {
 	Value        string
 }
 
-func (a Annotation) ID() database.ID {
-	return a.Uuid
+func (l Label) ID() database.ID {
+	return l.Uuid
 }

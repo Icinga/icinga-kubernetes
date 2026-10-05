@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/icinga/icinga-go-library/types"
-	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
+	"github.com/icinga/icinga-kubernetes/pkg/schema"
 	kcorev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
@@ -43,9 +43,9 @@ func TestSyncDeleteVanished(t *testing.T) {
 	})
 
 	t.Run("DeletesOnlyTheVanished", func(t *testing.T) {
-		vanished := schemav1.EnsureUUID("9f1c6a4e-0e0a-4e2b-9a5f-000000000002")
+		vanished := schema.EnsureUUID("9f1c6a4e-0e0a-4e2b-9a5f-000000000002")
 		synced := map[string]types.UUID{
-			"default/existing": schemav1.EnsureUUID(existing.UID),
+			"default/existing": schema.EnsureUUID(existing.UID),
 			"default/vanished": vanished,
 		}
 

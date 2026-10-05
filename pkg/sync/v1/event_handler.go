@@ -5,7 +5,7 @@ import (
 
 	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-go-library/types"
-	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
+	"github.com/icinga/icinga-kubernetes/pkg/schema"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -55,9 +55,9 @@ func (e *EventHandler) enqueue(_type EventType, obj any, keyFunc cache.KeyFunc) 
 	var id types.UUID
 	switch v := obj.(type) {
 	case kmetav1.Object:
-		id = schemav1.EnsureUUID(v.GetUID())
+		id = schema.EnsureUUID(v.GetUID())
 	case cache.DeletedFinalStateUnknown:
-		id = schemav1.EnsureUUID(v.Obj.(kmetav1.Object).GetUID())
+		id = schema.EnsureUUID(v.Obj.(kmetav1.Object).GetUID())
 	default:
 		panic(fmt.Sprintf("unknown object type %#v", v))
 	}

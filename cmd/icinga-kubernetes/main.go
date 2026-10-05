@@ -31,7 +31,7 @@ import (
 	"github.com/icinga/icinga-kubernetes/internal/kdatabase"
 	"github.com/icinga/icinga-kubernetes/internal/metrics"
 	"github.com/icinga/icinga-kubernetes/internal/notifications"
-	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
+	"github.com/icinga/icinga-kubernetes/pkg/schema"
 	syncv1 "github.com/icinga/icinga-kubernetes/pkg/sync/v1"
 	k8sMysql "github.com/icinga/icinga-kubernetes/schema/mysql"
 	"github.com/jmoiron/sqlx"
@@ -260,9 +260,9 @@ func main() {
 		)
 	}
 
-	clusterInstance := &schemav1.Cluster{
-		Uuid: schemav1.EnsureUUID(ns.UID),
-		Name: schemav1.NewNullableString(clusterName),
+	clusterInstance := &schema.Cluster{
+		Uuid: schema.EnsureUUID(ns.UID),
+		Name: schema.NewNullableString(clusterName),
 	}
 
 	ctx = cluster.NewClusterUuidContext(ctx, clusterInstance.Uuid)
@@ -286,17 +286,17 @@ func main() {
 			kubernetesHeartbeat = tick.Time
 		}
 
-		instance := schemav1.Instance{
+		instance := schema.Instance{
 			Uuid:                types.UUID{UUID: instanceId},
 			ClusterUuid:         clusterInstance.Uuid,
 			Version:             internal.Version.Version,
-			KubernetesVersion:   schemav1.NewNullableString(kubernetesVersion),
+			KubernetesVersion:   schema.NewNullableString(kubernetesVersion),
 			KubernetesHeartbeat: types.UnixMilli(kubernetesHeartbeat),
 			KubernetesApiReachable: types.Bool{
 				Bool:  err == nil,
 				Valid: true,
 			},
-			Message:   schemav1.NewNullableString(err),
+			Message:   schema.NewNullableString(err),
 			Heartbeat: types.UnixMilli(tick.Time),
 		}
 
@@ -489,7 +489,7 @@ func main() {
 	}
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().Namespaces().Informer(), logs.GetChildLogger("namespaces"), schemav1.NewNamespace)
+		s := syncv1.NewSync(db, factory.Core().V1().Namespaces().Informer(), logs.GetChildLogger("namespaces"), schema.NewNamespace)
 
 		return s.Run(ctx)
 	})
@@ -498,7 +498,7 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().Nodes().Informer(), logs.GetChildLogger("nodes"), schemav1.NewNode)
+		s := syncv1.NewSync(db, factory.Core().V1().Nodes().Informer(), logs.GetChildLogger("nodes"), schema.NewNode)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -516,7 +516,7 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		schemav1.SyncContainers(
+		schema.SyncContainers(
 			ctx,
 			db,
 			g,
@@ -524,7 +524,7 @@ func main() {
 			cache.Multiplexers().Pods().DeleteEvents().Out(),
 		)
 
-		f := schemav1.NewPodFactory(clientset)
+		f := schema.NewPodFactory(clientset)
 		s := syncv1.NewSync(db, factory.Core().V1().Pods().Informer(), logs.GetChildLogger("pods"), f.New)
 
 		wg.Done()
@@ -538,7 +538,7 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Apps().V1().Deployments().Informer(), logs.GetChildLogger("deployments"), schemav1.NewDeployment)
+		s := syncv1.NewSync(db, factory.Apps().V1().Deployments().Informer(), logs.GetChildLogger("deployments"), schema.NewDeployment)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -556,7 +556,7 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Apps().V1().DaemonSets().Informer(), logs.GetChildLogger("daemon-sets"), schemav1.NewDaemonSet)
+		s := syncv1.NewSync(db, factory.Apps().V1().DaemonSets().Informer(), logs.GetChildLogger("daemon-sets"), schema.NewDaemonSet)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -574,7 +574,7 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Apps().V1().ReplicaSets().Informer(), logs.GetChildLogger("replica-sets"), schemav1.NewReplicaSet)
+		s := syncv1.NewSync(db, factory.Apps().V1().ReplicaSets().Informer(), logs.GetChildLogger("replica-sets"), schema.NewReplicaSet)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -592,7 +592,7 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Apps().V1().StatefulSets().Informer(), logs.GetChildLogger("stateful-sets"), schemav1.NewStatefulSet)
+		s := syncv1.NewSync(db, factory.Apps().V1().StatefulSets().Informer(), logs.GetChildLogger("stateful-sets"), schema.NewStatefulSet)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -609,7 +609,7 @@ func main() {
 	})
 
 	g.Go(func() error {
-		f := schemav1.NewServiceFactory(clientset)
+		f := schema.NewServiceFactory(clientset)
 		s := syncv1.NewSync(db, factory.Core().V1().Services().Informer(), logs.GetChildLogger("services"), f.NewService)
 
 		return s.Run(
@@ -619,54 +619,54 @@ func main() {
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Discovery().V1().EndpointSlices().Informer(), logs.GetChildLogger("endpoints"), schemav1.NewEndpointSlice)
+		s := syncv1.NewSync(db, factory.Discovery().V1().EndpointSlices().Informer(), logs.GetChildLogger("endpoints"), schema.NewEndpointSlice)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().Secrets().Informer(), logs.GetChildLogger("secrets"), schemav1.NewSecret)
+		s := syncv1.NewSync(db, factory.Core().V1().Secrets().Informer(), logs.GetChildLogger("secrets"), schema.NewSecret)
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().ConfigMaps().Informer(), logs.GetChildLogger("config-maps"), schemav1.NewConfigMap)
+		s := syncv1.NewSync(db, factory.Core().V1().ConfigMaps().Informer(), logs.GetChildLogger("config-maps"), schema.NewConfigMap)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Events().V1().Events().Informer(), logs.GetChildLogger("events"), schemav1.NewEvent)
+		s := syncv1.NewSync(db, factory.Events().V1().Events().Informer(), logs.GetChildLogger("events"), schema.NewEvent)
 
 		return s.Run(ctx, syncv1.WithNoDelete(), syncv1.WithNoWarmup())
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().PersistentVolumeClaims().Informer(), logs.GetChildLogger("pvcs"), schemav1.NewPvc)
+		s := syncv1.NewSync(db, factory.Core().V1().PersistentVolumeClaims().Informer(), logs.GetChildLogger("pvcs"), schema.NewPvc)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().PersistentVolumes().Informer(), logs.GetChildLogger("persistent-volumes"), schemav1.NewPersistentVolume)
+		s := syncv1.NewSync(db, factory.Core().V1().PersistentVolumes().Informer(), logs.GetChildLogger("persistent-volumes"), schema.NewPersistentVolume)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Batch().V1().Jobs().Informer(), logs.GetChildLogger("jobs"), schemav1.NewJob)
+		s := syncv1.NewSync(db, factory.Batch().V1().Jobs().Informer(), logs.GetChildLogger("jobs"), schema.NewJob)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Batch().V1().CronJobs().Informer(), logs.GetChildLogger("cron-jobs"), schemav1.NewCronJob)
+		s := syncv1.NewSync(db, factory.Batch().V1().CronJobs().Informer(), logs.GetChildLogger("cron-jobs"), schema.NewCronJob)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Networking().V1().Ingresses().Informer(), logs.GetChildLogger("ingresses"), schemav1.NewIngress)
+		s := syncv1.NewSync(db, factory.Networking().V1().Ingresses().Informer(), logs.GetChildLogger("ingresses"), schema.NewIngress)
 
 		return s.Run(ctx)
 	})
@@ -743,7 +743,7 @@ func removeCluster(ctx context.Context, db *kdatabase.DB, logger *logging.Logger
 	// remove the resources an interrupted removal left behind. Data of
 	// resources that are already removed, such as pod conditions, can't be
 	// found anymore and stays in the database.
-	selectQuery := db.Rebind(db.BuildSelectStmt(&schemav1.Cluster{}, uuidColumn{}) + ` WHERE "uuid" = ?`)
+	selectQuery := db.Rebind(db.BuildSelectStmt(&schema.Cluster{}, uuidColumn{}) + ` WHERE "uuid" = ?`)
 
 	var clusterUuids []types.UUID
 	if err := db.SelectContext(ctx, &clusterUuids, selectQuery, clusterUuid); err != nil {
@@ -758,10 +758,10 @@ func removeCluster(ctx context.Context, db *kdatabase.DB, logger *logging.Logger
 	}
 
 	// Pods don't cascade deletes to their containers, so remove the containers first.
-	for _, container := range []database.Entity{&schemav1.Container{}, &schemav1.InitContainer{}, &schemav1.SidecarContainer{}} {
+	for _, container := range []database.Entity{&schema.Container{}, &schema.InitContainer{}, &schema.SidecarContainer{}} {
 		query := db.Rebind(db.BuildSelectStmt(container, uuidColumn{}) + fmt.Sprintf(
 			` WHERE "pod_uuid" IN (SELECT "uuid" FROM %q WHERE "cluster_uuid"=?)`,
-			database.TableName(&schemav1.Pod{}),
+			database.TableName(&schema.Pod{}),
 		))
 
 		// Scanned into []any so that the UUIDs can feed DeleteStreamed's <-chan any.
@@ -775,7 +775,7 @@ func removeCluster(ctx context.Context, db *kdatabase.DB, logger *logging.Logger
 		}
 	}
 
-	if err := db.DeleteStreamedCascading(ctx, &schemav1.Cluster{}, utils.ChanFromSlice([]any{clusterUuid})); err != nil {
+	if err := db.DeleteStreamedCascading(ctx, &schema.Cluster{}, utils.ChanFromSlice([]any{clusterUuid})); err != nil {
 		return errors.Wrap(err, "cannot remove cluster rows")
 	}
 
@@ -822,13 +822,13 @@ func SyncServicePods(ctx context.Context, db *kdatabase.DB, serviceList corev1.S
 					return nil
 				}
 
-				services, err := serviceList.Lister().Services(pod.(*schemav1.Pod).Namespace).List(labels.NewSelector())
+				services, err := serviceList.Lister().Services(pod.(*schema.Pod).Namespace).List(labels.NewSelector())
 				if err != nil {
 					return err
 				}
 
 				podLabels := make(labels.Set)
-				for _, label := range pod.(*schemav1.Pod).Labels {
+				for _, label := range pod.(*schema.Pod).Labels {
 					podLabels[label.Name] = label.Value
 				}
 
@@ -845,9 +845,9 @@ func SyncServicePods(ctx context.Context, db *kdatabase.DB, serviceList corev1.S
 
 					if selector.Matches(podLabels) {
 						select {
-						case servicePods <- schemav1.ServicePod{
-							ServiceUuid: schemav1.EnsureUUID(service.UID),
-							PodUuid:     pod.(*schemav1.Pod).Uuid,
+						case servicePods <- schema.ServicePod{
+							ServiceUuid: schema.EnsureUUID(service.UID),
+							PodUuid:     pod.(*schema.Pod).Uuid,
 						}:
 						case <-ctx.Done():
 							return ctx.Err()
@@ -875,12 +875,12 @@ func SyncServicePods(ctx context.Context, db *kdatabase.DB, serviceList corev1.S
 					return nil
 				}
 
-				if len(service.(*schemav1.Service).Selectors) == 0 {
+				if len(service.(*schema.Service).Selectors) == 0 {
 					continue
 				}
 
 				labelSelector := &v1.LabelSelector{MatchLabels: map[string]string{}}
-				for _, selector := range service.(*schemav1.Service).Selectors {
+				for _, selector := range service.(*schema.Service).Selectors {
 					labelSelector.MatchLabels[selector.Name] = selector.Value
 				}
 
@@ -889,16 +889,16 @@ func SyncServicePods(ctx context.Context, db *kdatabase.DB, serviceList corev1.S
 					return err
 				}
 
-				pods, err := podList.Lister().Pods(service.(*schemav1.Service).Namespace).List(selector)
+				pods, err := podList.Lister().Pods(service.(*schema.Service).Namespace).List(selector)
 				if err != nil {
 					return err
 				}
 
 				for _, pod := range pods {
 					select {
-					case servicePods <- schemav1.ServicePod{
-						ServiceUuid: service.(*schemav1.Service).Uuid,
-						PodUuid:     schemav1.EnsureUUID(pod.UID),
+					case servicePods <- schema.ServicePod{
+						ServiceUuid: service.(*schema.Service).Uuid,
+						PodUuid:     schema.EnsureUUID(pod.UID),
 					}:
 					case <-ctx.Done():
 						return ctx.Err()

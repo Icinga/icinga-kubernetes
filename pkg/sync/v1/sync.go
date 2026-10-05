@@ -9,7 +9,7 @@ import (
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/internal/cluster"
 	"github.com/icinga/icinga-kubernetes/internal/kdatabase"
-	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
+	"github.com/icinga/icinga-kubernetes/pkg/schema"
 	"golang.org/x/sync/errgroup"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
@@ -19,14 +19,14 @@ type Sync struct {
 	db       *kdatabase.DB
 	informer cache.SharedIndexInformer
 	log      *logging.Logger
-	factory  func() schemav1.Resource
+	factory  func() schema.Resource
 }
 
 func NewSync(
 	db *kdatabase.DB,
 	informer cache.SharedIndexInformer,
 	log *logging.Logger,
-	factory func() schemav1.Resource,
+	factory func() schema.Resource,
 ) *Sync {
 	return &Sync{
 		db:       db,
@@ -58,7 +58,7 @@ func (s *Sync) Run(ctx context.Context, features ...Feature) error {
 func (s *Sync) warmup(ctx context.Context) (map[string]types.UUID, error) {
 	g, ctx := errgroup.WithContext(ctx)
 
-	meta := &schemav1.Meta{ClusterUuid: cluster.ClusterUuidFromContext(ctx)}
+	meta := &schema.Meta{ClusterUuid: cluster.ClusterUuidFromContext(ctx)}
 	query := s.db.BuildSelectStmt(s.factory(), meta) + ` WHERE "cluster_uuid"=:cluster_uuid`
 
 	entities, errs := s.db.YieldAll(ctx, func() database.Entity { return s.factory() }, query, meta)
@@ -83,7 +83,7 @@ func (s *Sync) warmup(ctx context.Context) (map[string]types.UUID, error) {
 					return err
 				}
 
-				synced[key] = schemav1.EnsureUUID(object.GetUID())
+				synced[key] = schema.EnsureUUID(object.GetUID())
 			case <-ctx.Done():
 				return ctx.Err()
 			}
@@ -118,7 +118,7 @@ func (s *Sync) deleteVanished(ctx context.Context, sink *Sink, synced map[string
 			return err
 		}
 
-		if exists && schemav1.EnsureUUID(obj.(kmetav1.Object).GetUID()) == id {
+		if exists && schema.EnsureUUID(obj.(kmetav1.Object).GetUID()) == id {
 			continue
 		}
 

@@ -14,7 +14,7 @@ import (
 	"github.com/icinga/icinga-go-library/periodic"
 	"github.com/icinga/icinga-go-library/retry"
 	"github.com/icinga/icinga-go-library/types"
-	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
+	"github.com/icinga/icinga-kubernetes/pkg/schema"
 	"github.com/pkg/errors"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
@@ -420,7 +420,7 @@ func (pms *PromMetricSync) Nodes(ctx context.Context, informer kcache.SharedInde
 	defer periodic.Start(ctx, 1*time.Hour, func(tick periodic.Tick) {
 		for _, item := range informer.GetStore().List() {
 			node := item.(*kcorev1.Node)
-			uuid := schemav1.EnsureUUID(node.UID)
+			uuid := schema.EnsureUUID(node.UID)
 			nodes.Store(node.Name, uuid)
 			for _, address := range node.Status.Addresses {
 				if address.Type == kcorev1.NodeInternalIP {
@@ -466,7 +466,7 @@ func (pms *PromMetricSync) Nodes(ctx context.Context, informer kcache.SharedInde
 					name = string(res.Metric[query.nameLabel])
 				}
 
-				newNodeMetric := &schemav1.PrometheusNodeMetric{
+				newNodeMetric := &schema.PrometheusNodeMetric{
 					NodeUuid:  uuid.(types.UUID),
 					Timestamp: (res.Timestamp.UnixNano() - res.Timestamp.UnixNano()%(60*1000000000)) / 1000000,
 					Category:  query.metricCategory,
@@ -521,8 +521,8 @@ func (pms *PromMetricSync) Pods(ctx context.Context, informer kcache.SharedIndex
 					name = string(res.Metric[query.nameLabel])
 				}
 
-				newPodMetric := &schemav1.PrometheusPodMetric{
-					PodUuid:   schemav1.EnsureUUID(pod.UID),
+				newPodMetric := &schema.PrometheusPodMetric{
+					PodUuid:   schema.EnsureUUID(pod.UID),
 					Timestamp: (res.Timestamp.UnixNano() - res.Timestamp.UnixNano()%(60*1000000000)) / 1000000,
 					Category:  query.metricCategory,
 					Name:      name,
@@ -568,7 +568,7 @@ func (pms *PromMetricSync) Containers(ctx context.Context, informer kcache.Share
 					name = string(res.Metric[query.nameLabel])
 				}
 
-				newContainerMetric := &schemav1.PrometheusContainerMetric{
+				newContainerMetric := &schema.PrometheusContainerMetric{
 					// TODO uuid
 					Timestamp: (res.Timestamp.UnixNano() - res.Timestamp.UnixNano()%(60*1000000000)) / 1000000,
 					Category:  query.metricCategory,
@@ -615,7 +615,7 @@ func (pms *PromMetricSync) Clusters(ctx context.Context, informer kcache.SharedI
 					name = string(res.Metric[query.nameLabel])
 				}
 
-				newClusterMetric := &schemav1.PrometheusClusterMetric{
+				newClusterMetric := &schema.PrometheusClusterMetric{
 					// TODO uuid
 					Timestamp: (res.Timestamp.UnixNano() - res.Timestamp.UnixNano()%(60*1000000000)) / 1000000,
 					Category:  query.metricCategory,
