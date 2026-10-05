@@ -28,7 +28,7 @@ import (
 	"github.com/icinga/icinga-kubernetes/internal/cluster"
 	"github.com/icinga/icinga-kubernetes/internal/com"
 	"github.com/icinga/icinga-kubernetes/internal/daemon"
-	"github.com/icinga/icinga-kubernetes/pkg/kdatabase"
+	"github.com/icinga/icinga-kubernetes/internal/kdatabase"
 	"github.com/icinga/icinga-kubernetes/pkg/metrics"
 	"github.com/icinga/icinga-kubernetes/pkg/notifications"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"

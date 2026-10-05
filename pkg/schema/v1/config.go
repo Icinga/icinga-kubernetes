@@ -3,7 +3,7 @@ package v1
 import (
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-kubernetes/pkg/kdatabase"
+	"github.com/icinga/icinga-kubernetes/internal/kdatabase"
 )
 
 // Config represents a single key => value pair database config entry.

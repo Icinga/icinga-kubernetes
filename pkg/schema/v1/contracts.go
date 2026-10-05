@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-kubernetes/pkg/kdatabase"
+	"github.com/icinga/icinga-kubernetes/internal/kdatabase"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ktypes "k8s.io/apimachinery/pkg/types"
 )
