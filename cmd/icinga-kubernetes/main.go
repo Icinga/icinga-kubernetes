@@ -25,7 +25,7 @@ import (
 	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/internal"
 	"github.com/icinga/icinga-kubernetes/internal/cache"
-	"github.com/icinga/icinga-kubernetes/pkg/cluster"
+	"github.com/icinga/icinga-kubernetes/internal/cluster"
 	kcom "github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/icinga/icinga-kubernetes/pkg/daemon"
 	"github.com/icinga/icinga-kubernetes/pkg/kdatabase"
