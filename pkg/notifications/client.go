@@ -12,7 +12,7 @@ import (
 	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-go-library/notifications/source"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-kubernetes/pkg/com"
+	"github.com/icinga/icinga-kubernetes/internal/com"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )

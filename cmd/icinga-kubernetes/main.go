@@ -26,7 +26,7 @@ import (
 	"github.com/icinga/icinga-kubernetes/internal"
 	"github.com/icinga/icinga-kubernetes/internal/cache"
 	"github.com/icinga/icinga-kubernetes/internal/cluster"
-	kcom "github.com/icinga/icinga-kubernetes/pkg/com"
+	"github.com/icinga/icinga-kubernetes/internal/com"
 	"github.com/icinga/icinga-kubernetes/pkg/daemon"
 	"github.com/icinga/icinga-kubernetes/pkg/kdatabase"
 	"github.com/icinga/icinga-kubernetes/pkg/metrics"
@@ -462,10 +462,10 @@ func main() {
 	}
 
 	if cfg.Prometheus.Url != "" {
-		var transport http.RoundTripper = kcom.NewTransport(cfg.Prometheus.Insecure == "true")
+		var transport http.RoundTripper = com.NewTransport(cfg.Prometheus.Insecure == "true")
 
 		if cfg.Prometheus.Username != "" {
-			transport = kcom.NewBasicAuthTransport(transport, cfg.Prometheus.Username, cfg.Prometheus.Password)
+			transport = com.NewBasicAuthTransport(transport, cfg.Prometheus.Username, cfg.Prometheus.Password)
 		}
 
 		promClient, err := promapi.NewClient(promapi.Config{
