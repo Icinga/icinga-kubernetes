@@ -9,7 +9,7 @@ import (
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/internal/kdatabase"
-	"github.com/icinga/icinga-kubernetes/pkg/notifications"
+	"github.com/icinga/icinga-kubernetes/internal/notifications"
 	kappsv1 "k8s.io/api/apps/v1"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
