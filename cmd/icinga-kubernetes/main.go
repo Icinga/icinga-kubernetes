@@ -32,7 +32,7 @@ import (
 	"github.com/icinga/icinga-kubernetes/internal/metrics"
 	"github.com/icinga/icinga-kubernetes/internal/notifications"
 	"github.com/icinga/icinga-kubernetes/internal/schema"
-	ksync "github.com/icinga/icinga-kubernetes/pkg/sync"
+	ksync "github.com/icinga/icinga-kubernetes/internal/sync"
 	k8sMysql "github.com/icinga/icinga-kubernetes/schema/mysql"
 	"github.com/jmoiron/sqlx"
 	"github.com/okzk/sdnotify"
