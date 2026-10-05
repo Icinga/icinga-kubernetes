@@ -3,8 +3,8 @@ package v1
 import (
 	"context"
 
-	"github.com/go-logr/logr"
 	"github.com/icinga/icinga-go-library/com"
+	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/cluster"
 	"github.com/icinga/icinga-kubernetes/pkg/database"
@@ -17,14 +17,14 @@ import (
 type Sync struct {
 	db       *database.Database
 	informer cache.SharedIndexInformer
-	log      logr.Logger
+	log      *logging.Logger
 	factory  func() schemav1.Resource
 }
 
 func NewSync(
 	db *database.Database,
 	informer cache.SharedIndexInformer,
-	log logr.Logger,
+	log *logging.Logger,
 	factory func() schemav1.Resource,
 ) *Sync {
 	return &Sync{
@@ -36,7 +36,7 @@ func NewSync(
 }
 
 func (s *Sync) Run(ctx context.Context, features ...Feature) error {
-	controller := NewController(s.informer, s.log.WithName("controller"))
+	controller := NewController(s.informer, s.log)
 
 	with := NewFeatures(features...)
 

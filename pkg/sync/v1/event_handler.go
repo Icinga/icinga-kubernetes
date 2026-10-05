@@ -3,9 +3,10 @@ package v1
 import (
 	"fmt"
 
-	"github.com/go-logr/logr"
+	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-go-library/types"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
+	"go.uber.org/zap"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -13,7 +14,7 @@ import (
 
 type EventHandler struct {
 	queue workqueue.TypedInterface[EventHandlerItem]
-	log   logr.Logger
+	log   *logging.Logger
 }
 
 type EventHandlerItem struct {
@@ -28,7 +29,7 @@ const EventAdd EventType = "ADDED"
 const EventUpdate EventType = "UPDATED"
 const EventDelete EventType = "DELETED"
 
-func NewEventHandler(queue workqueue.TypedInterface[EventHandlerItem], log logr.Logger) cache.ResourceEventHandler {
+func NewEventHandler(queue workqueue.TypedInterface[EventHandlerItem], log *logging.Logger) cache.ResourceEventHandler {
 	return &EventHandler{queue: queue, log: log}
 }
 
@@ -47,7 +48,7 @@ func (e *EventHandler) OnDelete(obj any) {
 func (e *EventHandler) enqueue(_type EventType, obj any, keyFunc cache.KeyFunc) {
 	key, err := keyFunc(obj)
 	if err != nil {
-		e.log.Error(err, "cannot make key")
+		e.log.Errorw("Cannot make key", zap.Error(err))
 
 		return
 	}
