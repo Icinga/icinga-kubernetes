@@ -24,7 +24,7 @@ import (
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/internal"
-	cachev1 "github.com/icinga/icinga-kubernetes/internal/cache/v1"
+	"github.com/icinga/icinga-kubernetes/internal/cache"
 	"github.com/icinga/icinga-kubernetes/pkg/cluster"
 	kcom "github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/icinga/icinga-kubernetes/pkg/daemon"
@@ -421,27 +421,27 @@ func main() {
 		}, periodic.Immediate()).Stop()
 
 		g.Go(func() error {
-			return nclient.Stream(ctx, cachev1.Multiplexers().Nodes().UpsertEvents().Out())
+			return nclient.Stream(ctx, cache.Multiplexers().Nodes().UpsertEvents().Out())
 		})
 
 		g.Go(func() error {
-			return nclient.Stream(ctx, cachev1.Multiplexers().DaemonSets().UpsertEvents().Out())
+			return nclient.Stream(ctx, cache.Multiplexers().DaemonSets().UpsertEvents().Out())
 		})
 
 		g.Go(func() error {
-			return nclient.Stream(ctx, cachev1.Multiplexers().StatefulSets().UpsertEvents().Out())
+			return nclient.Stream(ctx, cache.Multiplexers().StatefulSets().UpsertEvents().Out())
 		})
 
 		g.Go(func() error {
-			return nclient.Stream(ctx, cachev1.Multiplexers().Deployments().UpsertEvents().Out())
+			return nclient.Stream(ctx, cache.Multiplexers().Deployments().UpsertEvents().Out())
 		})
 
 		g.Go(func() error {
-			return nclient.Stream(ctx, cachev1.Multiplexers().ReplicaSets().UpsertEvents().Out())
+			return nclient.Stream(ctx, cache.Multiplexers().ReplicaSets().UpsertEvents().Out())
 		})
 
 		g.Go(func() error {
-			return nclient.Stream(ctx, cachev1.Multiplexers().Pods().UpsertEvents().Out())
+			return nclient.Stream(ctx, cache.Multiplexers().Pods().UpsertEvents().Out())
 		})
 	}
 
@@ -504,8 +504,8 @@ func main() {
 		if cfg.Notifications.Url != "" {
 			forwardForNotifications = append(
 				forwardForNotifications,
-				syncv1.WithOnUpsert(database.OnSuccessSendTo(cachev1.Multiplexers().Nodes().UpsertEvents().In())),
-				syncv1.WithOnDelete(database.OnSuccessSendTo(cachev1.Multiplexers().Nodes().DeleteEvents().In())),
+				syncv1.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().Nodes().UpsertEvents().In())),
+				syncv1.WithOnDelete(database.OnSuccessSendTo(cache.Multiplexers().Nodes().DeleteEvents().In())),
 			)
 		}
 
@@ -520,8 +520,8 @@ func main() {
 			ctx,
 			db,
 			g,
-			cachev1.Multiplexers().Pods().UpsertEvents().Out(),
-			cachev1.Multiplexers().Pods().DeleteEvents().Out(),
+			cache.Multiplexers().Pods().UpsertEvents().Out(),
+			cache.Multiplexers().Pods().DeleteEvents().Out(),
 		)
 
 		f := schemav1.NewPodFactory(clientset)
@@ -531,8 +531,8 @@ func main() {
 
 		return s.Run(
 			ctx,
-			syncv1.WithOnUpsert(database.OnSuccessSendTo(cachev1.Multiplexers().Pods().UpsertEvents().In())),
-			syncv1.WithOnDelete(database.OnSuccessSendTo(cachev1.Multiplexers().Pods().DeleteEvents().In())),
+			syncv1.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().Pods().UpsertEvents().In())),
+			syncv1.WithOnDelete(database.OnSuccessSendTo(cache.Multiplexers().Pods().DeleteEvents().In())),
 		)
 	})
 
@@ -544,8 +544,8 @@ func main() {
 		if cfg.Notifications.Url != "" {
 			forwardForNotifications = append(
 				forwardForNotifications,
-				syncv1.WithOnUpsert(database.OnSuccessSendTo(cachev1.Multiplexers().Deployments().UpsertEvents().In())),
-				syncv1.WithOnDelete(database.OnSuccessSendTo(cachev1.Multiplexers().Deployments().DeleteEvents().In())),
+				syncv1.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().Deployments().UpsertEvents().In())),
+				syncv1.WithOnDelete(database.OnSuccessSendTo(cache.Multiplexers().Deployments().DeleteEvents().In())),
 			)
 		}
 
@@ -562,8 +562,8 @@ func main() {
 		if cfg.Notifications.Url != "" {
 			forwardForNotifications = append(
 				forwardForNotifications,
-				syncv1.WithOnUpsert(database.OnSuccessSendTo(cachev1.Multiplexers().DaemonSets().UpsertEvents().In())),
-				syncv1.WithOnDelete(database.OnSuccessSendTo(cachev1.Multiplexers().DaemonSets().DeleteEvents().In())),
+				syncv1.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().DaemonSets().UpsertEvents().In())),
+				syncv1.WithOnDelete(database.OnSuccessSendTo(cache.Multiplexers().DaemonSets().DeleteEvents().In())),
 			)
 		}
 
@@ -580,8 +580,8 @@ func main() {
 		if cfg.Notifications.Url != "" {
 			forwardForNotifications = append(
 				forwardForNotifications,
-				syncv1.WithOnUpsert(database.OnSuccessSendTo(cachev1.Multiplexers().ReplicaSets().UpsertEvents().In())),
-				syncv1.WithOnDelete(database.OnSuccessSendTo(cachev1.Multiplexers().ReplicaSets().DeleteEvents().In())),
+				syncv1.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().ReplicaSets().UpsertEvents().In())),
+				syncv1.WithOnDelete(database.OnSuccessSendTo(cache.Multiplexers().ReplicaSets().DeleteEvents().In())),
 			)
 		}
 
@@ -598,8 +598,8 @@ func main() {
 		if cfg.Notifications.Url != "" {
 			forwardForNotifications = append(
 				forwardForNotifications,
-				syncv1.WithOnUpsert(database.OnSuccessSendTo(cachev1.Multiplexers().StatefulSets().UpsertEvents().In())),
-				syncv1.WithOnDelete(database.OnSuccessSendTo(cachev1.Multiplexers().StatefulSets().DeleteEvents().In())),
+				syncv1.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().StatefulSets().UpsertEvents().In())),
+				syncv1.WithOnDelete(database.OnSuccessSendTo(cache.Multiplexers().StatefulSets().DeleteEvents().In())),
 			)
 		}
 
@@ -614,7 +614,7 @@ func main() {
 
 		return s.Run(
 			ctx,
-			syncv1.WithOnUpsert(database.OnSuccessSendTo(cachev1.Multiplexers().Services().UpsertEvents().In())),
+			syncv1.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().Services().UpsertEvents().In())),
 		)
 	})
 
@@ -676,7 +676,7 @@ func main() {
 
 		logger.Debug("Starting multiplexers")
 
-		return cachev1.Multiplexers().Run(ctx)
+		return cache.Multiplexers().Run(ctx)
 	})
 
 	cleanup := kdatabase.NewCleanup(db)
@@ -809,7 +809,7 @@ func SyncServicePods(ctx context.Context, db *kdatabase.DB, serviceList corev1.S
 
 	g.Go(func() error {
 		// Out() panics once the multiplexer has started, so subscribe before waiting for the cache.
-		ch := cachev1.Multiplexers().Pods().UpsertEvents().Out()
+		ch := cache.Multiplexers().Pods().UpsertEvents().Out()
 
 		if !kcache.WaitForCacheSync(ctx.Done(), serviceList.Informer().HasSynced) {
 			return ctx.Err()
@@ -862,7 +862,7 @@ func SyncServicePods(ctx context.Context, db *kdatabase.DB, serviceList corev1.S
 
 	g.Go(func() error {
 		// Out() panics once the multiplexer has started, so subscribe before waiting for the cache.
-		ch := cachev1.Multiplexers().Services().UpsertEvents().Out()
+		ch := cache.Multiplexers().Services().UpsertEvents().Out()
 
 		if !kcache.WaitForCacheSync(ctx.Done(), podList.Informer().HasSynced) {
 			return ctx.Err()
