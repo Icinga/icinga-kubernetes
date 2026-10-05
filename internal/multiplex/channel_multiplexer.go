@@ -1,7 +1,8 @@
-package internal
+package multiplex
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
 
 	"golang.org/x/sync/errgroup"
@@ -10,55 +11,55 @@ import (
 // ChannelMultiplexer is a multiplexer for channels of variable types.
 // It fans out all input channels to all output channels.
 type ChannelMultiplexer[T any] interface {
-	// In adds the given input channel reading.
+	// In returns a new input channel. The sender is responsible for closing it.
 	In() chan<- T
 
-	AddIn(chan T)
+	// AddIn registers the given input channel. The sender is responsible for closing it.
+	AddIn(<-chan T)
 
 	// Out returns a new output channel that receives from all input channels.
+	// Run closes it on return.
 	Out() <-chan T
 
-	// AddOut registers the given output channel to receive from all input channels.
-	AddOut(chan T)
+	// AddOut registers the given output channel to receive from all input
+	// channels. Run doesn't close it, as other senders may share it, so close
+	// it only once Run has returned.
+	AddOut(chan<- T)
 
 	// Run starts multiplexing of all input channels to all output channels.
+	// It returns once the context is done or all input channels are closed.
+	// It panics if there are output channels but no input channels.
 	// Once run is called, cannot be modified and will panic.
 	Run(context.Context) error
 }
 
-// NewChannelMux returns a new ChannelMultiplexer initialized with at least one input channel.
-func NewChannelMux[T any](inChannels ...chan T) ChannelMultiplexer[T] {
+// NewChannelMux returns a new ChannelMultiplexer reading from the given input channels.
+func NewChannelMux[T any](inChannels ...<-chan T) ChannelMultiplexer[T] {
 	return &channelMultiplexer[T]{
-		inAdded: inChannels,
+		in: inChannels,
 	}
 }
 
 type channelMultiplexer[T any] struct {
-	in       []chan T
-	inAdded  []chan T
-	out      []chan T
-	outAdded []chan T
+	in       []<-chan T
+	out      []chan<- T
+	outAdded []chan<- T
 	started  atomic.Bool
 }
 
 func (mux *channelMultiplexer[T]) In() chan<- T {
-	if mux.started.Load() {
-		panic("channelMultiplexer already started")
-	}
-
 	channel := make(chan T)
-
-	mux.in = append(mux.in, channel)
+	mux.AddIn(channel)
 
 	return channel
 }
 
-func (mux *channelMultiplexer[T]) AddIn(channel chan T) {
+func (mux *channelMultiplexer[T]) AddIn(channel <-chan T) {
 	if mux.started.Load() {
 		panic("channelMultiplexer already started")
 	}
 
-	mux.inAdded = append(mux.inAdded, channel)
+	mux.in = append(mux.in, channel)
 }
 
 func (mux *channelMultiplexer[T]) Out() <-chan T {
@@ -72,7 +73,7 @@ func (mux *channelMultiplexer[T]) Out() <-chan T {
 	return channel
 }
 
-func (mux *channelMultiplexer[T]) AddOut(channel chan T) {
+func (mux *channelMultiplexer[T]) AddOut(channel chan<- T) {
 	if mux.started.Load() {
 		panic("channelMultiplexer already started")
 	}
@@ -86,18 +87,14 @@ func (mux *channelMultiplexer[T]) Run(ctx context.Context) error {
 	}
 
 	defer func() {
-		for _, channelToClose := range mux.in {
-			close(channelToClose)
-		}
-
 		for _, channelToClose := range mux.out {
 			close(channelToClose)
 		}
 	}()
 
-	if len(mux.in)+len(mux.inAdded) == 0 {
+	if len(mux.in) == 0 {
 		if len(mux.out)+len(mux.outAdded) > 0 {
-			panic("foobar")
+			panic("channelMultiplexer has output channels but no input channels")
 		}
 
 		return nil
@@ -106,10 +103,12 @@ func (mux *channelMultiplexer[T]) Run(ctx context.Context) error {
 	g, ctx := errgroup.WithContext(ctx)
 
 	sink := make(chan T)
-	defer close(sink)
 
+	var readers sync.WaitGroup
 	for _, ch := range mux.in {
+		readers.Add(1)
 		g.Go(func() error {
+			defer readers.Done()
 			for {
 				select {
 				case spread, more := <-ch:
@@ -128,6 +127,15 @@ func (mux *channelMultiplexer[T]) Run(ctx context.Context) error {
 			}
 		})
 	}
+
+	// The readers are the only senders on sink. Closing it once they're done
+	// lets the fan-out below return, so Run ends when all inputs are closed.
+	g.Go(func() error {
+		readers.Wait()
+		close(sink)
+
+		return nil
+	})
 
 	outs := append(mux.outAdded, mux.out...)
 	g.Go(func() error {
