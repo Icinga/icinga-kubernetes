@@ -7,7 +7,7 @@ import (
 
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-kubernetes/pkg/metrics"
+	"github.com/icinga/icinga-kubernetes/internal/metrics"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"

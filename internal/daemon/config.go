@@ -3,7 +3,7 @@ package daemon
 import (
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/logging"
-	"github.com/icinga/icinga-kubernetes/pkg/metrics"
+	"github.com/icinga/icinga-kubernetes/internal/metrics"
 	"github.com/icinga/icinga-kubernetes/pkg/notifications"
 	"github.com/pkg/errors"
 )
