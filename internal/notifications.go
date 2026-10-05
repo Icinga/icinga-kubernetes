@@ -7,7 +7,7 @@ import (
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/internal/notifications"
-	"github.com/icinga/icinga-kubernetes/pkg/schema"
+	"github.com/icinga/icinga-kubernetes/internal/schema"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
 )

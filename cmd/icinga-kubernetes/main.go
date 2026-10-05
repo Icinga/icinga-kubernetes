@@ -31,7 +31,7 @@ import (
 	"github.com/icinga/icinga-kubernetes/internal/kdatabase"
 	"github.com/icinga/icinga-kubernetes/internal/metrics"
 	"github.com/icinga/icinga-kubernetes/internal/notifications"
-	"github.com/icinga/icinga-kubernetes/pkg/schema"
+	"github.com/icinga/icinga-kubernetes/internal/schema"
 	syncv1 "github.com/icinga/icinga-kubernetes/pkg/sync/v1"
 	k8sMysql "github.com/icinga/icinga-kubernetes/schema/mysql"
 	"github.com/jmoiron/sqlx"

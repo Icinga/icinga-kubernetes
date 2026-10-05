@@ -5,7 +5,7 @@ import (
 
 	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-kubernetes/pkg/schema"
+	"github.com/icinga/icinga-kubernetes/internal/schema"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"

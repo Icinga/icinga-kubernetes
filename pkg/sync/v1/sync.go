@@ -9,7 +9,7 @@ import (
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/internal/cluster"
 	"github.com/icinga/icinga-kubernetes/internal/kdatabase"
-	"github.com/icinga/icinga-kubernetes/pkg/schema"
+	"github.com/icinga/icinga-kubernetes/internal/schema"
 	"golang.org/x/sync/errgroup"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
