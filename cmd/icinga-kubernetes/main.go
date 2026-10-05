@@ -32,7 +32,7 @@ import (
 	"github.com/icinga/icinga-kubernetes/internal/metrics"
 	"github.com/icinga/icinga-kubernetes/internal/notifications"
 	"github.com/icinga/icinga-kubernetes/internal/schema"
-	syncv1 "github.com/icinga/icinga-kubernetes/pkg/sync/v1"
+	ksync "github.com/icinga/icinga-kubernetes/pkg/sync"
 	k8sMysql "github.com/icinga/icinga-kubernetes/schema/mysql"
 	"github.com/jmoiron/sqlx"
 	"github.com/okzk/sdnotify"
@@ -489,7 +489,7 @@ func main() {
 	}
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().Namespaces().Informer(), logs.GetChildLogger("namespaces"), schema.NewNamespace)
+		s := ksync.NewSync(db, factory.Core().V1().Namespaces().Informer(), logs.GetChildLogger("namespaces"), schema.NewNamespace)
 
 		return s.Run(ctx)
 	})
@@ -498,14 +498,14 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().Nodes().Informer(), logs.GetChildLogger("nodes"), schema.NewNode)
+		s := ksync.NewSync(db, factory.Core().V1().Nodes().Informer(), logs.GetChildLogger("nodes"), schema.NewNode)
 
-		var forwardForNotifications []syncv1.Feature
+		var forwardForNotifications []ksync.Feature
 		if cfg.Notifications.Url != "" {
 			forwardForNotifications = append(
 				forwardForNotifications,
-				syncv1.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().Nodes().UpsertEvents().In())),
-				syncv1.WithOnDelete(database.OnSuccessSendTo(cache.Multiplexers().Nodes().DeleteEvents().In())),
+				ksync.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().Nodes().UpsertEvents().In())),
+				ksync.WithOnDelete(database.OnSuccessSendTo(cache.Multiplexers().Nodes().DeleteEvents().In())),
 			)
 		}
 
@@ -525,27 +525,27 @@ func main() {
 		)
 
 		f := schema.NewPodFactory(clientset)
-		s := syncv1.NewSync(db, factory.Core().V1().Pods().Informer(), logs.GetChildLogger("pods"), f.New)
+		s := ksync.NewSync(db, factory.Core().V1().Pods().Informer(), logs.GetChildLogger("pods"), f.New)
 
 		wg.Done()
 
 		return s.Run(
 			ctx,
-			syncv1.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().Pods().UpsertEvents().In())),
-			syncv1.WithOnDelete(database.OnSuccessSendTo(cache.Multiplexers().Pods().DeleteEvents().In())),
+			ksync.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().Pods().UpsertEvents().In())),
+			ksync.WithOnDelete(database.OnSuccessSendTo(cache.Multiplexers().Pods().DeleteEvents().In())),
 		)
 	})
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Apps().V1().Deployments().Informer(), logs.GetChildLogger("deployments"), schema.NewDeployment)
+		s := ksync.NewSync(db, factory.Apps().V1().Deployments().Informer(), logs.GetChildLogger("deployments"), schema.NewDeployment)
 
-		var forwardForNotifications []syncv1.Feature
+		var forwardForNotifications []ksync.Feature
 		if cfg.Notifications.Url != "" {
 			forwardForNotifications = append(
 				forwardForNotifications,
-				syncv1.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().Deployments().UpsertEvents().In())),
-				syncv1.WithOnDelete(database.OnSuccessSendTo(cache.Multiplexers().Deployments().DeleteEvents().In())),
+				ksync.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().Deployments().UpsertEvents().In())),
+				ksync.WithOnDelete(database.OnSuccessSendTo(cache.Multiplexers().Deployments().DeleteEvents().In())),
 			)
 		}
 
@@ -556,14 +556,14 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Apps().V1().DaemonSets().Informer(), logs.GetChildLogger("daemon-sets"), schema.NewDaemonSet)
+		s := ksync.NewSync(db, factory.Apps().V1().DaemonSets().Informer(), logs.GetChildLogger("daemon-sets"), schema.NewDaemonSet)
 
-		var forwardForNotifications []syncv1.Feature
+		var forwardForNotifications []ksync.Feature
 		if cfg.Notifications.Url != "" {
 			forwardForNotifications = append(
 				forwardForNotifications,
-				syncv1.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().DaemonSets().UpsertEvents().In())),
-				syncv1.WithOnDelete(database.OnSuccessSendTo(cache.Multiplexers().DaemonSets().DeleteEvents().In())),
+				ksync.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().DaemonSets().UpsertEvents().In())),
+				ksync.WithOnDelete(database.OnSuccessSendTo(cache.Multiplexers().DaemonSets().DeleteEvents().In())),
 			)
 		}
 
@@ -574,14 +574,14 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Apps().V1().ReplicaSets().Informer(), logs.GetChildLogger("replica-sets"), schema.NewReplicaSet)
+		s := ksync.NewSync(db, factory.Apps().V1().ReplicaSets().Informer(), logs.GetChildLogger("replica-sets"), schema.NewReplicaSet)
 
-		var forwardForNotifications []syncv1.Feature
+		var forwardForNotifications []ksync.Feature
 		if cfg.Notifications.Url != "" {
 			forwardForNotifications = append(
 				forwardForNotifications,
-				syncv1.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().ReplicaSets().UpsertEvents().In())),
-				syncv1.WithOnDelete(database.OnSuccessSendTo(cache.Multiplexers().ReplicaSets().DeleteEvents().In())),
+				ksync.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().ReplicaSets().UpsertEvents().In())),
+				ksync.WithOnDelete(database.OnSuccessSendTo(cache.Multiplexers().ReplicaSets().DeleteEvents().In())),
 			)
 		}
 
@@ -592,14 +592,14 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Apps().V1().StatefulSets().Informer(), logs.GetChildLogger("stateful-sets"), schema.NewStatefulSet)
+		s := ksync.NewSync(db, factory.Apps().V1().StatefulSets().Informer(), logs.GetChildLogger("stateful-sets"), schema.NewStatefulSet)
 
-		var forwardForNotifications []syncv1.Feature
+		var forwardForNotifications []ksync.Feature
 		if cfg.Notifications.Url != "" {
 			forwardForNotifications = append(
 				forwardForNotifications,
-				syncv1.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().StatefulSets().UpsertEvents().In())),
-				syncv1.WithOnDelete(database.OnSuccessSendTo(cache.Multiplexers().StatefulSets().DeleteEvents().In())),
+				ksync.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().StatefulSets().UpsertEvents().In())),
+				ksync.WithOnDelete(database.OnSuccessSendTo(cache.Multiplexers().StatefulSets().DeleteEvents().In())),
 			)
 		}
 
@@ -610,63 +610,63 @@ func main() {
 
 	g.Go(func() error {
 		f := schema.NewServiceFactory(clientset)
-		s := syncv1.NewSync(db, factory.Core().V1().Services().Informer(), logs.GetChildLogger("services"), f.NewService)
+		s := ksync.NewSync(db, factory.Core().V1().Services().Informer(), logs.GetChildLogger("services"), f.NewService)
 
 		return s.Run(
 			ctx,
-			syncv1.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().Services().UpsertEvents().In())),
+			ksync.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().Services().UpsertEvents().In())),
 		)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Discovery().V1().EndpointSlices().Informer(), logs.GetChildLogger("endpoints"), schema.NewEndpointSlice)
+		s := ksync.NewSync(db, factory.Discovery().V1().EndpointSlices().Informer(), logs.GetChildLogger("endpoints"), schema.NewEndpointSlice)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().Secrets().Informer(), logs.GetChildLogger("secrets"), schema.NewSecret)
+		s := ksync.NewSync(db, factory.Core().V1().Secrets().Informer(), logs.GetChildLogger("secrets"), schema.NewSecret)
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().ConfigMaps().Informer(), logs.GetChildLogger("config-maps"), schema.NewConfigMap)
-
-		return s.Run(ctx)
-	})
-
-	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Events().V1().Events().Informer(), logs.GetChildLogger("events"), schema.NewEvent)
-
-		return s.Run(ctx, syncv1.WithNoDelete(), syncv1.WithNoWarmup())
-	})
-
-	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().PersistentVolumeClaims().Informer(), logs.GetChildLogger("pvcs"), schema.NewPvc)
+		s := ksync.NewSync(db, factory.Core().V1().ConfigMaps().Informer(), logs.GetChildLogger("config-maps"), schema.NewConfigMap)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Core().V1().PersistentVolumes().Informer(), logs.GetChildLogger("persistent-volumes"), schema.NewPersistentVolume)
+		s := ksync.NewSync(db, factory.Events().V1().Events().Informer(), logs.GetChildLogger("events"), schema.NewEvent)
+
+		return s.Run(ctx, ksync.WithNoDelete(), ksync.WithNoWarmup())
+	})
+
+	g.Go(func() error {
+		s := ksync.NewSync(db, factory.Core().V1().PersistentVolumeClaims().Informer(), logs.GetChildLogger("pvcs"), schema.NewPvc)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Batch().V1().Jobs().Informer(), logs.GetChildLogger("jobs"), schema.NewJob)
+		s := ksync.NewSync(db, factory.Core().V1().PersistentVolumes().Informer(), logs.GetChildLogger("persistent-volumes"), schema.NewPersistentVolume)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Batch().V1().CronJobs().Informer(), logs.GetChildLogger("cron-jobs"), schema.NewCronJob)
+		s := ksync.NewSync(db, factory.Batch().V1().Jobs().Informer(), logs.GetChildLogger("jobs"), schema.NewJob)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(db, factory.Networking().V1().Ingresses().Informer(), logs.GetChildLogger("ingresses"), schema.NewIngress)
+		s := ksync.NewSync(db, factory.Batch().V1().CronJobs().Informer(), logs.GetChildLogger("cron-jobs"), schema.NewCronJob)
+
+		return s.Run(ctx)
+	})
+
+	g.Go(func() error {
+		s := ksync.NewSync(db, factory.Networking().V1().Ingresses().Informer(), logs.GetChildLogger("ingresses"), schema.NewIngress)
 
 		return s.Run(ctx)
 	})

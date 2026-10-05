@@ -1,4 +1,4 @@
-package v1
+package sync
 
 import "github.com/icinga/icinga-go-library/database"
 
