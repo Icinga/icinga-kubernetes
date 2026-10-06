@@ -24,7 +24,6 @@ import (
 	"github.com/icinga/icinga-go-library/retry"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-go-library/utils"
-	"github.com/icinga/icinga-kubernetes/internal"
 	"github.com/icinga/icinga-kubernetes/internal/cache"
 	"github.com/icinga/icinga-kubernetes/internal/cluster"
 	"github.com/icinga/icinga-kubernetes/internal/com"
@@ -84,7 +83,7 @@ func main() {
 	pflag.Parse()
 
 	if showVersion {
-		internal.Version.Print("Icinga for Kubernetes")
+		daemon.Version.Print("Icinga for Kubernetes")
 		os.Exit(0)
 	}
 
@@ -105,7 +104,7 @@ func main() {
 	logger := logs.GetLogger()
 
 	if len(removeClusterUuids.Value()) == 0 {
-		logger.Infow("Starting Icinga for Kubernetes", zap.String("version", internal.Version.Version))
+		logger.Infow("Starting Icinga for Kubernetes", zap.String("version", daemon.Version.Version))
 	}
 
 	// An explicit -v/--v on the command line wins over the config file.
@@ -290,7 +289,7 @@ func main() {
 		instance := schema.Instance{
 			Uuid:                types.UUID{UUID: instanceId},
 			ClusterUuid:         clusterInstance.Uuid,
-			Version:             internal.Version.Version,
+			Version:             daemon.Version.Version,
 			KubernetesVersion:   schema.NewNullableString(kubernetesVersion),
 			KubernetesHeartbeat: types.UnixMilli(kubernetesHeartbeat),
 			KubernetesApiReachable: types.Bool{
@@ -308,7 +307,7 @@ func main() {
 		}
 	}, periodic.Immediate()).Stop()
 
-	if err := internal.SyncNotificationsConfig(ctx, db.DB, &cfg.Notifications, clusterInstance.Uuid); err != nil {
+	if err := daemon.SyncNotificationsConfig(ctx, db.DB, &cfg.Notifications, clusterInstance.Uuid); err != nil {
 		logger.Fatalw("Cannot sync notifications configuration", logging.Error(err))
 	}
 
@@ -316,7 +315,7 @@ func main() {
 		logger.Infow("Sending notifications", zap.String("url", cfg.Notifications.Url))
 
 		nclient, err := notifications.NewClient(
-			"icinga-kubernetes/"+internal.Version.Version,
+			"icinga-kubernetes/"+daemon.Version.Version,
 			cfg.Notifications,
 			db.DB,
 			logs.GetChildLogger("notifications"),
@@ -452,12 +451,12 @@ func main() {
 		return SyncServicePods(ctx, db, factory.Core().V1().Services(), factory.Core().V1().Pods())
 	})
 
-	if err := internal.SyncPrometheusConfig(ctx, db.DB, &cfg.Prometheus, clusterInstance.Uuid); err != nil {
+	if err := daemon.SyncPrometheusConfig(ctx, db.DB, &cfg.Prometheus, clusterInstance.Uuid); err != nil {
 		logger.Errorw("Cannot sync prometheus config", logging.Error(err))
 	}
 
 	if cfg.Prometheus.Url == "" {
-		if err := internal.AutoDetectPrometheus(ctx, clientset, &cfg.Prometheus); err != nil {
+		if err := daemon.AutoDetectPrometheus(ctx, clientset, &cfg.Prometheus); err != nil {
 			logger.Errorw("Cannot auto-detect prometheus", logging.Error(err))
 		}
 	}
