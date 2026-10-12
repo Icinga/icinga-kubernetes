@@ -122,6 +122,8 @@ ICINGA_FOR_KUBERNETES_PROMETHEUS_URL=http://localhost:9090
 2. Remove the corresponding environment file from `/etc/icinga-kubernetes`.
 3. Reload the systemd daemon with `systemctl daemon-reload` to make sure the
    daemon forgets the file.
+4. Optionally, remove the cluster's data from the database as described in
+   [Removing a Cluster](04-Commands.md#removing-a-cluster).
 
 !!! Warning
 
