@@ -58,6 +58,7 @@ func main() {
 	var glue daemon.ConfigFlagGlue
 	var showVersion bool
 	var clusterName string
+	var removeClusterUuid string
 
 	// The Kubernetes client libraries log through klog, so keep its flags on our command line
 	// to let -v and friends control their output. Our own code logs via icinga-go-library.
@@ -68,6 +69,7 @@ func main() {
 	pflag.BoolVar(&showVersion, "version", false, "print version and exit")
 	pflag.StringVar(&glue.Config, "config", "", fmt.Sprintf("path to the config file (default: %s)", daemon.DefaultConfigPath))
 	pflag.StringVar(&clusterName, "cluster-name", "", "name of the current cluster")
+	pflag.StringVar(&removeClusterUuid, "remove-cluster", "", "remove a cluster from the database by UUID")
 
 	loadingRules := kclientcmd.NewDefaultClientConfigLoadingRules()
 	loadingRules.DefaultClientConfig = &kclientcmd.DefaultClientConfig
@@ -101,7 +103,9 @@ func main() {
 
 	logger := logs.GetLogger()
 
-	logger.Infow("Starting Icinga for Kubernetes", zap.String("version", internal.Version.Version))
+	if removeClusterUuid == "" {
+		logger.Infow("Starting Icinga for Kubernetes", zap.String("version", internal.Version.Version))
+	}
 
 	// An explicit -v/--v on the command line wins over the config file.
 	if !pflag.CommandLine.Changed("v") {
@@ -129,6 +133,21 @@ func main() {
 	_ = sdnotify.Ready()
 
 	if !kdb.Connect() {
+		if removeClusterUuid != "" {
+			klog.Fatal(errors.New("cannot remove cluster without database connection"))
+		}
+
+		return
+	}
+
+	if removeClusterUuid != "" {
+		clusterRemovalLogger := logs.GetChildLogger("cluster-removal")
+		clusterRemovalLogger.Infof("Removing cluster %q", removeClusterUuid)
+
+		if err := removeCluster(context.Background(), kdb, clusterRemovalLogger, removeClusterUuid); err != nil {
+			clusterRemovalLogger.Fatal(errors.Wrapf(err, "cannot remove cluster %q", removeClusterUuid))
+		}
+
 		return
 	}
 
@@ -713,6 +732,66 @@ func main() {
 	if err := g.Wait(); err != nil {
 		logger.Fatalw("Cannot run Icinga for Kubernetes", logging.Error(err))
 	}
+}
+
+func removeCluster(ctx context.Context, db *kdatabase.Database, logger *logging.Logger, clusterUuidText string) error {
+	type clusterRemovalUuid struct {
+		Uuid types.UUID
+	}
+
+	parsedUuid, err := uuid.Parse(clusterUuidText)
+	if err != nil {
+		return errors.Wrapf(err, "invalid cluster UUID %q", clusterUuidText)
+	}
+
+	clusterUuid := types.UUID{UUID: parsedUuid}
+
+	// Check whether a cluster entry exists for the given UUID at all.
+	// A missing cluster entry only produces a warning so that a rerun
+	// can finish an interrupted removal.
+	selectQuery := db.BuildSelectStmt(&schemav1.Cluster{}, clusterRemovalUuid{}) + fmt.Sprintf(" WHERE %s = ?", db.QuoteIdentifier("uuid"))
+
+	var clusters []clusterRemovalUuid
+	if err := db.SelectContext(ctx, &clusters, db.Rebind(selectQuery), clusterUuid); err != nil {
+		return errors.Wrap(err, "cannot select cluster")
+	}
+
+	if len(clusters) == 0 {
+		logger.Warnf("No cluster entry exists for UUID %q, trying to remove any remaining data of that cluster anyway", clusterUuid)
+	}
+
+	// Pods don't cascade deletes to their containers, so remove the containers first.
+	for _, container := range []kdatabase.HasRelations{&schemav1.Container{}, &schemav1.InitContainer{}, &schemav1.SidecarContainer{}} {
+		query := db.BuildSelectStmt(container, clusterRemovalUuid{}) + fmt.Sprintf(
+			" WHERE %s IN (SELECT %s FROM %s WHERE %s=?)",
+			db.QuoteIdentifier("pod_uuid"),
+			db.QuoteIdentifier("uuid"),
+			db.QuoteIdentifier(kdatabase.TableName(&schemav1.Pod{})),
+			db.QuoteIdentifier("cluster_uuid"),
+		)
+
+		var rows []clusterRemovalUuid
+		if err := db.SelectContext(ctx, &rows, db.Rebind(query), clusterUuid); err != nil {
+			return errors.Wrapf(err, "cannot select %q rows for deletion", kdatabase.TableName(container))
+		}
+
+		ids := make([]any, len(rows))
+		for i := range rows {
+			ids[i] = rows[i].Uuid
+		}
+
+		if err := db.DeleteStreamed(ctx, container, utils.ChanFromSlice(ids), kdatabase.WithCascading()); err != nil {
+			return errors.Wrapf(err, "cannot remove rows from %q", kdatabase.TableName(container))
+		}
+	}
+
+	if err := db.DeleteStreamed(ctx, &schemav1.Cluster{}, utils.ChanFromSlice([]any{clusterUuid}), kdatabase.WithCascading()); err != nil {
+		return errors.Wrap(err, "cannot remove cluster rows")
+	}
+
+	logger.Infof("Removed cluster %q", clusterUuid)
+
+	return nil
 }
 
 // dbHasSchema queries via db whether the database dbName has a table named "kubernetes_schema".
