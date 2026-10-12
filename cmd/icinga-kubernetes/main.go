@@ -110,6 +110,24 @@ func main() {
 		}
 	}
 
+	dbLog := logs.GetChildLogger("database")
+
+	db, err := kdatabase.NewFromConfig(&cfg.Database, dbLog)
+	if err != nil {
+		logger.Fatalw("Cannot create database", logging.Error(err))
+	}
+	defer func() { _ = db.Close() }()
+
+	// When started by systemd, NOTIFY_SOCKET is set by systemd for Type=notify
+	// supervised services, which was the default setting for the Icinga for Kubernetes
+	// service before switching to Type=simple. For Type=notify, we need to tell
+	// systemd, that Icinga for Kubernetes finished starting up.
+	_ = sdnotify.Ready()
+
+	if !db.Connect() {
+		return
+	}
+
 	kconfig, err := kclientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, overrides).ClientConfig()
 	if err != nil {
 		if kclientcmd.IsEmptyConfig(err) {
@@ -131,24 +149,6 @@ func main() {
 	}
 
 	logger.Infow("Using Kubernetes API server", zap.String("host", kconfig.Host))
-
-	dbLog := logs.GetChildLogger("database")
-
-	db, err := kdatabase.NewFromConfig(&cfg.Database, dbLog)
-	if err != nil {
-		logger.Fatalw("Cannot create database", logging.Error(err))
-	}
-	defer func() { _ = db.Close() }()
-
-	// When started by systemd, NOTIFY_SOCKET is set by systemd for Type=notify
-	// supervised services, which was the default setting for the Icinga for Kubernetes
-	// service before switching to Type=simple. For Type=notify, we need to tell
-	// systemd, that Icinga for Kubernetes finished starting up.
-	_ = sdnotify.Ready()
-
-	if !db.Connect() {
-		return
-	}
 
 	hasSchema, err := dbHasSchema(db, cfg.Database.Database)
 	if err != nil {
