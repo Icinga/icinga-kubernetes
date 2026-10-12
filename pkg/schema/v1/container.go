@@ -128,6 +128,7 @@ func (c *ContainerCommon) Relations() []kdatabase.Relation {
 		// error can interrupt the deletion process of the logs when using the
 		// `on success` mechanism.
 		kdatabase.HasOne(ContainerLog{}, fk),
+		kdatabase.HasMany([]PrometheusContainerMetric(nil), fk),
 	}
 }
 

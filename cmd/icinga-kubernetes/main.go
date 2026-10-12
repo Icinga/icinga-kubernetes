@@ -272,7 +272,7 @@ func main() {
 		}
 
 		instance := schemav1.Instance{
-			Uuid:                instanceId[:],
+			Uuid:                types.UUID{UUID: instanceId},
 			ClusterUuid:         clusterInstance.Uuid,
 			Version:             internal.Version.Version,
 			KubernetesVersion:   schemav1.NewNullableString(kubernetesVersion),

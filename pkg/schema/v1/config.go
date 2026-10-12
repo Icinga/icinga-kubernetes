@@ -1,13 +1,22 @@
 package v1
 
-import "github.com/icinga/icinga-go-library/types"
+import (
+	"github.com/icinga/icinga-go-library/database"
+	"github.com/icinga/icinga-go-library/types"
+	"github.com/icinga/icinga-kubernetes/pkg/kdatabase"
+)
 
 // Config represents a single key => value pair database config entry.
 type Config struct {
+	kdatabase.EntityStub
 	ClusterUuid types.UUID
 	Key         ConfigKey
 	Value       string
 	Locked      types.Bool
+}
+
+func (c Config) ID() database.ID {
+	return compoundId{id: c.ClusterUuid.String() + string(c.Key)}
 }
 
 // ConfigKey represents the database config.Key enums.
