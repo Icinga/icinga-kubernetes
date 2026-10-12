@@ -58,7 +58,7 @@ func main() {
 	var glue daemon.ConfigFlagGlue
 	var showVersion bool
 	var clusterName string
-	var removeClusterUuid string
+	var removeClusterUuids kdatabase.UuidSliceValue
 
 	// The Kubernetes client libraries log through klog, so keep its flags on our command line
 	// to let -v and friends control their output. Our own code logs via icinga-go-library.
@@ -69,7 +69,7 @@ func main() {
 	pflag.BoolVar(&showVersion, "version", false, "print version and exit")
 	pflag.StringVar(&glue.Config, "config", "", fmt.Sprintf("path to the config file (default: %s)", daemon.DefaultConfigPath))
 	pflag.StringVar(&clusterName, "cluster-name", "", "name of the current cluster")
-	pflag.StringVar(&removeClusterUuid, "remove-cluster", "", "remove a cluster from the database by UUID")
+	pflag.Var(&removeClusterUuids, "remove-cluster", "remove clusters from the database by UUID (repeatable or comma-separated)")
 
 	loadingRules := kclientcmd.NewDefaultClientConfigLoadingRules()
 	loadingRules.DefaultClientConfig = &kclientcmd.DefaultClientConfig
@@ -103,7 +103,7 @@ func main() {
 
 	logger := logs.GetLogger()
 
-	if removeClusterUuid == "" {
+	if len(removeClusterUuids.Value()) == 0 {
 		logger.Infow("Starting Icinga for Kubernetes", zap.String("version", internal.Version.Version))
 	}
 
@@ -133,19 +133,21 @@ func main() {
 	_ = sdnotify.Ready()
 
 	if !kdb.Connect() {
-		if removeClusterUuid != "" {
+		if len(removeClusterUuids.Value()) != 0 {
 			klog.Fatal(errors.New("cannot remove cluster without database connection"))
 		}
 
 		return
 	}
 
-	if removeClusterUuid != "" {
+	if len(removeClusterUuids.Value()) != 0 {
 		clusterRemovalLogger := logs.GetChildLogger("cluster-removal")
-		clusterRemovalLogger.Infof("Removing cluster %q", removeClusterUuid)
 
-		if err := removeCluster(context.Background(), kdb, clusterRemovalLogger, removeClusterUuid); err != nil {
-			clusterRemovalLogger.Fatal(errors.Wrapf(err, "cannot remove cluster %q", removeClusterUuid))
+		for _, u := range removeClusterUuids.Value() {
+			clusterRemovalLogger.Infof("Removing cluster %q", u)
+			if err := removeCluster(context.Background(), kdb, clusterRemovalLogger, u); err != nil {
+				clusterRemovalLogger.Fatal(errors.Wrapf(err, "cannot remove cluster %q", u))
+			}
 		}
 
 		return
@@ -734,17 +736,10 @@ func main() {
 	}
 }
 
-func removeCluster(ctx context.Context, db *kdatabase.Database, logger *logging.Logger, clusterUuidText string) error {
+func removeCluster(ctx context.Context, db *kdatabase.Database, logger *logging.Logger, clusterUuid types.UUID) error {
 	type clusterRemovalUuid struct {
 		Uuid types.UUID
 	}
-
-	parsedUuid, err := uuid.Parse(clusterUuidText)
-	if err != nil {
-		return errors.Wrapf(err, "invalid cluster UUID %q", clusterUuidText)
-	}
-
-	clusterUuid := types.UUID{UUID: parsedUuid}
 
 	// Check whether a cluster entry exists for the given UUID at all.
 	// A missing cluster entry only produces a warning so that a rerun

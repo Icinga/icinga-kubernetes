@@ -7,10 +7,10 @@ until it is removed explicitly. Stopping or uninstalling the daemon of a cluster
 leaves its data in place, and the cluster still appears in
 [Icinga for Kubernetes Web](https://icinga.com/docs/icinga-kubernetes-web).
 
-To remove a cluster you no longer monitor, run `icinga-kubernetes` with the
-`--remove-cluster` flag. It deletes the cluster and all data that belongs to it
-from the database. The command only connects to the database, so it does not
-need a kubeconfig and works after the cluster itself is gone.
+To remove clusters you no longer monitor, run `icinga-kubernetes` with the
+`--remove-cluster` flag. It deletes each given cluster and all data that
+belongs to it from the database. The command only connects to the database,
+so it does not need a kubeconfig and works after the cluster itself is gone.
 
 !!! Warning
 
@@ -51,12 +51,25 @@ and pass the cluster UUID to `--remove-cluster`:
 icinga-kubernetes --config /etc/icinga-kubernetes/config.yml --remove-cluster <uuid>
 ```
 
+To remove several clusters at once, repeat the flag or pass a comma-separated
+list of UUIDs:
+
+```bash
+icinga-kubernetes --config /etc/icinga-kubernetes/config.yml --remove-cluster <uuid1>,<uuid2>
+```
+
 If the instance's environment file overrides database settings, set the same
 `ICINGA_FOR_KUBERNETES_DATABASE_*` variables for this command. All database
 options are listed under
 [Configuration](03-Configuration.md#configuration-via-environment-variables).
 
-On success, the command logs `Removed cluster "<uuid>"` and exits with status 0.
-It fails with an error if the UUID is invalid or the database connection fails.
-If no cluster with that UUID exists, it logs a warning and still removes any
-remaining data of that cluster, so you can rerun an interrupted removal.
+The command removes the clusters one after another and logs
+`Removed cluster "<uuid>"` for each of them. Once all clusters are removed, it
+exits with status 0. It fails with an error before removing anything if a UUID
+is invalid or the database connection fails. If the removal of a cluster fails,
+the command stops with an error. Clusters removed before that point stay
+removed.
+
+If no cluster with a given UUID exists, the command logs a warning and still
+removes any remaining data of that cluster, so you can rerun an interrupted
+removal.
