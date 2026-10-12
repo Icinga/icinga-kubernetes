@@ -110,28 +110,6 @@ func main() {
 		}
 	}
 
-	kconfig, err := kclientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, overrides).ClientConfig()
-	if err != nil {
-		if kclientcmd.IsEmptyConfig(err) {
-			logger.Fatal(
-				"No configuration provided: set KUBECONFIG environment variable or --kubeconfig CLI flag to" +
-					" a kubeconfig file with cluster access configured")
-		}
-
-		logger.Fatalw("Cannot configure Kubernetes client", logging.Error(err))
-	}
-
-	if serverName, ok := os.LookupEnv("KUBERNETES_SERVER"); ok {
-		kconfig.Host = serverName
-	}
-
-	clientset, err := kubernetes.NewForConfig(kconfig)
-	if err != nil {
-		logger.Fatalw("Cannot create Kubernetes clientset", logging.Error(err))
-	}
-
-	logger.Infow("Using Kubernetes API server", zap.String("host", kconfig.Host))
-
 	dbLog := logs.GetChildLogger("database")
 
 	db, err := database.NewDbFromConfig(&cfg.Database, dbLog, database.RetryConnectorCallbacks{})
@@ -153,6 +131,28 @@ func main() {
 	if !kdb.Connect() {
 		return
 	}
+
+	kconfig, err := kclientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, overrides).ClientConfig()
+	if err != nil {
+		if kclientcmd.IsEmptyConfig(err) {
+			logger.Fatal(
+				"No configuration provided: set KUBECONFIG environment variable or --kubeconfig CLI flag to" +
+					" a kubeconfig file with cluster access configured")
+		}
+
+		logger.Fatalw("Cannot configure Kubernetes client", logging.Error(err))
+	}
+
+	if serverName, ok := os.LookupEnv("KUBERNETES_SERVER"); ok {
+		kconfig.Host = serverName
+	}
+
+	clientset, err := kubernetes.NewForConfig(kconfig)
+	if err != nil {
+		logger.Fatalw("Cannot create Kubernetes clientset", logging.Error(err))
+	}
+
+	logger.Infow("Using Kubernetes API server", zap.String("host", kconfig.Host))
 
 	hasSchema, err := dbHasSchema(kdb, cfg.Database.Database)
 	if err != nil {
