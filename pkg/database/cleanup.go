@@ -11,10 +11,16 @@ import (
 	"github.com/icinga/icinga-go-library/periodic"
 	"github.com/icinga/icinga-go-library/retry"
 	"github.com/icinga/icinga-go-library/types"
+	"github.com/icinga/icinga-go-library/utils"
 	"go.uber.org/zap"
 )
 
 const batchSize = 5000
+
+// Cleaner deletes rows that are older than a given time, see PeriodicCleanup.
+type Cleaner interface {
+	cleanupOlderThan(ctx context.Context, db *Database, olderThan time.Time) error
+}
 
 // CleanupStmt defines information needed to compose cleanup statements.
 type CleanupStmt struct {
@@ -33,6 +39,59 @@ func (stmt *CleanupStmt) Build(driverName string, limit uint64) string {
 DELETE FROM %[2]s WHERE %[1]s IN (SELECT %[1]s FROM rows)`, stmt.PK, stmt.Table, stmt.Column, limit)
 	default:
 		panic(fmt.Sprintf("invalid database type %s", driverName))
+	}
+}
+
+func (stmt CleanupStmt) cleanupOlderThan(ctx context.Context, db *Database, olderThan time.Time) error {
+	_, err := db.CleanupOlderThan(ctx, stmt, olderThan)
+
+	return err
+}
+
+// CascadeCleanupStmt defines an entity whose rows are cleaned up together with
+// their relations based on the given time column.
+type CascadeCleanupStmt struct {
+	Entity      HasRelations
+	Column      string
+	ClusterUuid types.UUID
+}
+
+// cleanupOlderThan deletes all rows of the entity that are older than the given
+// time in rounds of at most batchSize rows via DeleteStreamed with cascading, so
+// that the relations of the entity are deleted as well.
+func (stmt CascadeCleanupStmt) cleanupOlderThan(ctx context.Context, db *Database, olderThan time.Time) error {
+	query := db.Rebind(db.BuildSelectStmt(stmt.Entity, &struct{ Uuid types.UUID }{}) + fmt.Sprintf(
+		" WHERE %s < ? AND %s = ? LIMIT %d",
+		db.QuoteIdentifier(stmt.Column),
+		db.QuoteIdentifier("cluster_uuid"),
+		batchSize,
+	))
+
+	for {
+		// Scanned into []any so that the UUIDs can feed DeleteStreamed's <-chan any.
+		var uuids []any
+
+		if err := retry.WithBackoff(
+			ctx,
+			func(ctx context.Context) error {
+				uuids = nil
+
+				return db.SelectContext(ctx, &uuids, query, types.UnixMilli(olderThan), stmt.ClusterUuid)
+			},
+			IsRetryable,
+			backoff.NewExponentialWithJitter(1*time.Millisecond, 1*time.Second),
+			retry.Settings{},
+		); err != nil {
+			return CantPerformQuery(err, query)
+		}
+
+		if err := db.DeleteStreamed(ctx, stmt.Entity, utils.ChanFromSlice(uuids), WithCascading()); err != nil {
+			return err
+		}
+
+		if len(uuids) < batchSize {
+			return nil
+		}
 	}
 }
 
@@ -136,7 +195,7 @@ func WithRetention(retention time.Duration) CleanupOption {
 
 // PeriodicCleanup deletes rows with the specified statement that are older
 // than the retention once per interval.
-func (db *Database) PeriodicCleanup(ctx context.Context, stmt CleanupStmt, options ...CleanupOption) error {
+func (db *Database) PeriodicCleanup(ctx context.Context, stmt Cleaner, options ...CleanupOption) error {
 	o := &cleanupOptions{
 		interval:  time.Hour,
 		retention: 24 * time.Hour,
@@ -150,9 +209,7 @@ func (db *Database) PeriodicCleanup(ctx context.Context, stmt CleanupStmt, optio
 	defer periodic.Start(ctx, o.interval, func(tick periodic.Tick) {
 		olderThan := tick.Time.Add(-o.retention)
 
-		_, err := db.CleanupOlderThan(ctx, stmt, olderThan)
-
-		if err != nil {
+		if err := stmt.cleanupOlderThan(ctx, db, olderThan); err != nil {
 			select {
 			case errs <- err:
 			case <-ctx.Done():
