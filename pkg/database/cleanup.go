@@ -17,9 +17,9 @@ import (
 
 const batchSize = 5000
 
-// Cleaner deletes rows that are older than a given time, see PeriodicCleanup.
+// Cleaner deletes rows that are older than a given retention, see PeriodicCleanup.
 type Cleaner interface {
-	cleanupOlderThan(ctx context.Context, db *Database, olderThan time.Time) error
+	cleanup(ctx context.Context, db *Database, retention time.Duration) error
 }
 
 // CleanupStmt defines information needed to compose cleanup statements.
@@ -42,8 +42,8 @@ DELETE FROM %[2]s WHERE %[1]s IN (SELECT %[1]s FROM rows)`, stmt.PK, stmt.Table,
 	}
 }
 
-func (stmt CleanupStmt) cleanupOlderThan(ctx context.Context, db *Database, olderThan time.Time) error {
-	_, err := db.CleanupOlderThan(ctx, stmt, olderThan)
+func (stmt CleanupStmt) cleanup(ctx context.Context, db *Database, retention time.Duration) error {
+	_, err := db.CleanupOlderThan(ctx, stmt, time.Now().Add(-retention))
 
 	return err
 }
@@ -51,17 +51,20 @@ func (stmt CleanupStmt) cleanupOlderThan(ctx context.Context, db *Database, olde
 // CascadeCleanupStmt defines an entity whose rows are cleaned up together with
 // their relations based on the given time column.
 type CascadeCleanupStmt struct {
-	Entity      HasRelations
+	Entity HasRelations
+
+	// Column must hold Unix milliseconds set by the database clock.
 	Column      string
 	ClusterUuid types.UUID
 }
 
-// cleanupOlderThan deletes all rows of the entity that are older than the given
-// time in rounds of at most batchSize rows via DeleteStreamed with cascading, so
-// that the relations of the entity are deleted as well.
-func (stmt CascadeCleanupStmt) cleanupOlderThan(ctx context.Context, db *Database, olderThan time.Time) error {
+// cleanup deletes all rows of the entity whose time column is older than the
+// retention, measured against the database clock, in rounds of at most
+// batchSize rows via DeleteStreamed with cascading, so that the relations of
+// the entity are deleted as well.
+func (stmt CascadeCleanupStmt) cleanup(ctx context.Context, db *Database, retention time.Duration) error {
 	query := db.Rebind(db.BuildSelectStmt(stmt.Entity, &struct{ Uuid types.UUID }{}) + fmt.Sprintf(
-		" WHERE %s < ? AND %s = ? LIMIT %d",
+		" WHERE %s < UNIX_TIMESTAMP() * 1000 - ? AND %s = ? LIMIT %d",
 		db.QuoteIdentifier(stmt.Column),
 		db.QuoteIdentifier("cluster_uuid"),
 		batchSize,
@@ -76,7 +79,7 @@ func (stmt CascadeCleanupStmt) cleanupOlderThan(ctx context.Context, db *Databas
 			func(ctx context.Context) error {
 				uuids = nil
 
-				return db.SelectContext(ctx, &uuids, query, types.UnixMilli(olderThan), stmt.ClusterUuid)
+				return db.SelectContext(ctx, &uuids, query, retention.Milliseconds(), stmt.ClusterUuid)
 			},
 			IsRetryable,
 			backoff.NewExponentialWithJitter(1*time.Millisecond, 1*time.Second),
@@ -206,10 +209,8 @@ func (db *Database) PeriodicCleanup(ctx context.Context, stmt Cleaner, options .
 
 	errs := make(chan error, 1)
 
-	defer periodic.Start(ctx, o.interval, func(tick periodic.Tick) {
-		olderThan := tick.Time.Add(-o.retention)
-
-		if err := stmt.cleanupOlderThan(ctx, db, olderThan); err != nil {
+	defer periodic.Start(ctx, o.interval, func(periodic.Tick) {
+		if err := stmt.cleanup(ctx, db, o.retention); err != nil {
 			select {
 			case errs <- err:
 			case <-ctx.Done():
