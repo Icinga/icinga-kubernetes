@@ -737,45 +737,43 @@ func main() {
 }
 
 func removeCluster(ctx context.Context, db *kdatabase.Database, logger *logging.Logger, clusterUuid types.UUID) error {
-	type clusterRemovalUuid struct {
+	type uuidColumn struct {
 		Uuid types.UUID
 	}
 
 	// Check whether a cluster entry exists for the given UUID at all.
 	// A missing cluster entry only produces a warning so that a rerun
 	// can finish an interrupted removal.
-	selectQuery := db.BuildSelectStmt(&schemav1.Cluster{}, clusterRemovalUuid{}) + fmt.Sprintf(" WHERE %s = ?", db.QuoteIdentifier("uuid"))
+	selectQuery := db.Rebind(
+		db.BuildSelectStmt(&schemav1.Cluster{}, uuidColumn{}) + fmt.Sprintf(" WHERE %s = ?", db.QuoteIdentifier("uuid")),
+	)
 
-	var clusters []clusterRemovalUuid
-	if err := db.SelectContext(ctx, &clusters, db.Rebind(selectQuery), clusterUuid); err != nil {
-		return errors.Wrap(err, "cannot select cluster")
+	var clusterUuids []types.UUID
+	if err := db.SelectContext(ctx, &clusterUuids, selectQuery, clusterUuid); err != nil {
+		return kdatabase.CantPerformQuery(err, selectQuery)
 	}
 
-	if len(clusters) == 0 {
+	if len(clusterUuids) == 0 {
 		logger.Warnf("No cluster entry exists for UUID %q, trying to remove any remaining data of that cluster anyway", clusterUuid)
 	}
 
 	// Pods don't cascade deletes to their containers, so remove the containers first.
 	for _, container := range []kdatabase.HasRelations{&schemav1.Container{}, &schemav1.InitContainer{}, &schemav1.SidecarContainer{}} {
-		query := db.BuildSelectStmt(container, clusterRemovalUuid{}) + fmt.Sprintf(
+		query := db.Rebind(db.BuildSelectStmt(container, uuidColumn{}) + fmt.Sprintf(
 			" WHERE %s IN (SELECT %s FROM %s WHERE %s=?)",
 			db.QuoteIdentifier("pod_uuid"),
 			db.QuoteIdentifier("uuid"),
 			db.QuoteIdentifier(kdatabase.TableName(&schemav1.Pod{})),
 			db.QuoteIdentifier("cluster_uuid"),
-		)
+		))
 
-		var rows []clusterRemovalUuid
-		if err := db.SelectContext(ctx, &rows, db.Rebind(query), clusterUuid); err != nil {
-			return errors.Wrapf(err, "cannot select %q rows for deletion", kdatabase.TableName(container))
+		// Scanned into []any so that the UUIDs can feed DeleteStreamed's <-chan any.
+		var uuids []any
+		if err := db.SelectContext(ctx, &uuids, query, clusterUuid); err != nil {
+			return kdatabase.CantPerformQuery(err, query)
 		}
 
-		ids := make([]any, len(rows))
-		for i := range rows {
-			ids[i] = rows[i].Uuid
-		}
-
-		if err := db.DeleteStreamed(ctx, container, utils.ChanFromSlice(ids), kdatabase.WithCascading()); err != nil {
+		if err := db.DeleteStreamed(ctx, container, utils.ChanFromSlice(uuids), kdatabase.WithCascading()); err != nil {
 			return errors.Wrapf(err, "cannot remove rows from %q", kdatabase.TableName(container))
 		}
 	}
