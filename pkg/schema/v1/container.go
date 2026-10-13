@@ -455,10 +455,8 @@ func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStat
 // SyncContainers consumes from the `upsertPods` and `deletePods` chans
 // concurrently and schedules a job for each of the containers (drawn from
 // `upsertPods`) that periodically syncs the container logs with the database.
-// When pods are deleted, their IDs are streamed through the `deletePods` chan,
-// and this fetches all the container IDs matching the respective pod ID from
-// the database and initiates a container deletion stream that cleans up all
-// container-related resources.
+// When pods are deleted, matching log jobs are stopped and cached logs are
+// evicted. Database container rows are retained here for later physical cleanup.
 func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Group, upsertPods, deletePods <-chan any) {
 	type containerFingerprint struct {
 		Uuid    types.UUID
@@ -471,16 +469,7 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 	close(err)
 	com.ErrgroupReceive(g, err)
 
-	// Use buffered channel here not to block the goroutines, as they can stream
-	// container ids from multiple pods concurrently.
-	containerIds := make(chan any, db.Options.MaxPlaceholdersPerStatement)
 	g.Go(func() error {
-		return db.DeleteStreamed(ctx, &Container{}, containerIds, database.WithCascading())
-	})
-
-	g.Go(func() error {
-		defer close(containerIds)
-
 		scheduler.SetMaxConcurrentJobs(MaxConcurrentJobs, gocron.WaitMode)
 		scheduler.TagsUnique()
 
@@ -500,10 +489,9 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 
 				meta := &containerFingerprint{PodUuid: podUuid.(types.UUID)}
 				if _, ok := deletedPodIds[meta.PodUuid.String()]; ok {
-					// Due to the recursive relation resolution in the
-					// `DB#DeleteStreamed()` method, we may get the same pod ID
-					// multiple times since they all share the same `on success`
-					// handler.
+					// The controller can report a pod's deletion twice: once for
+					// an update that was still queued when the pod left the
+					// informer's store, and once for the delete event itself.
 					break
 				}
 				deletedPodIds[meta.PodUuid.String()] = true
@@ -524,12 +512,6 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 							}
 
 							container := e.(*Container)
-							select {
-							case containerIds <- container.Uuid:
-							case <-ctx.Done():
-								return ctx.Err()
-							}
-
 							err := scheduler.RemoveByTag(container.Uuid.String())
 							if err != nil && !errors.Is(err, gocron.ErrJobNotFoundWithTag) {
 								return err
@@ -596,9 +578,12 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 func warmup(ctx context.Context, db *database.Database) error {
 	g, ctx := errgroup.WithContext(ctx)
 
+	query := db.BuildSelectStmt(ContainerLog{}, ContainerLog{}) +
+		` INNER JOIN pod ON pod.uuid=container_log.pod_uuid WHERE pod.deleted IS NULL`
+
 	entities, errs := db.YieldAll(ctx, func() (any, error) {
 		return &ContainerLog{}, nil
-	}, db.BuildSelectStmt(ContainerLog{}, ContainerLog{}))
+	}, query)
 	com.ErrgroupReceive(g, errs)
 
 	g.Go(func() error {

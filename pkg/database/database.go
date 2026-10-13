@@ -89,6 +89,15 @@ func (db *Database) BuildDeleteStmt(from any) string {
 	)
 }
 
+// BuildSoftDeleteStmt returns an UPDATE statement that marks rows as deleted.
+func (db *Database) BuildSoftDeleteStmt(from any) string {
+	return fmt.Sprintf(
+		`UPDATE %[1]s SET %[2]s = UNIX_TIMESTAMP() * 1000 WHERE uuid IN (?) AND %[2]s IS NULL`,
+		db.QuoteIdentifier(TableName(from)),
+		db.QuoteIdentifier("deleted"),
+	)
+}
+
 // BuildSelectStmt returns a SELECT query that creates the FROM part from the
 // given table struct and the column list from the specified columns struct.
 func (db *Database) BuildSelectStmt(table any, columns any) string {
@@ -477,6 +486,20 @@ func (db *Database) DeleteStreamed(
 	return db.BulkExec(
 		ctx,
 		db.BuildDeleteStmt(from),
+		db.Options.MaxPlaceholdersPerStatement,
+		db.GetSemaphoreForTable(TableName(from)),
+		ids,
+		features...,
+	)
+}
+
+// SoftDeleteStreamed marks the specified ids as deleted via BulkExec.
+// The deleted timestamp is intentionally not part of the entity structs, so later
+// upserts cannot clear a previously recorded logical deletion.
+func (db *Database) SoftDeleteStreamed(ctx context.Context, from any, ids <-chan any, features ...Feature) error {
+	return db.BulkExec(
+		ctx,
+		db.BuildSoftDeleteStmt(from),
 		db.Options.MaxPlaceholdersPerStatement,
 		db.GetSemaphoreForTable(TableName(from)),
 		ids,
