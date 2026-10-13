@@ -224,7 +224,7 @@ func (db *Database) BulkExec(
 func (db *Database) Connect() bool {
 	db.log.Info("Connecting to database")
 	if err := db.Ping(); err != nil {
-		db.log.Errorw("Cannot connect to database", zap.Error(errors.WithStack(err)))
+		db.log.Errorw("Cannot connect to database", logging.Error(err))
 
 		return false
 	}
@@ -641,10 +641,15 @@ func (db *Database) YieldAll(ctx context.Context, factoryFunc func() (any, error
 func (db *Database) periodicLog(ctx context.Context, query string, counter *com.Counter) periodic.Stopper {
 	return periodic.Start(ctx, db.log.Interval(), func(tick periodic.Tick) {
 		if count := counter.Reset(); count > 0 {
-			db.log.Debugf("Executed %s with %d rows", query, count)
+			db.log.Debugw("Executed", zap.String("query", query), zap.Uint64("rows", count))
 		}
 	}, periodic.OnStop(func(tick periodic.Tick) {
-		db.log.Debugf("Finished executing %s with %d rows in %s", query, counter.Total(), tick.Elapsed)
+		db.log.Debugw(
+			"Finished executing",
+			zap.String("query", query),
+			zap.Uint64("rows", counter.Total()),
+			zap.Duration("duration", tick.Elapsed),
+		)
 	}))
 }
 

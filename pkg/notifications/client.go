@@ -14,6 +14,7 @@ import (
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 )
 
 type Client struct {
@@ -75,7 +76,7 @@ func (c *Client) ProcessEvent(ctx context.Context, event Event) error {
 			event.Uuid,
 			event.ClusterUuid)
 		if err != nil {
-			c.logger.Errorf("Cannot evaluate rules for event, assuming no rule matched: %v", err)
+			c.logger.Errorw("Cannot evaluate rules for event, assuming no rule matched", logging.Error(err))
 			eventRuleIds = []string{}
 		}
 
@@ -84,9 +85,11 @@ func (c *Client) ProcessEvent(ctx context.Context, event Event) error {
 
 		newEventRules, err := c.client.ProcessEvent(ctx, ev)
 		if errors.Is(err, source.ErrRulesOutdated) {
-			c.logger.Infof("Received a rule update from Icinga Notifications, resubmitting event (old_rules_version: %q, new_rules_version: %q)",
-				c.rulesInfo.Version,
-				newEventRules.Version)
+			c.logger.Infow(
+				"Received a rule update from Icinga Notifications, resubmitting event",
+				zap.String("old_rules_version", c.rulesInfo.Version),
+				zap.String("new_rules_version", newEventRules.Version),
+			)
 
 			c.rulesInfo = newEventRules
 
@@ -95,7 +98,7 @@ func (c *Client) ProcessEvent(ctx context.Context, event Event) error {
 			return errors.Wrapf(err, "cannot submit event to Icinga Notifications (matched_rules: %v, rules_version: %q)", eventRuleIds, c.rulesInfo.Version)
 		}
 
-		c.logger.Debugf("Successfully submitted event to Icinga Notifications (matched_rules: %v)", eventRuleIds)
+		c.logger.Debugw("Successfully submitted event to Icinga Notifications", zap.Strings("matched_rules", eventRuleIds))
 
 		return nil
 	}
@@ -115,12 +118,12 @@ func (c *Client) Stream(ctx context.Context, entities <-chan any) error {
 
 			event, err := entity.(Marshaler).MarshalEvent()
 			if err != nil {
-				c.logger.Errorf("Cannot marshal event: %v", err)
+				c.logger.Errorw("Cannot marshal event", logging.Error(err))
 				continue
 			}
 
 			if err := c.ProcessEvent(ctx, event); err != nil {
-				c.logger.Errorf("Cannot process event: %v", err)
+				c.logger.Errorw("Cannot process event", logging.Error(err))
 			}
 		case <-ctx.Done():
 			return ctx.Err()

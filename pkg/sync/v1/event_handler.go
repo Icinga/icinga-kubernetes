@@ -6,7 +6,6 @@ import (
 	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-go-library/types"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
-	"go.uber.org/zap"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -48,7 +47,7 @@ func (e *EventHandler) OnDelete(obj any) {
 func (e *EventHandler) enqueue(_type EventType, obj any, keyFunc cache.KeyFunc) {
 	key, err := keyFunc(obj)
 	if err != nil {
-		e.log.Errorw("Cannot make key", zap.Error(err))
+		e.log.Errorw("Cannot make key", logging.Error(err))
 
 		return
 	}

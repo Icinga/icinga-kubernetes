@@ -40,6 +40,7 @@ import (
 	promapi "github.com/prometheus/client_golang/api"
 	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/spf13/pflag"
+	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -100,12 +101,12 @@ func main() {
 
 	logger := logs.GetLogger()
 
-	logger.Infof("Starting Icinga for Kubernetes (%s)", internal.Version.Version)
+	logger.Infow("Starting Icinga for Kubernetes", zap.String("version", internal.Version.Version))
 
 	// An explicit -v/--v on the command line wins over the config file.
 	if !pflag.CommandLine.Changed("v") {
 		if err := pflag.CommandLine.Set("v", strconv.Itoa(int(cfg.Logging.Kubernetes))); err != nil {
-			logger.Fatal(errors.Wrap(err, "cannot set Kubernetes logging verbosity"))
+			logger.Fatalw("Cannot set Kubernetes logging verbosity", logging.Error(err))
 		}
 	}
 
@@ -117,7 +118,7 @@ func main() {
 					" a kubeconfig file with cluster access configured")
 		}
 
-		logger.Fatal(errors.Wrap(err, "cannot configure Kubernetes client"))
+		logger.Fatalw("Cannot configure Kubernetes client", logging.Error(err))
 	}
 
 	if serverName, ok := os.LookupEnv("KUBERNETES_SERVER"); ok {
@@ -126,21 +127,21 @@ func main() {
 
 	clientset, err := kubernetes.NewForConfig(kconfig)
 	if err != nil {
-		logger.Fatal(err)
+		logger.Fatalw("Cannot create Kubernetes clientset", logging.Error(err))
 	}
 
-	logger.Infof("Connected to %s", kconfig.Host)
+	logger.Infow("Using Kubernetes API server", zap.String("host", kconfig.Host))
 
 	dbLog := logs.GetChildLogger("database")
 
 	db, err := database.NewDbFromConfig(&cfg.Database, dbLog, database.RetryConnectorCallbacks{})
 	if err != nil {
-		logger.Fatal(err)
+		logger.Fatalw("Cannot create database", logging.Error(err))
 	}
 
 	kdb, err := kdatabase.NewFromSqlxDb(&cfg.Database, dbLog, db.DB)
 	if err != nil {
-		logger.Fatal(err)
+		logger.Fatalw("Cannot create database wrapper", logging.Error(err))
 	}
 
 	// When started by systemd, NOTIFY_SOCKET is set by systemd for Type=notify
@@ -155,7 +156,7 @@ func main() {
 
 	hasSchema, err := dbHasSchema(kdb, cfg.Database.Database)
 	if err != nil {
-		logger.Fatal(err)
+		logger.Fatalw("Cannot query whether the database has a kubernetes_schema table", logging.Error(err))
 	}
 
 	g, ctx := errgroup.WithContext(context.Background())
@@ -177,7 +178,7 @@ func main() {
 			backoff.NewExponentialWithJitter(128*time.Millisecond, 1*time.Minute),
 			retry.Settings{})
 		if err != nil {
-			logger.Fatal(err)
+			logger.Fatalw("Cannot query schema version", logging.Error(err))
 		}
 
 		if version != expectedSchemaVersion {
@@ -189,7 +190,7 @@ func main() {
 						cfg.Database.Database,
 					)
 					if err != nil {
-						logger.Fatal(err)
+						logger.Fatalw("Cannot query database tables", logging.Error(err))
 					}
 					defer func() {
 						_ = rows.Close()
@@ -200,12 +201,12 @@ func main() {
 					for rows.Next() {
 						var tableName string
 						if err := rows.Scan(&tableName); err != nil {
-							logger.Fatal(err)
+							logger.Fatalw("Cannot scan table name", logging.Error(err))
 						}
 
 						_, err := kdb.Exec(fmt.Sprintf(`DROP TABLE %s`, tableName))
 						if err != nil {
-							logger.Fatal(err)
+							logger.Fatalw("Cannot drop table", zap.String("table", tableName), logging.Error(err))
 						}
 					}
 					return
@@ -214,7 +215,7 @@ func main() {
 				backoff.NewExponentialWithJitter(128*time.Millisecond, 1*time.Minute),
 				retry.Settings{})
 			if err != nil {
-				logger.Fatal(err)
+				logger.Fatalw("Cannot wipe outdated database tables", logging.Error(err))
 			}
 
 			hasSchema = false
@@ -227,7 +228,7 @@ func main() {
 		for ddl := range strings.SplitSeq(k8sMysql.Schema, ";") {
 			if ddl = strings.TrimSpace(ddl); ddl != "" {
 				if _, err := kdb.Exec(ddl); err != nil {
-					logger.Fatal(err)
+					logger.Fatalw("Cannot execute schema statement", logging.Error(err))
 				}
 			}
 		}
@@ -240,7 +241,12 @@ func main() {
 	namespaceName := "kube-system"
 	ns, err := clientset.CoreV1().Namespaces().Get(context.TODO(), namespaceName, v1.GetOptions{})
 	if err != nil {
-		logger.Fatalf("Cannot retrieve namespace '%s' for cluster '%s': %v", namespaceName, clusterName, err)
+		logger.Fatalw(
+			"Cannot retrieve namespace",
+			zap.String("namespace", namespaceName),
+			zap.String("cluster", clusterName),
+			logging.Error(err),
+		)
 	}
 
 	clusterInstance := &schemav1.Cluster{
@@ -252,11 +258,11 @@ func main() {
 
 	stmt, _ := kdb.BuildUpsertStmt(clusterInstance)
 	if _, err := kdb.NamedExecContext(ctx, stmt, clusterInstance); err != nil {
-		logger.Error(errors.Wrap(err, "cannot update cluster"))
+		logger.Errorw("Cannot update cluster", logging.Error(err))
 	}
 
 	if _, err := kdb.ExecContext(ctx, "DELETE FROM kubernetes_instance WHERE cluster_uuid = ?", clusterInstance.Uuid); err != nil {
-		logger.Fatal(errors.Wrap(err, "cannot delete instance"))
+		logger.Fatalw("Cannot delete instance", logging.Error(err))
 	}
 	// ,omitempty
 	var kubernetesVersion string
@@ -286,16 +292,16 @@ func main() {
 		stmt, _ := kdb.BuildUpsertStmt(instance)
 
 		if _, err := kdb.NamedExecContext(ctx, stmt, instance); err != nil {
-			logger.Error(errors.Wrap(err, "cannot update instance"))
+			logger.Errorw("Cannot update instance", logging.Error(err))
 		}
 	}, periodic.Immediate()).Stop()
 
 	if err := internal.SyncNotificationsConfig(ctx, db, &cfg.Notifications, clusterInstance.Uuid); err != nil {
-		logger.Fatal(err)
+		logger.Fatalw("Cannot sync notifications configuration", logging.Error(err))
 	}
 
 	if cfg.Notifications.Url != "" {
-		logger.Infof("Sending notifications to %s", cfg.Notifications.Url)
+		logger.Infow("Sending notifications", zap.String("url", cfg.Notifications.Url))
 
 		nclient, err := notifications.NewClient(
 			"icinga-kubernetes/"+internal.Version.Version,
@@ -304,7 +310,7 @@ func main() {
 			logs.GetChildLogger("notifications"),
 		)
 		if err != nil {
-			logger.Fatal(err)
+			logger.Fatalw("Cannot create notifications client", logging.Error(err))
 		}
 
 		type objectTags struct {
@@ -324,14 +330,14 @@ func main() {
 		defer periodic.Start(ctx, time.Hour, func(tick periodic.Tick) {
 			r, err := nclient.Incidents(ctx)
 			if err != nil {
-				logger.Errorf("Cannot fetch incidents: %v", err)
+				logger.Errorw("Cannot fetch incidents", logging.Error(err))
 				return
 			}
 			defer func() { _ = r.Close() }()
 
 			var incidents []incident
 			if err := json.NewDecoder(r).Decode(&incidents); err != nil {
-				logger.Errorf("Cannot decode incidents: %v", err)
+				logger.Errorw("Cannot decode incidents", logging.Error(err))
 				return
 			}
 
@@ -370,7 +376,7 @@ func main() {
 			}
 
 			if err := ng.Wait(); err != nil {
-				logger.Errorf("Cannot fetch orphaned incidents: %v", err)
+				logger.Errorw("Cannot fetch orphaned incidents", logging.Error(err))
 			}
 
 			for _, tags := range objectTagMap {
@@ -396,9 +402,9 @@ func main() {
 					Tags:        _tags,
 					ExtraTags:   nil,
 				}
-				logger.Infof("Deleting orphaned incident: %q", ev.Name)
+				logger.Infow("Deleting orphaned incident", zap.String("name", ev.Name))
 				if err := nclient.ProcessEvent(ctx, ev); err != nil {
-					logger.Errorf("Cannot delete orphaned incident: %v", err)
+					logger.Errorw("Cannot delete orphaned incident", logging.Error(err))
 				}
 			}
 		}, periodic.Immediate()).Stop()
@@ -436,13 +442,13 @@ func main() {
 
 	err = internal.SyncPrometheusConfig(ctx, db, &cfg.Prometheus, clusterInstance.Uuid)
 	if err != nil {
-		logger.Error(errors.Wrap(err, "cannot sync prometheus config"))
+		logger.Errorw("Cannot sync prometheus config", logging.Error(err))
 	}
 
 	if cfg.Prometheus.Url == "" {
 		err = internal.AutoDetectPrometheus(ctx, clientset, &cfg.Prometheus)
 		if err != nil {
-			logger.Error(errors.Wrap(err, "cannot auto-detect prometheus"))
+			logger.Errorw("Cannot auto-detect prometheus", logging.Error(err))
 		}
 	}
 
@@ -458,7 +464,7 @@ func main() {
 			RoundTripper: transport,
 		})
 		if err != nil {
-			logger.Fatal(errors.Wrap(err, "cannot create Prometheus client"))
+			logger.Fatalw("Cannot create Prometheus client", logging.Error(err))
 		}
 
 		promApiClient := promv1.NewAPI(promClient)
@@ -705,7 +711,7 @@ func main() {
 	})
 
 	if err := g.Wait(); err != nil {
-		logger.Fatal(err)
+		logger.Fatalw("Cannot run Icinga for Kubernetes", logging.Error(err))
 	}
 }
 

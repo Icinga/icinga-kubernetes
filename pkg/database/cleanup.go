@@ -7,6 +7,7 @@ import (
 
 	"github.com/icinga/icinga-go-library/backoff"
 	"github.com/icinga/icinga-go-library/com"
+	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-go-library/periodic"
 	"github.com/icinga/icinga-go-library/retry"
 	"github.com/icinga/icinga-go-library/types"
@@ -70,7 +71,7 @@ func (db *Database) CleanupOlderThan(
 				Timeout: retry.DefaultTimeout,
 				OnRetryableError: func(_ time.Duration, _ uint64, err, lastErr error) {
 					if lastErr == nil || err.Error() != lastErr.Error() {
-						db.log.Warnw("Cannot execute query. Retrying", zap.Error(err))
+						db.log.Warnw("Cannot execute query. Retrying", logging.Error(err))
 					}
 				},
 				OnSuccess: func(elapsed time.Duration, attempt uint64, lastErr error) {
@@ -79,7 +80,7 @@ func (db *Database) CleanupOlderThan(
 							"Query retried successfully after error",
 							zap.Duration("after", elapsed),
 							zap.Uint64("attempts", attempt),
-							zap.NamedError("recovered_error", lastErr),
+							logging.Error(lastErr),
 						)
 					}
 				},
