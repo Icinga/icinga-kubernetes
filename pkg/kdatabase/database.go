@@ -41,6 +41,14 @@ func NewFromConfig(cfg *database.Config, log *logging.Logger) (*DB, error) {
 	}, nil
 }
 
+// BuildSoftDeleteStmt returns an UPDATE statement that marks rows as deleted.
+func (db *DB) BuildSoftDeleteStmt(from any) string {
+	return fmt.Sprintf(
+		`UPDATE %q SET "deleted" = UNIX_TIMESTAMP() * 1000 WHERE "uuid" IN (?) AND "deleted" IS NULL`,
+		database.TableName(from),
+	)
+}
+
 // BuildDeleteStmt returns a DELETE statement for the given struct.
 func (db *DB) BuildDeleteStmt(from any) string {
 	var column string
@@ -66,6 +74,20 @@ func (db *DB) Connect() bool {
 	}
 
 	return true
+}
+
+// SoftDeleteStreamed marks the specified ids as deleted via BulkExec.
+// The deleted timestamp is intentionally not part of the entity structs,
+// so later upserts cannot clear a previously recorded logical deletion.
+func (db *DB) SoftDeleteStreamed(ctx context.Context, from any, ids <-chan any, onSuccess ...database.OnSuccess[any]) error {
+	return db.BulkExec(
+		ctx,
+		db.BuildSoftDeleteStmt(from),
+		db.Options.MaxPlaceholdersPerStatement,
+		db.GetSemaphoreForTable(database.TableName(from)),
+		ids,
+		withoutNil(onSuccess)...,
+	)
 }
 
 // streamChildIds streams the ids of the related rows that reference one of the
