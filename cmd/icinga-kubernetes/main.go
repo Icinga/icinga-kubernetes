@@ -652,6 +652,41 @@ func main() {
 		})
 	})
 
+	// Every kind synced without WithNoDelete() is soft-deleted, so it
+	// needs a deleted column in the schema and an entry in this list.
+	// Otherwise, its soft delete fails, or its rows are never purged.
+	for _, entity := range []database.Entity{
+		&schema.ConfigMap{},
+		&schema.CronJob{},
+		&schema.DaemonSet{},
+		&schema.Deployment{},
+		&schema.EndpointSlice{},
+		&schema.Ingress{},
+		&schema.Job{},
+		&schema.Namespace{},
+		&schema.Node{},
+		&schema.PersistentVolume{},
+		&schema.Pod{},
+		&schema.Pvc{},
+		&schema.ReplicaSet{},
+		&schema.Secret{},
+		&schema.Service{},
+		&schema.StatefulSet{},
+	} {
+		g.Go(func() error {
+			return cleanup.PeriodicCleanup(
+				ctx,
+				&kdatabase.CascadeCleaner{
+					Entity:      entity,
+					Column:      "deleted",
+					ClusterUuid: cluster.ClusterUuidFromContext(ctx),
+				},
+				kdatabase.WithInterval(time.Minute),
+				kdatabase.WithRetention(5*time.Minute),
+			)
+		})
+	}
+
 	// When started by systemd, NOTIFY_SOCKET is set by systemd for Type=notify
 	// supervised services, which was the default setting for the Icinga for Kubernetes
 	// service before switching to Type=simple. For Type=notify, we need to tell
