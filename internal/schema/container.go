@@ -553,7 +553,11 @@ func SyncContainers(
 
 				pod := e.(*Pod)
 
-				delete(deletedPodIds, pod.Uuid.String())
+				// A late upsert may finish after logical deletion. Never restart
+				// log collection for the same Kubernetes UID once deletion won.
+				if deletedPodIds[pod.Uuid.String()] {
+					continue
+				}
 
 				for _, container := range pod.Containers {
 					_, err := scheduler.FindJobsByTag(container.Uuid.String())
