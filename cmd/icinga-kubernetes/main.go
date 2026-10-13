@@ -363,7 +363,7 @@ func main() {
 
 			for kind, uuids := range uuidMap {
 				ng.Go(func() error {
-					q, args, err := sqlx.In(fmt.Sprintf(`SELECT "uuid" FROM %q WHERE "uuid" IN (?)`, kind), uuids)
+					q, args, err := sqlx.In(fmt.Sprintf(`SELECT "uuid" FROM %q WHERE "uuid" IN (?) AND "deleted" IS NULL`, kind), uuids)
 					if err != nil {
 						return err
 					}
@@ -720,6 +720,46 @@ func main() {
 			Column: "timestamp",
 		})
 	})
+
+	interval := time.Hour
+	if cfg.DeletedRetention < time.Hour {
+		interval = time.Minute
+	}
+
+	// Every kind synced without WithNoDelete() is soft-deleted, so it
+	// needs a deleted column in the schema and an entry in this list.
+	// Otherwise, its soft delete fails, or its rows are never purged.
+	for _, entity := range []database.Entity{
+		&schema.ConfigMap{},
+		&schema.CronJob{},
+		&schema.DaemonSet{},
+		&schema.Deployment{},
+		&schema.EndpointSlice{},
+		&schema.Ingress{},
+		&schema.Job{},
+		&schema.Namespace{},
+		&schema.Node{},
+		&schema.PersistentVolume{},
+		&schema.Pod{},
+		&schema.Pvc{},
+		&schema.ReplicaSet{},
+		&schema.Secret{},
+		&schema.Service{},
+		&schema.StatefulSet{},
+	} {
+		g.Go(func() error {
+			return cleanup.PeriodicCleanup(
+				ctx,
+				&kdatabase.CascadeCleaner{
+					Entity:      entity,
+					Column:      "deleted",
+					ClusterUuid: cluster.ClusterUuidFromContext(ctx),
+				},
+				kdatabase.WithInterval(interval),
+				kdatabase.WithRetention(cfg.DeletedRetention),
+			)
+		})
+	}
 
 	// When started by systemd, NOTIFY_SOCKET is set by systemd for Type=notify
 	// supervised services, which was the default setting for the Icinga for Kubernetes

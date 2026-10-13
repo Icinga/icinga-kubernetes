@@ -41,6 +41,10 @@ logging:
   # Overridden by the -v/--v command line flag.
 #  kubernetes: 0
 
+# Retention period for soft-deleted Kubernetes resources before physical purge.
+# Must be at least one minute.
+#deleted_retention: 5m
+
 # Configuration for Prometheus metrics API.
 prometheus:
   # Prometheus server URL.

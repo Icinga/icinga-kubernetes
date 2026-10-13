@@ -478,10 +478,8 @@ func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStat
 // SyncContainers consumes from the `upsertPods` and `deletePods` chans
 // concurrently and schedules a job for each of the containers (drawn from
 // `upsertPods`) that periodically syncs the container logs with the database.
-// When pods are deleted, their IDs are streamed through the `deletePods` chan,
-// and this fetches all the container IDs matching the respective pod ID from
-// the database and initiates a container deletion stream that cleans up all
-// container-related resources.
+// When pods are deleted, matching log jobs are stopped and cached logs are
+// evicted. Database container rows are retained here for later physical cleanup.
 func SyncContainers(
 	ctx context.Context, db *kdatabase.DB, g *errgroup.Group, upsertPods <-chan database.Entity, deletePods <-chan any,
 ) {
@@ -496,16 +494,7 @@ func SyncContainers(
 	close(err)
 	com.ErrgroupReceive(g, err)
 
-	// Use buffered channel here not to block the goroutines, as they can stream
-	// container ids from multiple pods concurrently.
-	containerIds := make(chan any, db.Options.MaxPlaceholdersPerStatement)
 	g.Go(func() error {
-		return db.DeleteStreamedCascading(ctx, &Container{}, containerIds)
-	})
-
-	g.Go(func() error {
-		defer close(containerIds)
-
 		scheduler.SetMaxConcurrentJobs(MaxConcurrentJobs, gocron.WaitMode)
 		scheduler.TagsUnique()
 
@@ -546,11 +535,6 @@ func SyncContainers(
 							}
 
 							container := e.(*Container)
-							select {
-							case containerIds <- container.Uuid:
-							case <-ctx.Done():
-								return ctx.Err()
-							}
 
 							if err := scheduler.RemoveByTag(container.Uuid.String()); err != nil && !errors.Is(err, gocron.ErrJobNotFoundWithTag) {
 								return err
@@ -618,7 +602,7 @@ func warmup(ctx context.Context, db *kdatabase.DB) error {
 
 	meta := struct{ ClusterUuid types.UUID }{ClusterUuid: cluster.ClusterUuidFromContext(ctx)}
 	query := db.BuildSelectStmt(ContainerLog{}, ContainerLog{}) +
-		` WHERE "pod_uuid" IN (SELECT "uuid" FROM "pod" WHERE "cluster_uuid" = :cluster_uuid)`
+		` WHERE "pod_uuid" IN (SELECT "uuid" FROM "pod" WHERE "cluster_uuid" = :cluster_uuid AND "deleted" IS NULL)`
 
 	entities, errs := db.YieldAll(ctx, func() database.Entity { return &ContainerLog{} }, query, meta)
 	com.ErrgroupReceive(g, errs)
