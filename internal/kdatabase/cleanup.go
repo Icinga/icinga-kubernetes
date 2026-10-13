@@ -14,6 +14,8 @@ import (
 	"github.com/icinga/icinga-go-library/types"
 )
 
+const batchSize = 5000
+
 // CleanupStmt defines information needed to compose cleanup statements.
 type CleanupStmt struct {
 	Table string
@@ -57,15 +59,15 @@ func NewCleanup(db *DB) *Cleanup {
 }
 
 // CleanupOlderThan deletes all rows with the specified statement that are older
-// than the given time. Deletes a maximum of as many rows per round as defined
-// in count. Actually deleted rows will be passed to onSuccess. Returns the total
-// number of rows deleted.
+// than the given time. Deletes a maximum of batchSize rows per round. Actually
+// deleted rows will be passed to onSuccess. Returns the total number of rows
+// deleted.
 func (c *Cleanup) CleanupOlderThan(
-	ctx context.Context, stmt CleanupStmt, count uint64, olderThan time.Time, onSuccess ...database.OnSuccess[struct{}],
+	ctx context.Context, stmt CleanupStmt, olderThan time.Time, onSuccess ...database.OnSuccess[struct{}],
 ) (uint64, error) {
 	var counter com.Counter
 
-	q := c.db.Rebind(stmt.Build(c.db.DriverName(), count))
+	q := c.db.Rebind(stmt.Build(c.db.DriverName(), batchSize))
 
 	defer c.db.Log(ctx, q, &counter).Stop()
 
@@ -102,7 +104,7 @@ func (c *Cleanup) CleanupOlderThan(
 			}
 		}
 
-		if rowsDeleted < int64(count) {
+		if rowsDeleted < int64(batchSize) {
 			break
 		}
 	}
@@ -119,7 +121,7 @@ func (c *Cleanup) PeriodicCleanup(ctx context.Context, stmt CleanupStmt) error {
 	defer periodic.Start(ctx, time.Hour, func(tick periodic.Tick) {
 		olderThan := tick.Time.AddDate(0, 0, -1)
 
-		_, err := c.CleanupOlderThan(ctx, stmt, 5000, olderThan)
+		_, err := c.CleanupOlderThan(ctx, stmt, olderThan)
 		if err != nil {
 			select {
 			case errs <- err:
