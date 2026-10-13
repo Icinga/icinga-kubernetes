@@ -16,9 +16,9 @@ import (
 
 const batchSize = 5000
 
-// Cleaner deletes rows that are older than a given time, see PeriodicCleanup.
+// Cleaner deletes rows that are older than a given retention, see PeriodicCleanup.
 type Cleaner interface {
-	cleanup(ctx context.Context, db *DB, olderThan time.Time) error
+	cleanup(ctx context.Context, db *DB, retention time.Duration) error
 }
 
 // DefaultCleaner defines information needed to compose cleanup statements.
@@ -42,12 +42,14 @@ DELETE FROM %[2]s WHERE %[1]s IN (SELECT %[1]s FROM rows)`, c.PK, c.Table, c.Col
 	}
 }
 
-// cleanup deletes all rows with the specified statement that are older than
-// the given time. Deletes a maximum of batchSize rows per round.
-func (c *DefaultCleaner) cleanup(ctx context.Context, db *DB, olderThan time.Time) error {
+// cleanup deletes all rows of the table whose time column is older than
+// the retention, measured against the daemon's clock.
+// Deletes a maximum of batchSize rows per round.
+func (c *DefaultCleaner) cleanup(ctx context.Context, db *DB, retention time.Duration) error {
 	var counter com.Counter
 
 	query := db.Rebind(c.buildStmt(db.DriverName(), batchSize))
+	olderThan := time.Now().Add(-retention)
 
 	defer db.Log(ctx, query, &counter).Stop()
 
@@ -88,17 +90,20 @@ func (c *DefaultCleaner) cleanup(ctx context.Context, db *DB, olderThan time.Tim
 // CascadeCleaner defines an entity whose rows are cleaned up together with
 // their relations based on the given time column.
 type CascadeCleaner struct {
-	Entity      database.Entity
+	Entity database.Entity
+
+	// Column must hold Unix milliseconds set by the database clock.
 	Column      string
 	ClusterUuid types.UUID
 }
 
-// cleanup deletes all rows of the entity that are older than the given time in
-// rounds of at most batchSize rows via DeleteStreamed with cascading, so that
-// the relations of the entity are deleted as well.
-func (c *CascadeCleaner) cleanup(ctx context.Context, db *DB, olderThan time.Time) error {
+// cleanup deletes all rows of the entity whose time column is older than the
+// retention, measured against the database clock, in rounds of at most
+// batchSize rows via DeleteStreamed with cascading, so that the relations of
+// the entity are deleted as well.
+func (c *CascadeCleaner) cleanup(ctx context.Context, db *DB, retention time.Duration) error {
 	query := db.Rebind(db.BuildSelectStmt(c.Entity, &struct{ Uuid types.UUID }{}) + fmt.Sprintf(
-		` WHERE %q < ? AND "cluster_uuid" = ? LIMIT %d`, c.Column, batchSize,
+		` WHERE %q < UNIX_TIMESTAMP() * 1000 - ? AND "cluster_uuid" = ? LIMIT %d`, c.Column, batchSize,
 	))
 
 	for {
@@ -110,7 +115,7 @@ func (c *CascadeCleaner) cleanup(ctx context.Context, db *DB, olderThan time.Tim
 			func(ctx context.Context) error {
 				uuids = nil
 
-				return db.SelectContext(ctx, &uuids, query, types.UnixMilli(olderThan), c.ClusterUuid)
+				return db.SelectContext(ctx, &uuids, query, retention.Milliseconds(), c.ClusterUuid)
 			},
 			retry.Retryable,
 			backoff.DefaultBackoff,
@@ -185,9 +190,7 @@ func (c *Cleanup) PeriodicCleanup(ctx context.Context, cleaner Cleaner, options 
 	errs := make(chan error, 1)
 
 	defer periodic.Start(ctx, o.interval, func(tick periodic.Tick) {
-		olderThan := tick.Time.Add(-o.retention)
-
-		if err := cleaner.cleanup(ctx, c.db, olderThan); err != nil {
+		if err := cleaner.cleanup(ctx, c.db, o.retention); err != nil {
 			select {
 			case errs <- err:
 			case <-ctx.Done():
