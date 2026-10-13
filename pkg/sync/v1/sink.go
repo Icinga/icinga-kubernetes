@@ -2,7 +2,6 @@ package v1
 
 import (
 	"context"
-	"time"
 
 	"github.com/icinga/icinga-go-library/database"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -43,18 +42,6 @@ func (s *Sink) DeleteCh() <-chan any {
 }
 
 func (s *Sink) Upsert(ctx context.Context, item *Item) error {
-	if item.Item != nil {
-		deletionTimestamp := (*item.Item).GetDeletionTimestamp()
-		if !deletionTimestamp.IsZero() && deletionTimestamp.Time.Compare(time.Now().Add(30*time.Second)) <= 0 {
-			// Don't process UPSERTs if the resource is about to be deleted in
-			// the next 30 seconds to prevent races between simultaneous UPSERT
-			// and DELETE statements for the same resource, where an UPSERT
-			// statement can occur after a DELETE statement has already been
-			// executed.
-			return ctx.Err()
-		}
-	}
-
 	select {
 	case s.upsert <- s.upsertFunc(item):
 		return nil
