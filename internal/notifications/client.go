@@ -198,7 +198,7 @@ func (c *Client) CloseOrphanedIncidents(ctx context.Context, clusterUuid types.U
 	live := make(map[string]struct{})
 	for kind, uuids := range uuidByResource {
 		ng.Go(func() error {
-			q, args, err := sqlx.In(fmt.Sprintf(`SELECT "uuid" FROM %q WHERE "uuid" IN (?)`, kind), uuids)
+			q, args, err := sqlx.In(fmt.Sprintf(`SELECT "uuid" FROM %q WHERE "uuid" IN (?) AND "deleted" IS NULL`, kind), uuids)
 			if err != nil {
 				return err
 			}
