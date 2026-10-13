@@ -111,11 +111,44 @@ type cleanupWhere struct {
 	Time types.UnixMilli
 }
 
-func (db *Database) PeriodicCleanup(ctx context.Context, stmt CleanupStmt) error {
+// CleanupOption configures PeriodicCleanup.
+type CleanupOption func(*cleanupOptions)
+
+type cleanupOptions struct {
+	interval  time.Duration
+	retention time.Duration
+}
+
+// WithInterval sets how often PeriodicCleanup runs. Defaults to one hour.
+func WithInterval(interval time.Duration) CleanupOption {
+	return func(o *cleanupOptions) {
+		o.interval = interval
+	}
+}
+
+// WithRetention sets how long rows are kept before PeriodicCleanup deletes
+// them. Defaults to 24 hours.
+func WithRetention(retention time.Duration) CleanupOption {
+	return func(o *cleanupOptions) {
+		o.retention = retention
+	}
+}
+
+// PeriodicCleanup deletes rows with the specified statement that are older
+// than the retention once per interval.
+func (db *Database) PeriodicCleanup(ctx context.Context, stmt CleanupStmt, options ...CleanupOption) error {
+	o := &cleanupOptions{
+		interval:  time.Hour,
+		retention: 24 * time.Hour,
+	}
+	for _, option := range options {
+		option(o)
+	}
+
 	errs := make(chan error, 1)
 
-	defer periodic.Start(ctx, time.Hour, func(tick periodic.Tick) {
-		olderThan := tick.Time.AddDate(0, 0, -1)
+	defer periodic.Start(ctx, o.interval, func(tick periodic.Tick) {
+		olderThan := tick.Time.Add(-o.retention)
 
 		_, err := db.CleanupOlderThan(ctx, stmt, olderThan)
 
