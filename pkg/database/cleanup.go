@@ -14,6 +14,8 @@ import (
 	"go.uber.org/zap"
 )
 
+const batchSize = 5000
+
 // CleanupStmt defines information needed to compose cleanup statements.
 type CleanupStmt struct {
 	Table  string
@@ -35,16 +37,15 @@ DELETE FROM %[2]s WHERE %[1]s IN (SELECT %[1]s FROM rows)`, stmt.PK, stmt.Table,
 }
 
 // CleanupOlderThan deletes all rows with the specified statement that are older
-// than the given time. Deletes a maximum of as many rows per round as defined
-// in count. Actually deleted rows will be passed to onSuccess. Returns the total
-// number of rows deleted.
+// than the given time. Deletes a maximum of batchSize rows per round. Actually
+// deleted rows will be passed to onSuccess. Returns the total number of rows
+// deleted.
 func (db *Database) CleanupOlderThan(
-	ctx context.Context, stmt CleanupStmt,
-	count uint64, olderThan time.Time, onSuccess ...OnSuccess[struct{}],
+	ctx context.Context, stmt CleanupStmt, olderThan time.Time, onSuccess ...OnSuccess[struct{}],
 ) (uint64, error) {
 	var counter com.Counter
 
-	q := db.Rebind(stmt.Build(db.DriverName(), count))
+	q := db.Rebind(stmt.Build(db.DriverName(), batchSize))
 
 	defer db.periodicLog(ctx, q, &counter).Stop()
 
@@ -98,7 +99,7 @@ func (db *Database) CleanupOlderThan(
 			}
 		}
 
-		if rowsDeleted < int64(count) {
+		if rowsDeleted < int64(batchSize) {
 			break
 		}
 	}
@@ -116,9 +117,7 @@ func (db *Database) PeriodicCleanup(ctx context.Context, stmt CleanupStmt) error
 	defer periodic.Start(ctx, time.Hour, func(tick periodic.Tick) {
 		olderThan := tick.Time.AddDate(0, 0, -1)
 
-		_, err := db.CleanupOlderThan(
-			ctx, stmt, 5000, olderThan,
-		)
+		_, err := db.CleanupOlderThan(ctx, stmt, olderThan)
 
 		if err != nil {
 			select {
