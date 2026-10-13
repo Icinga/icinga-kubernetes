@@ -112,9 +112,8 @@ type cleanupWhere struct {
 
 func (db *Database) PeriodicCleanup(ctx context.Context, stmt CleanupStmt) error {
 	errs := make(chan error, 1)
-	defer close(errs)
 
-	periodic.Start(ctx, time.Hour, func(tick periodic.Tick) {
+	defer periodic.Start(ctx, time.Hour, func(tick periodic.Tick) {
 		olderThan := tick.Time.AddDate(0, 0, -1)
 
 		_, err := db.CleanupOlderThan(
