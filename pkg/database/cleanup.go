@@ -82,7 +82,7 @@ func (stmt CascadeCleanupStmt) cleanup(ctx context.Context, db *Database, retent
 				return db.SelectContext(ctx, &uuids, query, retention.Milliseconds(), stmt.ClusterUuid)
 			},
 			IsRetryable,
-			backoff.NewExponentialWithJitter(1*time.Millisecond, 1*time.Second),
+			backoff.DefaultBackoff,
 			retry.Settings{},
 		); err != nil {
 			return CantPerformQuery(err, query)
