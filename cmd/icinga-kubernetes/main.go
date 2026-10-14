@@ -739,7 +739,7 @@ func main() {
 		g.Go(func() error {
 			return kdb.PeriodicCleanup(
 				ctx,
-				kdatabase.CascadeCleanupStmt{
+				&kdatabase.CascadeCleaner{
 					Entity:      entity,
 					Column:      "deleted",
 					ClusterUuid: cluster.ClusterUuidFromContext(ctx),
