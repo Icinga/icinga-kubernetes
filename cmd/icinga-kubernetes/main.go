@@ -71,7 +71,7 @@ func main() {
 
 	loadingRules := kclientcmd.NewDefaultClientConfigLoadingRules()
 	loadingRules.DefaultClientConfig = &kclientcmd.DefaultClientConfig
-	pflag.StringVar(&loadingRules.ExplicitPath, "kubeconfig", "", "Path to a kube config. Only required if out-of-cluster")
+	pflag.StringVar(&loadingRules.ExplicitPath, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster")
 
 	overrides := &kclientcmd.ConfigOverrides{}
 	kflags := kclientcmd.RecommendedConfigOverrideFlags("")
