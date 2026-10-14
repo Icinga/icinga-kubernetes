@@ -18,11 +18,11 @@ including the database, common setup approaches include the following:
 * Only the Icinga for Kubernetes daemon runs inside a Kubernetes cluster,
   requiring configuration for an external service to connect to the database outside the cluster.
 
-![Icinga Kubernetes Web Dashboard](doc/res/icinga-kubernetes-dashboard.png)
-![Icinga Kubernetes Web Deployment](doc/res/icinga-kubernetes-deployment.png)
-![Icinga Kubernetes Web Stateful Set](doc/res/icinga-kubernetes-statefulset.png)
-![Icinga Kubernetes Web Replica Set](doc/res/icinga-kubernetes-replicaset.png)
-![Icinga Kubernetes Web Favorites Dashboard](doc/res/icinga-kubernetes-favorites-dashboard.png)
+![Icinga for Kubernetes Web Dashboard](doc/res/icinga-kubernetes-dashboard.png)
+![Icinga for Kubernetes Web Deployment](doc/res/icinga-kubernetes-deployment.png)
+![Icinga for Kubernetes Web Stateful Set](doc/res/icinga-kubernetes-statefulset.png)
+![Icinga for Kubernetes Web Replica Set](doc/res/icinga-kubernetes-replicaset.png)
+![Icinga for Kubernetes Web Favorites Dashboard](doc/res/icinga-kubernetes-favorites-dashboard.png)
 
 ## Multi-Cluster Support
 

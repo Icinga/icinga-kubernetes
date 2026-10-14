@@ -81,7 +81,7 @@ func main() {
 	pflag.Parse()
 
 	if showVersion {
-		internal.Version.Print("Icinga Kubernetes")
+		internal.Version.Print("Icinga for Kubernetes")
 		os.Exit(0)
 	}
 
@@ -94,7 +94,7 @@ func main() {
 		utils.PrintErrorThenExit(errors.Wrap(err, "cannot load configuration"), 1)
 	}
 
-	logs, err := logging.NewLoggingFromConfig("Icinga Kubernetes", cfg.Logging.Config)
+	logs, err := logging.NewLoggingFromConfig("Icinga for Kubernetes", cfg.Logging.Config)
 	if err != nil {
 		utils.PrintErrorThenExit(errors.Wrap(err, "cannot configure logging"), 1)
 	}
