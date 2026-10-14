@@ -7,9 +7,11 @@ import (
 
 	"github.com/icinga/icinga-go-library/backoff"
 	"github.com/icinga/icinga-go-library/com"
+	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-go-library/periodic"
 	"github.com/icinga/icinga-go-library/retry"
 	"github.com/icinga/icinga-go-library/types"
+	"go.uber.org/zap"
 )
 
 // CleanupStmt defines information needed to compose cleanup statements.
@@ -69,13 +71,17 @@ func (db *Database) CleanupOlderThan(
 				Timeout: retry.DefaultTimeout,
 				OnRetryableError: func(_ time.Duration, _ uint64, err, lastErr error) {
 					if lastErr == nil || err.Error() != lastErr.Error() {
-						db.log.Info("Cannot execute query. Retrying", "error", err)
+						db.log.Warnw("Cannot execute query. Retrying", logging.Error(err))
 					}
 				},
 				OnSuccess: func(elapsed time.Duration, attempt uint64, lastErr error) {
 					if attempt > 1 {
-						db.log.Info("Query retried successfully after error",
-							"after", elapsed, "attempt", attempt, "recovered_error", lastErr)
+						db.log.Infow(
+							"Query retried successfully after error",
+							zap.Duration("after", elapsed),
+							zap.Uint64("attempts", attempt),
+							logging.Error(lastErr),
+						)
 					}
 				},
 			},

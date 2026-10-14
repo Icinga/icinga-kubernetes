@@ -364,15 +364,17 @@ func (pms *PromMetricSync) run(
 						Timeout: retry.DefaultTimeout,
 						OnRetryableError: func(_ time.Duration, _ uint64, err, lastErr error) {
 							if lastErr == nil || err.Error() != lastErr.Error() {
-								pms.logger.Warnw("Cannot execute prometheus query. Retrying", zap.Error(err))
+								pms.logger.Warnw("Cannot execute prometheus query. Retrying", logging.Error(err))
 							}
 						},
 						OnSuccess: func(elapsed time.Duration, attempt uint64, lastErr error) {
 							if attempt > 1 {
-								pms.logger.Infow("Query retried successfully after error",
+								pms.logger.Infow(
+									"Query retried successfully after error",
 									zap.Duration("after", elapsed),
 									zap.Uint64("attempts", attempt),
-									zap.NamedError("recovered_error", lastErr))
+									logging.Error(lastErr),
+								)
 							}
 						},
 					},
@@ -382,7 +384,7 @@ func (pms *PromMetricSync) run(
 				}
 
 				if len(warnings) > 0 {
-					pms.logger.Warnf("Prometheus warnings: %v\n", warnings)
+					pms.logger.Warnw("Prometheus warnings", zap.Strings("warnings", warnings))
 				}
 
 				if result == nil {
@@ -546,7 +548,7 @@ func (pms *PromMetricSync) Pods(ctx context.Context, informer kcache.SharedIndex
 
 func (pms *PromMetricSync) Containers(ctx context.Context, informer kcache.SharedIndexInformer) error {
 	if !kcache.WaitForCacheSync(ctx.Done(), informer.HasSynced) {
-		pms.logger.Fatal("timed out waiting for caches to sync")
+		pms.logger.Fatal("Timed out waiting for caches to sync")
 	}
 
 	upsertMetrics := make(chan database.Entity)
@@ -593,7 +595,7 @@ func (pms *PromMetricSync) Containers(ctx context.Context, informer kcache.Share
 
 func (pms *PromMetricSync) Clusters(ctx context.Context, informer kcache.SharedIndexInformer) error {
 	if !kcache.WaitForCacheSync(ctx.Done(), informer.HasSynced) {
-		pms.logger.Fatal("timed out waiting for caches to sync")
+		pms.logger.Fatal("Timed out waiting for caches to sync")
 	}
 
 	upsertMetrics := make(chan database.Entity)
