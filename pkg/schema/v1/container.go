@@ -313,7 +313,7 @@ func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStat
 		if !status.Ready && container.ReadinessProbe != nil && status.LastTerminationState.Terminated != nil {
 			return Critical, fmt.Sprintf(
 				"Container %s is critical as it's not ready due to failing readiness probes."+
-					" Last terminal with non-zero exit code %d and signal %d was at %s. %s.",
+					" Last termination with non-zero exit code %d and signal %d was at %s. %s.",
 				container.Name,
 				status.LastTerminationState.Terminated.ExitCode,
 				status.LastTerminationState.Terminated.Signal,
@@ -357,7 +357,7 @@ func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStat
 			if container.StartupProbe != nil && status.LastTerminationState.Terminated != nil {
 				return Critical, fmt.Sprintf(
 					"Container %s is critical as it's not ready due to failing startup probes."+
-						" Last terminal with non-zero exit code %d and signal %d was at %s. %s.",
+						" Last termination with non-zero exit code %d and signal %d was at %s. %s.",
 					container.Name,
 					status.LastTerminationState.Terminated.ExitCode,
 					status.LastTerminationState.Terminated.Signal,
@@ -376,7 +376,7 @@ func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStat
 			if container.ReadinessProbe != nil && status.LastTerminationState.Terminated != nil {
 				return Critical, fmt.Sprintf(
 					"Container %s is critical as it's not ready due to failing readiness probes."+
-						" Last terminal with non-zero exit code %d and signal %d was at %s. %s.",
+						" Last termination with non-zero exit code %d and signal %d was at %s. %s.",
 					container.Name,
 					status.LastTerminationState.Terminated.ExitCode,
 					status.LastTerminationState.Terminated.Signal,
