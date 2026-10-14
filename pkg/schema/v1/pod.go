@@ -7,9 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-kubernetes/pkg/database"
+	kdatabase "github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/notifications"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -75,14 +76,50 @@ type PodCondition struct {
 	Message        string
 }
 
+func (p PodCondition) ID() database.ID {
+	return compoundId{id: p.PodUuid.String() + p.Type}
+}
+
+func (p PodCondition) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (p PodCondition) Fingerprint() database.Fingerprinter {
+	return p
+}
+
 type PodLabel struct {
 	PodUuid   types.UUID
 	LabelUuid types.UUID
 }
 
+func (p PodLabel) ID() database.ID {
+	return compoundId{id: p.PodUuid.String() + p.LabelUuid.String()}
+}
+
+func (p PodLabel) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (p PodLabel) Fingerprint() database.Fingerprinter {
+	return p
+}
+
 type PodAnnotation struct {
 	PodUuid        types.UUID
 	AnnotationUuid types.UUID
+}
+
+func (p PodAnnotation) ID() database.ID {
+	return compoundId{id: p.PodUuid.String() + p.AnnotationUuid.String()}
+}
+
+func (p PodAnnotation) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (p PodAnnotation) Fingerprint() database.Fingerprinter {
+	return p
 }
 
 type PodOwner struct {
@@ -95,6 +132,18 @@ type PodOwner struct {
 	BlockOwnerDeletion types.Bool
 }
 
+func (p PodOwner) ID() database.ID {
+	return compoundId{id: p.PodUuid.String() + p.OwnerUuid.String()}
+}
+
+func (p PodOwner) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (p PodOwner) Fingerprint() database.Fingerprinter {
+	return p
+}
+
 type PodVolume struct {
 	PodUuid    types.UUID
 	VolumeName string
@@ -102,11 +151,35 @@ type PodVolume struct {
 	Source     string
 }
 
+func (p PodVolume) ID() database.ID {
+	return compoundId{id: p.PodUuid.String() + p.VolumeName}
+}
+
+func (p PodVolume) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (p PodVolume) Fingerprint() database.Fingerprinter {
+	return p
+}
+
 type PodPvc struct {
 	PodUuid    types.UUID
 	VolumeName string
 	ClaimName  string
 	ReadOnly   types.Bool
+}
+
+func (p PodPvc) ID() database.ID {
+	return compoundId{id: p.PodUuid.String() + p.VolumeName + p.ClaimName}
+}
+
+func (p PodPvc) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (p PodPvc) Fingerprint() database.Fingerprinter {
+	return p
 }
 
 func NewPodFactory(clientset *kubernetes.Clientset) *PodFactory {
@@ -410,28 +483,28 @@ func NewContainers[T any](
 	return obtained
 }
 
-func (p *Pod) Relations() []database.Relation {
-	fk := database.WithForeignKey("pod_uuid")
+func (p *Pod) Relations() []kdatabase.Relation {
+	fk := kdatabase.WithForeignKey("pod_uuid")
 
-	return []database.Relation{
-		database.HasMany(p.Conditions, fk),
-		database.HasMany(p.Containers, database.WithoutCascadeDelete()),
-		database.HasMany(p.InitContainers, database.WithoutCascadeDelete()),
-		database.HasMany(p.SidecarContainers, database.WithoutCascadeDelete()),
-		database.HasMany(p.Owners, fk),
-		database.HasMany(p.ResourceLabels, database.WithForeignKey("resource_uuid")),
-		database.HasMany(p.Labels, database.WithoutCascadeDelete()),
-		database.HasMany(p.PodLabels, fk),
-		database.HasMany(p.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
-		database.HasMany(p.Annotations, database.WithoutCascadeDelete()),
-		database.HasMany(p.PodAnnotations, fk),
-		database.HasMany(p.Pvcs, fk),
-		database.HasMany(p.Volumes, fk),
-		database.HasMany(p.Favorites, database.WithForeignKey("resource_uuid")),
+	return []kdatabase.Relation{
+		kdatabase.HasMany(p.Conditions, fk),
+		kdatabase.HasMany(p.Containers, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(p.InitContainers, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(p.SidecarContainers, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(p.Owners, fk),
+		kdatabase.HasMany(p.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(p.Labels, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(p.PodLabels, fk),
+		kdatabase.HasMany(p.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(p.Annotations, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(p.PodAnnotations, fk),
+		kdatabase.HasMany(p.Pvcs, fk),
+		kdatabase.HasMany(p.Volumes, fk),
+		kdatabase.HasMany(p.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 
 		// Delete-only relations.
-		database.HasMany([]PrometheusPodMetric(nil), fk),
-		database.HasMany([]ServicePod(nil), fk),
+		kdatabase.HasMany([]PrometheusPodMetric(nil), fk),
+		kdatabase.HasMany([]ServicePod(nil), fk),
 	}
 }
 

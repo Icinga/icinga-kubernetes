@@ -4,8 +4,9 @@ import (
 	"database/sql"
 	"strings"
 
+	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-kubernetes/pkg/database"
+	kdatabase "github.com/icinga/icinga-kubernetes/pkg/database"
 	v1 "k8s.io/api/core/v1"
 	kdiscoveryv1 "k8s.io/api/discovery/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,6 +27,18 @@ type EndpointSliceLabel struct {
 	LabelUuid         types.UUID
 }
 
+func (e EndpointSliceLabel) ID() database.ID {
+	return compoundId{id: e.EndpointSliceUuid.String() + e.LabelUuid.String()}
+}
+
+func (e EndpointSliceLabel) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (e EndpointSliceLabel) Fingerprint() database.Fingerprinter {
+	return e
+}
+
 type Endpoint struct {
 	Uuid              types.UUID
 	EndpointSliceUuid types.UUID
@@ -41,6 +54,18 @@ type Endpoint struct {
 	AppProtocol       string
 }
 
+func (e Endpoint) ID() database.ID {
+	return e.Uuid
+}
+
+func (e Endpoint) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (e Endpoint) Fingerprint() database.Fingerprinter {
+	return e
+}
+
 type EndpointTargetRef struct {
 	EndpointSliceUuid types.UUID
 	Kind              sql.NullString
@@ -49,6 +74,18 @@ type EndpointTargetRef struct {
 	Uid               ktypes.UID
 	ApiVersion        string
 	ResourceVersion   string
+}
+
+func (e EndpointTargetRef) ID() database.ID {
+	return e.EndpointSliceUuid
+}
+
+func (e EndpointTargetRef) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (e EndpointTargetRef) Fingerprint() database.Fingerprinter {
+	return e
 }
 
 func NewEndpointSlice() Resource {
@@ -150,13 +187,13 @@ func (e *EndpointSlice) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	}
 }
 
-func (e *EndpointSlice) Relations() []database.Relation {
-	fk := database.WithForeignKey("endpoint_slice_uuid")
+func (e *EndpointSlice) Relations() []kdatabase.Relation {
+	fk := kdatabase.WithForeignKey("endpoint_slice_uuid")
 
-	return []database.Relation{
-		database.HasMany(e.Endpoints, fk),
-		database.HasMany(e.Labels, database.WithoutCascadeDelete()),
-		database.HasMany(e.EndpointLabels, fk),
-		database.HasMany(e.EndpointTargetRefs, fk),
+	return []kdatabase.Relation{
+		kdatabase.HasMany(e.Endpoints, fk),
+		kdatabase.HasMany(e.Labels, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(e.EndpointLabels, fk),
+		kdatabase.HasMany(e.EndpointTargetRefs, fk),
 	}
 }

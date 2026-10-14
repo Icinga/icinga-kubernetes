@@ -3,12 +3,13 @@ package v1
 import (
 	"context"
 
+	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-kubernetes/internal/multiplex"
 	"golang.org/x/sync/errgroup"
 )
 
 type EventsMultiplexer interface {
-	UpsertEvents() multiplex.ChannelMultiplexer[any]
+	UpsertEvents() multiplex.ChannelMultiplexer[database.Entity]
 	DeleteEvents() multiplex.ChannelMultiplexer[any]
 	Run(context.Context) error
 }
@@ -29,11 +30,11 @@ func Multiplexers() EventsMultiplexers {
 }
 
 type events struct {
-	upsertEvents multiplex.ChannelMultiplexer[any]
+	upsertEvents multiplex.ChannelMultiplexer[database.Entity]
 	deleteEvents multiplex.ChannelMultiplexer[any]
 }
 
-func (e events) UpsertEvents() multiplex.ChannelMultiplexer[any] {
+func (e events) UpsertEvents() multiplex.ChannelMultiplexer[database.Entity] {
 	return e.upsertEvents
 }
 
@@ -132,31 +133,31 @@ var m multiplexers
 func init() {
 	m = multiplexers{
 		daemonSets: events{
-			upsertEvents: multiplex.NewChannelMux[any](),
+			upsertEvents: multiplex.NewChannelMux[database.Entity](),
 			deleteEvents: multiplex.NewChannelMux[any](),
 		},
 		deployments: events{
-			upsertEvents: multiplex.NewChannelMux[any](),
+			upsertEvents: multiplex.NewChannelMux[database.Entity](),
 			deleteEvents: multiplex.NewChannelMux[any](),
 		},
 		nodes: events{
-			upsertEvents: multiplex.NewChannelMux[any](),
+			upsertEvents: multiplex.NewChannelMux[database.Entity](),
 			deleteEvents: multiplex.NewChannelMux[any](),
 		},
 		pods: events{
-			upsertEvents: multiplex.NewChannelMux[any](),
+			upsertEvents: multiplex.NewChannelMux[database.Entity](),
 			deleteEvents: multiplex.NewChannelMux[any](),
 		},
 		replicaSets: events{
-			upsertEvents: multiplex.NewChannelMux[any](),
+			upsertEvents: multiplex.NewChannelMux[database.Entity](),
 			deleteEvents: multiplex.NewChannelMux[any](),
 		},
 		services: events{
-			upsertEvents: multiplex.NewChannelMux[any](),
+			upsertEvents: multiplex.NewChannelMux[database.Entity](),
 			deleteEvents: multiplex.NewChannelMux[any](),
 		},
 		statefulSets: events{
-			upsertEvents: multiplex.NewChannelMux[any](),
+			upsertEvents: multiplex.NewChannelMux[database.Entity](),
 			deleteEvents: multiplex.NewChannelMux[any](),
 		},
 	}

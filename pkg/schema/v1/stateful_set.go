@@ -5,9 +5,10 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-kubernetes/pkg/database"
+	kdatabase "github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/notifications"
 	kappsv1 "k8s.io/api/apps/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -55,6 +56,18 @@ type StatefulSetCondition struct {
 	Message         string
 }
 
+func (s StatefulSetCondition) ID() database.ID {
+	return compoundId{id: s.StatefulSetUuid.String() + s.Type}
+}
+
+func (s StatefulSetCondition) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (s StatefulSetCondition) Fingerprint() database.Fingerprinter {
+	return s
+}
+
 type StatefulSetOwner struct {
 	StatefulSetUuid    types.UUID
 	OwnerUuid          types.UUID
@@ -65,14 +78,50 @@ type StatefulSetOwner struct {
 	BlockOwnerDeletion types.Bool
 }
 
+func (s StatefulSetOwner) ID() database.ID {
+	return compoundId{id: s.StatefulSetUuid.String() + s.OwnerUuid.String()}
+}
+
+func (s StatefulSetOwner) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (s StatefulSetOwner) Fingerprint() database.Fingerprinter {
+	return s
+}
+
 type StatefulSetLabel struct {
 	StatefulSetUuid types.UUID
 	LabelUuid       types.UUID
 }
 
+func (s StatefulSetLabel) ID() database.ID {
+	return compoundId{id: s.StatefulSetUuid.String() + s.LabelUuid.String()}
+}
+
+func (s StatefulSetLabel) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (s StatefulSetLabel) Fingerprint() database.Fingerprinter {
+	return s
+}
+
 type StatefulSetAnnotation struct {
 	StatefulSetUuid types.UUID
 	AnnotationUuid  types.UUID
+}
+
+func (s StatefulSetAnnotation) ID() database.ID {
+	return compoundId{id: s.StatefulSetUuid.String() + s.AnnotationUuid.String()}
+}
+
+func (s StatefulSetAnnotation) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (s StatefulSetAnnotation) Fingerprint() database.Fingerprinter {
+	return s
 }
 
 func NewStatefulSet() Resource {
@@ -228,18 +277,18 @@ func (s *StatefulSet) getIcingaState() (IcingaState, string) {
 	}
 }
 
-func (s *StatefulSet) Relations() []database.Relation {
-	fk := database.WithForeignKey("stateful_set_uuid")
+func (s *StatefulSet) Relations() []kdatabase.Relation {
+	fk := kdatabase.WithForeignKey("stateful_set_uuid")
 
-	return []database.Relation{
-		database.HasMany(s.Conditions, fk),
-		database.HasMany(s.Owners, fk),
-		database.HasMany(s.ResourceLabels, database.WithForeignKey("resource_uuid")),
-		database.HasMany(s.Labels, database.WithoutCascadeDelete()),
-		database.HasMany(s.StatefulSetLabels, fk),
-		database.HasMany(s.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
-		database.HasMany(s.Annotations, database.WithoutCascadeDelete()),
-		database.HasMany(s.StatefulSetAnnotations, fk),
-		database.HasMany(s.Favorites, database.WithForeignKey("resource_uuid")),
+	return []kdatabase.Relation{
+		kdatabase.HasMany(s.Conditions, fk),
+		kdatabase.HasMany(s.Owners, fk),
+		kdatabase.HasMany(s.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(s.Labels, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(s.StatefulSetLabels, fk),
+		kdatabase.HasMany(s.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(s.Annotations, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(s.StatefulSetAnnotations, fk),
+		kdatabase.HasMany(s.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

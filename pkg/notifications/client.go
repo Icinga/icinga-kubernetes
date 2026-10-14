@@ -108,7 +108,7 @@ func (c *Client) ProcessEvent(ctx context.Context, event Event) error {
 
 // Stream consumes the items from the given `entities` chan and triggers
 // a notifications event for each of them.
-func (c *Client) Stream(ctx context.Context, entities <-chan any) error {
+func (c *Client) Stream(ctx context.Context, entities <-chan database.Entity) error {
 	for {
 		select {
 		case entity, more := <-entities:

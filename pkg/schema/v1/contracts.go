@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	"github.com/google/uuid"
+	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/types"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ktypes "k8s.io/apimachinery/pkg/types"
@@ -15,7 +16,16 @@ var NameSpaceKubernetes = uuid.MustParse("3f249403-2bb0-428f-8e91-504d1fd7ddb6")
 
 type Resource interface {
 	kmetav1.Object
+	database.Entity
 	Obtain(k8s kmetav1.Object, clusterUuid types.UUID)
+}
+
+type compoundId struct {
+	id string
+}
+
+func (i compoundId) String() string {
+	return i.id
 }
 
 type Meta struct {
@@ -36,6 +46,18 @@ func (m *Meta) ObtainMeta(k8s kmetav1.Object, clusterUuid types.UUID) {
 	m.Name = k8s.GetName()
 	m.ResourceVersion = k8s.GetResourceVersion()
 	m.Created = types.UnixMilli(k8s.GetCreationTimestamp().Time)
+}
+
+func (m Meta) ID() database.ID {
+	return m.Uuid
+}
+
+func (m Meta) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (m Meta) Fingerprint() database.Fingerprinter {
+	return m
 }
 
 func (m *Meta) GetNamespace() string                           { return m.Namespace }

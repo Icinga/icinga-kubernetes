@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-kubernetes/pkg/database"
+	kdatabase "github.com/icinga/icinga-kubernetes/pkg/database"
 	kbatchv1 "k8s.io/api/batch/v1"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -55,14 +56,50 @@ type JobCondition struct {
 	Message        string
 }
 
+func (j JobCondition) ID() database.ID {
+	return compoundId{id: j.JobUuid.String() + j.Type}
+}
+
+func (j JobCondition) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (j JobCondition) Fingerprint() database.Fingerprinter {
+	return j
+}
+
 type JobLabel struct {
 	JobUuid   types.UUID
 	LabelUuid types.UUID
 }
 
+func (j JobLabel) ID() database.ID {
+	return compoundId{id: j.JobUuid.String() + j.LabelUuid.String()}
+}
+
+func (j JobLabel) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (j JobLabel) Fingerprint() database.Fingerprinter {
+	return j
+}
+
 type JobAnnotation struct {
 	JobUuid        types.UUID
 	AnnotationUuid types.UUID
+}
+
+func (j JobAnnotation) ID() database.ID {
+	return compoundId{id: j.JobUuid.String() + j.AnnotationUuid.String()}
+}
+
+func (j JobAnnotation) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (j JobAnnotation) Fingerprint() database.Fingerprinter {
+	return j
 }
 
 type JobOwner struct {
@@ -73,6 +110,18 @@ type JobOwner struct {
 	Uid                ktypes.UID
 	Controller         types.Bool
 	BlockOwnerDeletion types.Bool
+}
+
+func (j JobOwner) ID() database.ID {
+	return compoundId{id: j.JobUuid.String() + j.OwnerUuid.String()}
+}
+
+func (j JobOwner) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (j JobOwner) Fingerprint() database.Fingerprinter {
+	return j
 }
 
 func NewJob() Resource {
@@ -277,18 +326,18 @@ func (j *Job) getIcingaState(job *kbatchv1.Job) (IcingaState, string) {
 	return Pending, reason
 }
 
-func (j *Job) Relations() []database.Relation {
-	fk := database.WithForeignKey("job_uuid")
+func (j *Job) Relations() []kdatabase.Relation {
+	fk := kdatabase.WithForeignKey("job_uuid")
 
-	return []database.Relation{
-		database.HasMany(j.Conditions, fk),
-		database.HasMany(j.ResourceLabels, database.WithForeignKey("resource_uuid")),
-		database.HasMany(j.Labels, database.WithoutCascadeDelete()),
-		database.HasMany(j.JobLabels, fk),
-		database.HasMany(j.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
-		database.HasMany(j.Annotations, database.WithoutCascadeDelete()),
-		database.HasMany(j.JobAnnotations, fk),
-		database.HasMany(j.Owners, fk),
-		database.HasMany(j.Favorites, database.WithForeignKey("resource_uuid")),
+	return []kdatabase.Relation{
+		kdatabase.HasMany(j.Conditions, fk),
+		kdatabase.HasMany(j.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(j.Labels, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(j.JobLabels, fk),
+		kdatabase.HasMany(j.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(j.Annotations, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(j.JobAnnotations, fk),
+		kdatabase.HasMany(j.Owners, fk),
+		kdatabase.HasMany(j.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

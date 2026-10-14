@@ -6,8 +6,9 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-kubernetes/pkg/database"
+	kdatabase "github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/notifications"
 	"github.com/pkg/errors"
 	kcorev1 "k8s.io/api/core/v1"
@@ -64,6 +65,18 @@ type NodeCondition struct {
 	Message        string
 }
 
+func (n NodeCondition) ID() database.ID {
+	return compoundId{id: n.NodeUuid.String() + n.Type}
+}
+
+func (n NodeCondition) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (n NodeCondition) Fingerprint() database.Fingerprinter {
+	return n
+}
+
 type NodeVolume struct {
 	NodeUuid   types.UUID
 	Name       kcorev1.UniqueVolumeName
@@ -71,14 +84,50 @@ type NodeVolume struct {
 	Mounted    types.Bool
 }
 
+func (n NodeVolume) ID() database.ID {
+	return compoundId{id: n.NodeUuid.String() + string(n.Name)}
+}
+
+func (n NodeVolume) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (n NodeVolume) Fingerprint() database.Fingerprinter {
+	return n
+}
+
 type NodeLabel struct {
 	NodeUuid  types.UUID
 	LabelUuid types.UUID
 }
 
+func (n NodeLabel) ID() database.ID {
+	return compoundId{id: n.NodeUuid.String() + n.LabelUuid.String()}
+}
+
+func (n NodeLabel) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (n NodeLabel) Fingerprint() database.Fingerprinter {
+	return n
+}
+
 type NodeAnnotation struct {
 	NodeUuid       types.UUID
 	AnnotationUuid types.UUID
+}
+
+func (n NodeAnnotation) ID() database.ID {
+	return compoundId{id: n.NodeUuid.String() + n.AnnotationUuid.String()}
+}
+
+func (n NodeAnnotation) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (n NodeAnnotation) Fingerprint() database.Fingerprinter {
+	return n
 }
 
 func NewNode() Resource {
@@ -279,22 +328,22 @@ func (n *Node) getIcingaState(node *kcorev1.Node) (IcingaState, string) {
 	return Ok, fmt.Sprintf("Node %s is ok.", node.Name)
 }
 
-func (n *Node) Relations() []database.Relation {
-	fk := database.WithForeignKey("node_uuid")
+func (n *Node) Relations() []kdatabase.Relation {
+	fk := kdatabase.WithForeignKey("node_uuid")
 
-	return []database.Relation{
-		database.HasMany(n.Conditions, fk),
-		database.HasMany(n.Volumes, fk),
-		database.HasMany(n.ResourceLabels, database.WithForeignKey("resource_uuid")),
-		database.HasMany(n.Labels, database.WithoutCascadeDelete()),
-		database.HasMany(n.NodeLabels, fk),
-		database.HasMany(n.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
-		database.HasMany(n.Annotations, database.WithoutCascadeDelete()),
-		database.HasMany(n.NodeAnnotations, fk),
-		database.HasMany(n.Favorites, database.WithForeignKey("resource_uuid")),
+	return []kdatabase.Relation{
+		kdatabase.HasMany(n.Conditions, fk),
+		kdatabase.HasMany(n.Volumes, fk),
+		kdatabase.HasMany(n.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(n.Labels, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(n.NodeLabels, fk),
+		kdatabase.HasMany(n.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(n.Annotations, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(n.NodeAnnotations, fk),
+		kdatabase.HasMany(n.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 
 		// Delete-only relations.
-		database.HasMany([]PrometheusNodeMetric(nil), fk),
+		kdatabase.HasMany([]PrometheusNodeMetric(nil), fk),
 	}
 }
 

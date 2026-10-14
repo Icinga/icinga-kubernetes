@@ -5,9 +5,10 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-kubernetes/pkg/database"
+	kdatabase "github.com/icinga/icinga-kubernetes/pkg/database"
 	"github.com/icinga/icinga-kubernetes/pkg/notifications"
 	kappsv1 "k8s.io/api/apps/v1"
 	kcorev1 "k8s.io/api/core/v1"
@@ -54,6 +55,18 @@ type DeploymentCondition struct {
 	Message        string
 }
 
+func (d DeploymentCondition) ID() database.ID {
+	return compoundId{id: d.DeploymentUuid.String() + d.Type}
+}
+
+func (d DeploymentCondition) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (d DeploymentCondition) Fingerprint() database.Fingerprinter {
+	return d
+}
+
 type DeploymentOwner struct {
 	DeploymentUuid     types.UUID
 	OwnerUuid          types.UUID
@@ -64,14 +77,50 @@ type DeploymentOwner struct {
 	BlockOwnerDeletion types.Bool
 }
 
+func (d DeploymentOwner) ID() database.ID {
+	return compoundId{id: d.DeploymentUuid.String() + d.OwnerUuid.String()}
+}
+
+func (d DeploymentOwner) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (d DeploymentOwner) Fingerprint() database.Fingerprinter {
+	return d
+}
+
 type DeploymentLabel struct {
 	DeploymentUuid types.UUID
 	LabelUuid      types.UUID
 }
 
+func (d DeploymentLabel) ID() database.ID {
+	return compoundId{id: d.DeploymentUuid.String() + d.LabelUuid.String()}
+}
+
+func (d DeploymentLabel) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (d DeploymentLabel) Fingerprint() database.Fingerprinter {
+	return d
+}
+
 type DeploymentAnnotation struct {
 	DeploymentUuid types.UUID
 	AnnotationUuid types.UUID
+}
+
+func (d DeploymentAnnotation) ID() database.ID {
+	return compoundId{id: d.DeploymentUuid.String() + d.AnnotationUuid.String()}
+}
+
+func (d DeploymentAnnotation) SetID(_ database.ID) {
+	panic("Not expected to be called")
+}
+
+func (d DeploymentAnnotation) Fingerprint() database.Fingerprinter {
+	return d
 }
 
 func NewDeployment() Resource {
@@ -229,18 +278,18 @@ func (d *Deployment) getIcingaState() (IcingaState, string) {
 	}
 }
 
-func (d *Deployment) Relations() []database.Relation {
-	fk := database.WithForeignKey("deployment_uuid")
+func (d *Deployment) Relations() []kdatabase.Relation {
+	fk := kdatabase.WithForeignKey("deployment_uuid")
 
-	return []database.Relation{
-		database.HasMany(d.Conditions, fk),
-		database.HasMany(d.Owners, fk),
-		database.HasMany(d.ResourceLabels, database.WithForeignKey("resource_uuid")),
-		database.HasMany(d.Labels, database.WithoutCascadeDelete()),
-		database.HasMany(d.DeploymentLabels, fk),
-		database.HasMany(d.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
-		database.HasMany(d.Annotations, database.WithoutCascadeDelete()),
-		database.HasMany(d.DeploymentAnnotations, fk),
-		database.HasMany(d.Favorites, database.WithForeignKey("resource_uuid")),
+	return []kdatabase.Relation{
+		kdatabase.HasMany(d.Conditions, fk),
+		kdatabase.HasMany(d.Owners, fk),
+		kdatabase.HasMany(d.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(d.Labels, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(d.DeploymentLabels, fk),
+		kdatabase.HasMany(d.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(d.Annotations, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(d.DeploymentAnnotations, fk),
+		kdatabase.HasMany(d.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }
