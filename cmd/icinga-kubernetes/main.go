@@ -134,7 +134,7 @@ func main() {
 
 	if !kdb.Connect() {
 		if len(removeClusterUuids.Value()) != 0 {
-			klog.Fatal(errors.New("cannot remove cluster without database connection"))
+			logger.Fatal("Cannot remove cluster without database connection")
 		}
 
 		return
@@ -736,6 +736,7 @@ func main() {
 	}
 }
 
+// removeCluster deletes the cluster with the given UUID and all data that references it from db.
 func removeCluster(ctx context.Context, db *kdatabase.Database, logger *logging.Logger, clusterUuid types.UUID) error {
 	type uuidColumn struct {
 		Uuid types.UUID
@@ -754,7 +755,10 @@ func removeCluster(ctx context.Context, db *kdatabase.Database, logger *logging.
 	}
 
 	if len(clusterUuids) == 0 {
-		logger.Warnf("No cluster entry exists for UUID %q, trying to remove any remaining data of that cluster anyway", clusterUuid)
+		logger.Warnw(
+			"No cluster entry exists for UUID, trying to remove any remaining data of that cluster anyway",
+			zap.String("uuid", clusterUuid.String()),
+		)
 	}
 
 	// Pods don't cascade deletes to their containers, so remove the containers first.
@@ -782,7 +786,7 @@ func removeCluster(ctx context.Context, db *kdatabase.Database, logger *logging.
 		return errors.Wrap(err, "cannot remove cluster rows")
 	}
 
-	logger.Infof("Removed cluster %q", clusterUuid)
+	logger.Infow("Removed cluster", zap.String("uuid", clusterUuid.String()))
 
 	return nil
 }
