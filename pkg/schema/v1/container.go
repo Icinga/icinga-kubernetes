@@ -282,9 +282,9 @@ func (cl ContainerLog) ID() database.ID {
 	return cl.ContainerUuid
 }
 
-type ContainerStateReasonAndMassage [2]string
+type ContainerStateReasonAndMessage [2]string
 
-func (c ContainerStateReasonAndMassage) String() string {
+func (c ContainerStateReasonAndMessage) String() string {
 	msg := removeTrailingWhitespaceAndFullStop(c[1])
 
 	if msg != "" {
@@ -340,7 +340,7 @@ func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStat
 				status.LastTerminationState.Terminated.ExitCode,
 				status.LastTerminationState.Terminated.Signal,
 				status.LastTerminationState.Terminated.FinishedAt,
-				ContainerStateReasonAndMassage{
+				ContainerStateReasonAndMessage{
 					status.LastTerminationState.Terminated.Reason,
 					status.LastTerminationState.Terminated.Message,
 				})
@@ -357,7 +357,7 @@ func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStat
 				container.Name,
 				status.State.Terminated.Signal,
 				status.State.Terminated.FinishedAt,
-				ContainerStateReasonAndMassage{
+				ContainerStateReasonAndMessage{
 					status.State.Terminated.Reason,
 					status.State.Terminated.Message,
 				})
@@ -368,7 +368,7 @@ func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStat
 			container.Name,
 			status.State.Terminated.ExitCode,
 			status.State.Terminated.FinishedAt,
-			ContainerStateReasonAndMassage{
+			ContainerStateReasonAndMessage{
 				status.State.Terminated.Reason,
 				status.State.Terminated.Message,
 			})
@@ -384,7 +384,7 @@ func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStat
 					status.LastTerminationState.Terminated.ExitCode,
 					status.LastTerminationState.Terminated.Signal,
 					status.LastTerminationState.Terminated.FinishedAt,
-					ContainerStateReasonAndMassage{
+					ContainerStateReasonAndMessage{
 						status.LastTerminationState.Terminated.Reason,
 						status.LastTerminationState.Terminated.Message,
 					})
@@ -403,7 +403,7 @@ func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStat
 					status.LastTerminationState.Terminated.ExitCode,
 					status.LastTerminationState.Terminated.Signal,
 					status.LastTerminationState.Terminated.FinishedAt,
-					ContainerStateReasonAndMassage{
+					ContainerStateReasonAndMessage{
 						status.LastTerminationState.Terminated.Reason,
 						status.LastTerminationState.Terminated.Message,
 					})
@@ -439,7 +439,7 @@ func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStat
 				return Critical, fmt.Sprintf(
 					"Container %s cannot start. %s.",
 					container.Name,
-					ContainerStateReasonAndMassage{
+					ContainerStateReasonAndMessage{
 						status.LastTerminationState.Terminated.Reason,
 						removeTrailingWhitespaceAndFullStop(status.LastTerminationState.Terminated.Message),
 					})
@@ -452,7 +452,7 @@ func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStat
 		return Critical, fmt.Sprintf(
 			"Container %s cannot start. %s.",
 			container.Name,
-			ContainerStateReasonAndMassage{
+			ContainerStateReasonAndMessage{
 				status.State.Waiting.Reason,
 				removeTrailingWhitespaceAndFullStop(status.State.Waiting.Message),
 			})
