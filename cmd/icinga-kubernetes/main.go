@@ -52,7 +52,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
-const expectedSchemaVersion = "0.4.0"
+const expectedSchemaVersion = "0.5.0"
 
 func main() {
 	var glue daemon.ConfigFlagGlue
@@ -352,7 +352,7 @@ func main() {
 
 			for kind, uuids := range uuidMap {
 				ng.Go(func() error {
-					q, args, err := sqlx.In(fmt.Sprintf("SELECT uuid FROM %s WHERE uuid IN (?)", kind), uuids)
+					q, args, err := sqlx.In(fmt.Sprintf("SELECT uuid FROM %s WHERE uuid IN (?) AND deleted IS NULL", kind), uuids)
 					if err != nil {
 						return err
 					}
@@ -671,7 +671,7 @@ func main() {
 	})
 
 	g.Go(func() error {
-		return kdb.PeriodicCleanup(ctx, kdatabase.CleanupStmt{
+		return kdb.PeriodicCleanup(ctx, &kdatabase.DefaultCleaner{
 			Table:  "event",
 			PK:     "uuid",
 			Column: "created",
@@ -679,7 +679,7 @@ func main() {
 	})
 
 	g.Go(func() error {
-		return kdb.PeriodicCleanup(ctx, kdatabase.CleanupStmt{
+		return kdb.PeriodicCleanup(ctx, &kdatabase.DefaultCleaner{
 			Table:  "prometheus_cluster_metric",
 			PK:     "(cluster_uuid, timestamp, category, name)",
 			Column: "timestamp",
@@ -687,7 +687,7 @@ func main() {
 	})
 
 	g.Go(func() error {
-		return kdb.PeriodicCleanup(ctx, kdatabase.CleanupStmt{
+		return kdb.PeriodicCleanup(ctx, &kdatabase.DefaultCleaner{
 			Table:  "prometheus_node_metric",
 			PK:     "(node_uuid, timestamp, category, name)",
 			Column: "timestamp",
@@ -695,7 +695,7 @@ func main() {
 	})
 
 	g.Go(func() error {
-		return kdb.PeriodicCleanup(ctx, kdatabase.CleanupStmt{
+		return kdb.PeriodicCleanup(ctx, &kdatabase.DefaultCleaner{
 			Table:  "prometheus_pod_metric",
 			PK:     "(pod_uuid, timestamp, category, name)",
 			Column: "timestamp",
@@ -703,12 +703,52 @@ func main() {
 	})
 
 	g.Go(func() error {
-		return kdb.PeriodicCleanup(ctx, kdatabase.CleanupStmt{
+		return kdb.PeriodicCleanup(ctx, &kdatabase.DefaultCleaner{
 			Table:  "prometheus_container_metric",
 			PK:     "(container_uuid, timestamp, category, name)",
 			Column: "timestamp",
 		})
 	})
+
+	interval := time.Hour
+	if cfg.DeletedRetention < time.Hour {
+		interval = time.Minute
+	}
+
+	// Every kind synced without WithNoDelete() is soft-deleted, so it
+	// needs a deleted column in the schema and an entry in this list.
+	// Otherwise, its soft delete fails, or its rows are never purged.
+	for _, entity := range []kdatabase.HasRelations{
+		&schemav1.ConfigMap{},
+		&schemav1.CronJob{},
+		&schemav1.DaemonSet{},
+		&schemav1.Deployment{},
+		&schemav1.EndpointSlice{},
+		&schemav1.Ingress{},
+		&schemav1.Job{},
+		&schemav1.Namespace{},
+		&schemav1.Node{},
+		&schemav1.PersistentVolume{},
+		&schemav1.Pod{},
+		&schemav1.Pvc{},
+		&schemav1.ReplicaSet{},
+		&schemav1.Secret{},
+		&schemav1.Service{},
+		&schemav1.StatefulSet{},
+	} {
+		g.Go(func() error {
+			return kdb.PeriodicCleanup(
+				ctx,
+				&kdatabase.CascadeCleaner{
+					Entity:      entity,
+					Column:      "deleted",
+					ClusterUuid: cluster.ClusterUuidFromContext(ctx),
+				},
+				kdatabase.WithInterval(interval),
+				kdatabase.WithRetention(cfg.DeletedRetention),
+			)
+		})
+	}
 
 	if err := g.Wait(); err != nil {
 		logger.Fatalw("Cannot run Icinga for Kubernetes", logging.Error(err))
