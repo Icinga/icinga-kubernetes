@@ -28,7 +28,7 @@ to view and work with the data.
 
 | Option            | Description                                                                                                                                                                                                                                                                                   |
 |-------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| deleted_retention | **Optional.** How long soft-deleted Kubernetes resources remain in the database before physical purge. Must be at least one minute. Defaults to `5m`. The purge runs every minute for retentions below one hour and hourly otherwise, so resources can remain up to one such interval longer. |
+| deleted_retention | **Optional.** How long soft-deleted Kubernetes resources remain in the database before physical purge. Must be at least one minute. The purge runs every minute for retentions below one hour and hourly otherwise, so resources can remain up to one such interval longer. Defaults to `5m`. |
 
 ## Logging Configuration
 
@@ -89,7 +89,7 @@ The configurations set by environment variables override the ones set by YAML.
 
 | Env               | Description                                                                                                                                                                                                                                                                                   |
 |-------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| DELETED_RETENTION | **Optional.** How long soft-deleted Kubernetes resources remain in the database before physical purge. Must be at least one minute. Defaults to `5m`. The purge runs every minute for retentions below one hour and hourly otherwise, so resources can remain up to one such interval longer. |
+| DELETED_RETENTION | **Optional.** How long soft-deleted Kubernetes resources remain in the database before physical purge. Must be at least one minute. The purge runs every minute for retentions below one hour and hourly otherwise, so resources can remain up to one such interval longer. Defaults to `5m`. |
 
 ## Logging Configuration
 
