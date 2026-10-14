@@ -22,35 +22,36 @@ type Cleaner interface {
 	cleanup(ctx context.Context, db *Database, retention time.Duration) error
 }
 
-// CleanupStmt defines information needed to compose cleanup statements.
-type CleanupStmt struct {
+// DefaultCleaner defines information needed to compose cleanup statements.
+type DefaultCleaner struct {
 	Table  string
 	PK     string
 	Column string
 }
 
-// Build assembles the cleanup statement for the specified database driver with the given limit.
-func (stmt *CleanupStmt) Build(driverName string, limit uint64) string {
+// buildStmt assembles the cleanup statement for the specified database driver
+// with the given limit.
+func (c *DefaultCleaner) buildStmt(driverName string, limit uint64) string {
 	switch driverName {
 	case MySQL, "mysql":
-		return fmt.Sprintf(`DELETE FROM %[1]s WHERE %[2]s < :time LIMIT %[3]d`, stmt.Table, stmt.Column, limit)
+		return fmt.Sprintf(`DELETE FROM %[1]s WHERE %[2]s < :time LIMIT %[3]d`, c.Table, c.Column, limit)
 	case PostgreSQL, "postgres":
 		return fmt.Sprintf(`WITH rows AS (SELECT %[1]s FROM %[2]s WHERE %[3]s < :time LIMIT %[4]d)
-DELETE FROM %[2]s WHERE %[1]s IN (SELECT %[1]s FROM rows)`, stmt.PK, stmt.Table, stmt.Column, limit)
+DELETE FROM %[2]s WHERE %[1]s IN (SELECT %[1]s FROM rows)`, c.PK, c.Table, c.Column, limit)
 	default:
 		panic(fmt.Sprintf("invalid database type %s", driverName))
 	}
 }
 
-func (stmt CleanupStmt) cleanup(ctx context.Context, db *Database, retention time.Duration) error {
-	_, err := db.CleanupOlderThan(ctx, stmt, time.Now().Add(-retention))
+func (c *DefaultCleaner) cleanup(ctx context.Context, db *Database, retention time.Duration) error {
+	_, err := db.CleanupOlderThan(ctx, c, time.Now().Add(-retention))
 
 	return err
 }
 
-// CascadeCleanupStmt defines an entity whose rows are cleaned up together with
+// CascadeCleaner defines an entity whose rows are cleaned up together with
 // their relations based on the given time column.
-type CascadeCleanupStmt struct {
+type CascadeCleaner struct {
 	Entity HasRelations
 
 	// Column must hold Unix milliseconds set by the database clock.
@@ -62,10 +63,10 @@ type CascadeCleanupStmt struct {
 // retention, measured against the database clock, in rounds of at most
 // batchSize rows via DeleteStreamed with cascading, so that the relations of
 // the entity are deleted as well.
-func (stmt CascadeCleanupStmt) cleanup(ctx context.Context, db *Database, retention time.Duration) error {
-	query := db.Rebind(db.BuildSelectStmt(stmt.Entity, &struct{ Uuid types.UUID }{}) + fmt.Sprintf(
+func (c *CascadeCleaner) cleanup(ctx context.Context, db *Database, retention time.Duration) error {
+	query := db.Rebind(db.BuildSelectStmt(c.Entity, &struct{ Uuid types.UUID }{}) + fmt.Sprintf(
 		" WHERE %s < UNIX_TIMESTAMP() * 1000 - ? AND %s = ? LIMIT %d",
-		db.QuoteIdentifier(stmt.Column),
+		db.QuoteIdentifier(c.Column),
 		db.QuoteIdentifier("cluster_uuid"),
 		batchSize,
 	))
@@ -79,16 +80,16 @@ func (stmt CascadeCleanupStmt) cleanup(ctx context.Context, db *Database, retent
 			func(ctx context.Context) error {
 				uuids = nil
 
-				return db.SelectContext(ctx, &uuids, query, retention.Milliseconds(), stmt.ClusterUuid)
+				return db.SelectContext(ctx, &uuids, query, retention.Milliseconds(), c.ClusterUuid)
 			},
-			IsRetryable,
+			retry.Retryable,
 			backoff.DefaultBackoff,
 			retry.Settings{},
 		); err != nil {
 			return CantPerformQuery(err, query)
 		}
 
-		if err := db.DeleteStreamed(ctx, stmt.Entity, utils.ChanFromSlice(uuids), WithCascading()); err != nil {
+		if err := db.DeleteStreamed(ctx, c.Entity, utils.ChanFromSlice(uuids), WithCascading()); err != nil {
 			return err
 		}
 
@@ -103,11 +104,11 @@ func (stmt CascadeCleanupStmt) cleanup(ctx context.Context, db *Database, retent
 // deleted rows will be passed to onSuccess. Returns the total number of rows
 // deleted.
 func (db *Database) CleanupOlderThan(
-	ctx context.Context, stmt CleanupStmt, olderThan time.Time, onSuccess ...OnSuccess[struct{}],
+	ctx context.Context, stmt *DefaultCleaner, olderThan time.Time, onSuccess ...OnSuccess[struct{}],
 ) (uint64, error) {
 	var counter com.Counter
 
-	q := db.Rebind(stmt.Build(db.DriverName(), batchSize))
+	q := db.Rebind(stmt.buildStmt(db.DriverName(), batchSize))
 
 	defer db.periodicLog(ctx, q, &counter).Stop()
 

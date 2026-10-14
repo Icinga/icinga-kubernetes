@@ -671,7 +671,7 @@ func main() {
 	})
 
 	g.Go(func() error {
-		return kdb.PeriodicCleanup(ctx, kdatabase.CleanupStmt{
+		return kdb.PeriodicCleanup(ctx, &kdatabase.DefaultCleaner{
 			Table:  "event",
 			PK:     "uuid",
 			Column: "created",
@@ -679,7 +679,7 @@ func main() {
 	})
 
 	g.Go(func() error {
-		return kdb.PeriodicCleanup(ctx, kdatabase.CleanupStmt{
+		return kdb.PeriodicCleanup(ctx, &kdatabase.DefaultCleaner{
 			Table:  "prometheus_cluster_metric",
 			PK:     "(cluster_uuid, timestamp, category, name)",
 			Column: "timestamp",
@@ -687,7 +687,7 @@ func main() {
 	})
 
 	g.Go(func() error {
-		return kdb.PeriodicCleanup(ctx, kdatabase.CleanupStmt{
+		return kdb.PeriodicCleanup(ctx, &kdatabase.DefaultCleaner{
 			Table:  "prometheus_node_metric",
 			PK:     "(node_uuid, timestamp, category, name)",
 			Column: "timestamp",
@@ -695,7 +695,7 @@ func main() {
 	})
 
 	g.Go(func() error {
-		return kdb.PeriodicCleanup(ctx, kdatabase.CleanupStmt{
+		return kdb.PeriodicCleanup(ctx, &kdatabase.DefaultCleaner{
 			Table:  "prometheus_pod_metric",
 			PK:     "(pod_uuid, timestamp, category, name)",
 			Column: "timestamp",
@@ -703,7 +703,7 @@ func main() {
 	})
 
 	g.Go(func() error {
-		return kdb.PeriodicCleanup(ctx, kdatabase.CleanupStmt{
+		return kdb.PeriodicCleanup(ctx, &kdatabase.DefaultCleaner{
 			Table:  "prometheus_container_metric",
 			PK:     "(container_uuid, timestamp, category, name)",
 			Column: "timestamp",
