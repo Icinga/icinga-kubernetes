@@ -65,7 +65,7 @@ func (r *relation[T]) WithoutCascadeDelete() {
 }
 
 func (r *relation[T]) TableName() string {
-	return TableName(*new(T))
+	return TableName(r.NewEntity())
 }
 
 func (r *relation[T]) NewEntity() any {

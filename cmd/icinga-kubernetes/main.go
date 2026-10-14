@@ -58,6 +58,7 @@ func main() {
 	var glue daemon.ConfigFlagGlue
 	var showVersion bool
 	var clusterName string
+	var removeClusterUuids kdatabase.UuidSliceValue
 
 	// The Kubernetes client libraries log through klog, so keep its flags on our command line
 	// to let -v and friends control their output. Our own code logs via icinga-go-library.
@@ -68,6 +69,7 @@ func main() {
 	pflag.BoolVar(&showVersion, "version", false, "print version and exit")
 	pflag.StringVar(&glue.Config, "config", "", fmt.Sprintf("path to the config file (default: %s)", daemon.DefaultConfigPath))
 	pflag.StringVar(&clusterName, "cluster-name", "", "name of the current cluster")
+	pflag.Var(&removeClusterUuids, "remove-cluster", "remove clusters from the database by UUID (repeatable or comma-separated)")
 
 	loadingRules := kclientcmd.NewDefaultClientConfigLoadingRules()
 	loadingRules.DefaultClientConfig = &kclientcmd.DefaultClientConfig
@@ -101,13 +103,54 @@ func main() {
 
 	logger := logs.GetLogger()
 
-	logger.Infow("Starting Icinga for Kubernetes", zap.String("version", internal.Version.Version))
+	if len(removeClusterUuids.Value()) == 0 {
+		logger.Infow("Starting Icinga for Kubernetes", zap.String("version", internal.Version.Version))
+	}
 
 	// An explicit -v/--v on the command line wins over the config file.
 	if !pflag.CommandLine.Changed("v") {
 		if err := pflag.CommandLine.Set("v", strconv.Itoa(int(cfg.Logging.Kubernetes))); err != nil {
 			logger.Fatalw("Cannot set Kubernetes logging verbosity", logging.Error(err))
 		}
+	}
+
+	dbLog := logs.GetChildLogger("database")
+
+	db, err := database.NewDbFromConfig(&cfg.Database, dbLog, database.RetryConnectorCallbacks{})
+	if err != nil {
+		logger.Fatalw("Cannot create database", logging.Error(err))
+	}
+
+	kdb, err := kdatabase.NewFromSqlxDb(&cfg.Database, dbLog, db.DB)
+	if err != nil {
+		logger.Fatalw("Cannot create database wrapper", logging.Error(err))
+	}
+
+	// When started by systemd, NOTIFY_SOCKET is set by systemd for Type=notify
+	// supervised services, which was the default setting for the Icinga for Kubernetes
+	// service. Before switching to Type=simple. For Type=notify, we need to tell
+	// systemd, that Icinga for Kubernetes finished starting up.
+	_ = sdnotify.Ready()
+
+	if !kdb.Connect() {
+		if len(removeClusterUuids.Value()) != 0 {
+			logger.Fatal("Cannot remove cluster without database connection")
+		}
+
+		return
+	}
+
+	if len(removeClusterUuids.Value()) != 0 {
+		clusterRemovalLogger := logs.GetChildLogger("cluster-removal")
+
+		for _, u := range removeClusterUuids.Value() {
+			clusterRemovalLogger.Infof("Removing cluster %q", u)
+			if err := removeCluster(context.Background(), kdb, clusterRemovalLogger, u); err != nil {
+				clusterRemovalLogger.Fatal(errors.Wrapf(err, "cannot remove cluster %q", u))
+			}
+		}
+
+		return
 	}
 
 	kconfig, err := kclientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, overrides).ClientConfig()
@@ -131,28 +174,6 @@ func main() {
 	}
 
 	logger.Infow("Using Kubernetes API server", zap.String("host", kconfig.Host))
-
-	dbLog := logs.GetChildLogger("database")
-
-	db, err := database.NewDbFromConfig(&cfg.Database, dbLog, database.RetryConnectorCallbacks{})
-	if err != nil {
-		logger.Fatalw("Cannot create database", logging.Error(err))
-	}
-
-	kdb, err := kdatabase.NewFromSqlxDb(&cfg.Database, dbLog, db.DB)
-	if err != nil {
-		logger.Fatalw("Cannot create database wrapper", logging.Error(err))
-	}
-
-	// When started by systemd, NOTIFY_SOCKET is set by systemd for Type=notify
-	// supervised services, which was the default setting for the Icinga for Kubernetes
-	// service. Before switching to Type=simple. For Type=notify, we need to tell
-	// systemd, that Icinga for Kubernetes finished starting up.
-	_ = sdnotify.Ready()
-
-	if !kdb.Connect() {
-		return
-	}
 
 	hasSchema, err := dbHasSchema(kdb, cfg.Database.Database)
 	if err != nil {
@@ -713,6 +734,61 @@ func main() {
 	if err := g.Wait(); err != nil {
 		logger.Fatalw("Cannot run Icinga for Kubernetes", logging.Error(err))
 	}
+}
+
+// removeCluster deletes the cluster with the given UUID and all data that references it from db.
+func removeCluster(ctx context.Context, db *kdatabase.Database, logger *logging.Logger, clusterUuid types.UUID) error {
+	type uuidColumn struct {
+		Uuid types.UUID
+	}
+
+	// Check whether a cluster entry exists for the given UUID at all.
+	// A missing cluster entry only produces a warning so that a rerun
+	// can finish an interrupted removal.
+	selectQuery := db.Rebind(
+		db.BuildSelectStmt(&schemav1.Cluster{}, uuidColumn{}) + fmt.Sprintf(" WHERE %s = ?", db.QuoteIdentifier("uuid")),
+	)
+
+	var clusterUuids []types.UUID
+	if err := db.SelectContext(ctx, &clusterUuids, selectQuery, clusterUuid); err != nil {
+		return kdatabase.CantPerformQuery(err, selectQuery)
+	}
+
+	if len(clusterUuids) == 0 {
+		logger.Warnw(
+			"No cluster entry exists for UUID, trying to remove any remaining data of that cluster anyway",
+			zap.String("uuid", clusterUuid.String()),
+		)
+	}
+
+	// Pods don't cascade deletes to their containers, so remove the containers first.
+	for _, container := range []kdatabase.HasRelations{&schemav1.Container{}, &schemav1.InitContainer{}, &schemav1.SidecarContainer{}} {
+		query := db.Rebind(db.BuildSelectStmt(container, uuidColumn{}) + fmt.Sprintf(
+			" WHERE %s IN (SELECT %s FROM %s WHERE %s=?)",
+			db.QuoteIdentifier("pod_uuid"),
+			db.QuoteIdentifier("uuid"),
+			db.QuoteIdentifier(kdatabase.TableName(&schemav1.Pod{})),
+			db.QuoteIdentifier("cluster_uuid"),
+		))
+
+		// Scanned into []any so that the UUIDs can feed DeleteStreamed's <-chan any.
+		var uuids []any
+		if err := db.SelectContext(ctx, &uuids, query, clusterUuid); err != nil {
+			return kdatabase.CantPerformQuery(err, query)
+		}
+
+		if err := db.DeleteStreamed(ctx, container, utils.ChanFromSlice(uuids), kdatabase.WithCascading()); err != nil {
+			return errors.Wrapf(err, "cannot remove rows from %q", kdatabase.TableName(container))
+		}
+	}
+
+	if err := db.DeleteStreamed(ctx, &schemav1.Cluster{}, utils.ChanFromSlice([]any{clusterUuid}), kdatabase.WithCascading()); err != nil {
+		return errors.Wrap(err, "cannot remove cluster rows")
+	}
+
+	logger.Infow("Removed cluster", zap.String("uuid", clusterUuid.String()))
+
+	return nil
 }
 
 // dbHasSchema queries via db whether the database dbName has a table named "kubernetes_schema".
