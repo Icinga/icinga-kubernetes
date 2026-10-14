@@ -229,7 +229,7 @@ func (j *Job) getIcingaState(job *kbatchv1.Job) (IcingaState, string) {
 		switch condition.Type {
 		case kbatchv1.JobSuccessCriteriaMet:
 			return Ok, fmt.Sprintf(
-				"Job %s/%s met its sucess criteria.",
+				"Job %s/%s met its success criteria.",
 				j.Namespace, j.Name)
 		case kbatchv1.JobComplete:
 			reason := fmt.Sprintf(

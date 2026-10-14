@@ -71,7 +71,7 @@ func main() {
 
 	loadingRules := kclientcmd.NewDefaultClientConfigLoadingRules()
 	loadingRules.DefaultClientConfig = &kclientcmd.DefaultClientConfig
-	pflag.StringVar(&loadingRules.ExplicitPath, "kubeconfig", "", "Path to a kube config. Only required if out-of-cluster")
+	pflag.StringVar(&loadingRules.ExplicitPath, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster")
 
 	overrides := &kclientcmd.ConfigOverrides{}
 	kflags := kclientcmd.RecommendedConfigOverrideFlags("")
@@ -81,7 +81,7 @@ func main() {
 	pflag.Parse()
 
 	if showVersion {
-		internal.Version.Print("Icinga Kubernetes")
+		internal.Version.Print("Icinga for Kubernetes")
 		os.Exit(0)
 	}
 
@@ -94,7 +94,7 @@ func main() {
 		utils.PrintErrorThenExit(errors.Wrap(err, "cannot load configuration"), 1)
 	}
 
-	logs, err := logging.NewLoggingFromConfig("Icinga Kubernetes", cfg.Logging.Config)
+	logs, err := logging.NewLoggingFromConfig("Icinga for Kubernetes", cfg.Logging.Config)
 	if err != nil {
 		utils.PrintErrorThenExit(errors.Wrap(err, "cannot configure logging"), 1)
 	}
@@ -146,7 +146,7 @@ func main() {
 
 	// When started by systemd, NOTIFY_SOCKET is set by systemd for Type=notify
 	// supervised services, which was the default setting for the Icinga for Kubernetes
-	// service. Before switching to Type=simple. For Type=notify, we need to tell
+	// service before switching to Type=simple. For Type=notify, we need to tell
 	// systemd, that Icinga for Kubernetes finished starting up.
 	_ = sdnotify.Ready()
 

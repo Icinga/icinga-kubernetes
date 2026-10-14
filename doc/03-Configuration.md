@@ -40,12 +40,12 @@ Connection configuration for [Icinga Notifications](https://github.com/icinga/ic
 If one of `url`, `username`, or `password` is set, **all** must be set.
 Defined in the `notifications` section of the configuration file.
 
-| Option             | Description                                                                                           |
-|--------------------|-------------------------------------------------------------------------------------------------------|
-| url                | **Optional.** Icinga Notifications daemon URL. If not set, notifications are disabled                 | 
-| username           | **Optional.** Username for authenticating the Icinga for Kubernetes source in Icinga Notifications.   |
-| password           | **Optional.** Password for authenticating the Icinga for Kubernetes source in Icinga Notifications.   |
-| kubernetes_web_url | **Optional.** The base URL of Icinga for Kubernetes Web used in generated Icinga Notification events. |
+| Option             | Description                                                                                            |
+|--------------------|--------------------------------------------------------------------------------------------------------|
+| url                | **Optional.** Icinga Notifications daemon URL. If not set, notifications are disabled                  | 
+| username           | **Optional.** Username for authenticating the Icinga for Kubernetes source in Icinga Notifications.    |
+| password           | **Optional.** Password for authenticating the Icinga for Kubernetes source in Icinga Notifications.    |
+| kubernetes_web_url | **Optional.** The base URL of Icinga for Kubernetes Web used in generated Icinga Notifications events. |
 
 ## Prometheus Configuration
 
@@ -91,12 +91,12 @@ The configurations set by environment variables override the ones set by YAML.
 
 ## Notifications Configuration
 
-| Env                              | Description                                                                                           |
-|----------------------------------|-------------------------------------------------------------------------------------------------------|
-| NOTIFICATIONS_URL                | **Optional.** Icinga Notifications daemon URL. If not set, notifications are disabled                 |
-| NOTIFICATIONS_USERNAME           | **Optional.** Username for authenticating the Icinga for Kubernetes source in Icinga Notifications.   |
-| NOTIFICATIONS_PASSWORD           | **Optional.** Password for authenticating the Icinga for Kubernetes source in Icinga Notifications.   |
-| NOTIFICATIONS_KUBERNETES_WEB_URL | **Optional.** The base URL of Icinga for Kubernetes Web used in generated Icinga Notification events. |
+| Env                              | Description                                                                                            |
+|----------------------------------|--------------------------------------------------------------------------------------------------------|
+| NOTIFICATIONS_URL                | **Optional.** Icinga Notifications daemon URL. If not set, notifications are disabled                  |
+| NOTIFICATIONS_USERNAME           | **Optional.** Username for authenticating the Icinga for Kubernetes source in Icinga Notifications.    |
+| NOTIFICATIONS_PASSWORD           | **Optional.** Password for authenticating the Icinga for Kubernetes source in Icinga Notifications.    |
+| NOTIFICATIONS_KUBERNETES_WEB_URL | **Optional.** The base URL of Icinga for Kubernetes Web used in generated Icinga Notifications events. |
 
 ## Prometheus Configuration
 

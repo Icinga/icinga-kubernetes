@@ -57,5 +57,5 @@ notifications:
   # Password for authenticating the Icinga for Kubernetes source in Icinga Notifications.
 #  password: password
 
-  # The base URL of Icinga for Kubernetes Web used in generated Icinga Notification events.
+  # The base URL of Icinga for Kubernetes Web used in generated Icinga Notifications events.
 #  kubernetes_web_url: http://localhost/icingaweb2/kubernetes

@@ -146,7 +146,7 @@ systemctl enable --now icinga-kubernetes
 
 ##### Stopping Icinga for Kubernetes
 
-The following command will stop all running Icinga for Kubernetes services instances:
+The following command will stop all running Icinga for Kubernetes service instances:
 
 ```bash
 systemctl stop icinga-kubernetes
