@@ -26,13 +26,21 @@ var (
 	containerLogs   = make(map[string]ContainerLog)
 	containerLogsMu sync.Mutex
 
-	deletedPodIds = make(map[string]bool)
+	// deletedPodIds maps the IDs of deleted pods to when SyncContainers
+	// processed their deletion. Only the SyncContainers loop accesses it.
+	deletedPodIds = make(map[string]time.Time)
 )
 
 const (
 	MaxConcurrentJobs int = 60
 	ScheduleInterval      = 5 * time.Minute
 	MaxLogLength          = 1<<16 - 1
+
+	// DeletedPodIdsTTL is how long SyncContainers remembers a deleted pod. Late
+	// upserts trail the deletion by the time a pending upsert batch takes to
+	// reach the database, so this leaves a wide margin while keeping the memory
+	// bounded by the pods deleted within that time.
+	DeletedPodIdsTTL = 10 * time.Minute
 
 	PodInitializing   = "PodInitializing" // https://github.com/kubernetes/kubernetes/blob/v1.30.1/pkg/kubelet/kubelet_pods.go#L80
 	ContainerCreating = "ContainerCreating"
@@ -478,10 +486,19 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 
 		query := db.BuildSelectStmt(&Container{}, containerFingerprint{}) + ` WHERE pod_uuid=:pod_uuid`
 
+		sweep := time.NewTicker(DeletedPodIdsTTL)
+		defer sweep.Stop()
+
 		for {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
+			case now := <-sweep.C:
+				for id, deleted := range deletedPodIds {
+					if now.Sub(deleted) > DeletedPodIdsTTL {
+						delete(deletedPodIds, id)
+					}
+				}
 			case podUuid, ok := <-deletePods:
 				if !ok {
 					return nil
@@ -494,7 +511,7 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 					// informer's store, and once for the delete event itself.
 					break
 				}
-				deletedPodIds[meta.PodUuid.String()] = true
+				deletedPodIds[meta.PodUuid.String()] = time.Now()
 
 				entities, errs := db.YieldAll(ctx, func() (any, error) {
 					return &Container{}, nil
@@ -530,9 +547,9 @@ func SyncContainers(ctx context.Context, db *database.Database, g *errgroup.Grou
 
 				pod := e.(*Pod)
 
-				// A late upsert may finish after logical deletion. Never restart
-				// log collection for the same Kubernetes UID once deletion won.
-				if deletedPodIds[pod.Uuid.String()] {
+				// A late upsert may finish after logical deletion. Ignore it so
+				// that log collection does not restart for the deleted pod.
+				if _, ok := deletedPodIds[pod.Uuid.String()]; ok {
 					continue
 				}
 
