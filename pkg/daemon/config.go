@@ -12,7 +12,7 @@ import (
 // config.yml if not set via command line flag.
 const DefaultConfigPath = "./config.yml"
 
-// Config defines Icinga Kubernetes config.
+// Config defines Icinga for Kubernetes config.
 type Config struct {
 	Database      database.Config          `yaml:"database" envPrefix:"DATABASE_"`
 	Logging       LoggingConfig            `yaml:"logging" envPrefix:"LOGGING_"`

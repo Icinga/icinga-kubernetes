@@ -21,11 +21,11 @@ include the following:
   requiring configuration for an external service to connect to the database
   outside the cluster.
 
-![Icinga Kubernetes Web Dashboard](res/icinga-kubernetes-dashboard.png)
-![Icinga Kubernetes Web Deployment](res/icinga-kubernetes-deployment.png)
-![Icinga Kubernetes Web Stateful Set](res/icinga-kubernetes-statefulset.png)
-![Icinga Kubernetes Web Replica Set](res/icinga-kubernetes-replicaset.png)
-![Icinga Kubernetes Web Favorites Dashboard](res/icinga-kubernetes-favorites-dashboard.png)
+![Icinga for Kubernetes Web Dashboard](res/icinga-kubernetes-dashboard.png)
+![Icinga for Kubernetes Web Deployment](res/icinga-kubernetes-deployment.png)
+![Icinga for Kubernetes Web Stateful Set](res/icinga-kubernetes-statefulset.png)
+![Icinga for Kubernetes Web Replica Set](res/icinga-kubernetes-replicaset.png)
+![Icinga for Kubernetes Web Favorites Dashboard](res/icinga-kubernetes-favorites-dashboard.png)
 
 ## Multi-Cluster Support
 
