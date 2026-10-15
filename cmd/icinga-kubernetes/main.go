@@ -505,7 +505,12 @@ func main() {
 		}
 
 		promApiClient := promv1.NewAPI(promClient)
-		promMetricSync := metrics.NewPromMetricSync(promApiClient, db, logs.GetChildLogger("prometheus"))
+		promMetricSync := metrics.NewPromMetricSync(
+			promApiClient,
+			db,
+			logs.GetChildLogger("prometheus"),
+			metrics.NamespaceMatcher(cfg.Namespaces.Include, cfg.Namespaces.Exclude),
+		)
 
 		g.Go(func() error {
 			return promMetricSync.Nodes(
