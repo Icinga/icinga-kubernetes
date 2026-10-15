@@ -753,7 +753,7 @@ func SyncServicePods(ctx context.Context, db *kdatabase.Database, serviceList co
 					return nil
 				}
 
-				services, err := serviceList.Lister().List(labels.NewSelector())
+				services, err := serviceList.Lister().Services(pod.(*schemav1.Pod).Namespace).List(labels.NewSelector())
 				if err != nil {
 					return err
 				}
@@ -820,7 +820,7 @@ func SyncServicePods(ctx context.Context, db *kdatabase.Database, serviceList co
 					return err
 				}
 
-				pods, err := podList.Lister().List(selector)
+				pods, err := podList.Lister().Pods(service.(*schemav1.Service).Namespace).List(selector)
 				if err != nil {
 					return err
 				}
