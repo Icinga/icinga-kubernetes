@@ -1,6 +1,8 @@
 package daemon
 
 import (
+	"slices"
+
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-kubernetes/pkg/metrics"
@@ -18,6 +20,43 @@ type Config struct {
 	Logging       LoggingConfig            `yaml:"logging" envPrefix:"LOGGING_"`
 	Notifications notifications.Config     `yaml:"notifications" envPrefix:"NOTIFICATIONS_"`
 	Prometheus    metrics.PrometheusConfig `yaml:"prometheus" envPrefix:"PROMETHEUS_"`
+	Namespaces    NamespacesConfig         `yaml:"namespaces" envPrefix:"NAMESPACES_"`
+}
+
+type NamespacesConfig struct {
+	Include []string `yaml:"include" env:"INCLUDE"`
+	Exclude []string `yaml:"exclude" env:"EXCLUDE"`
+}
+
+func (c *NamespacesConfig) Validate() error {
+	if len(c.Exclude) > 0 && len(c.Include) > 0 {
+		return errors.New("exclude and include can not be set at the same time")
+	}
+
+	if slices.Contains(c.Include, "") {
+		return errors.New("include namespace can not be empty")
+	}
+
+	if slices.Contains(c.Exclude, "") {
+		return errors.New("exclude namespace can not be empty")
+	}
+
+	var found []string
+	for _, namespace := range c.Include {
+		if slices.Contains(found, namespace) {
+			return errors.New("namespace can not be included twice")
+		}
+		found = append(found, namespace)
+	}
+
+	for _, namespace := range c.Exclude {
+		if slices.Contains(found, namespace) {
+			return errors.New("namespace can not be excluded twice")
+		}
+		found = append(found, namespace)
+	}
+
+	return nil
 }
 
 // Validate checks constraints in the supplied configuration and returns
@@ -32,6 +71,10 @@ func (c *Config) Validate() error {
 	}
 
 	if err := c.Prometheus.Validate(); err != nil {
+		return err
+	}
+
+	if err := c.Namespaces.Validate(); err != nil {
 		return err
 	}
 
