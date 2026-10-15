@@ -42,10 +42,10 @@ import (
 	"github.com/spf13/pflag"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
+	kcorev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/informers"
-	corev1 "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	kcache "k8s.io/client-go/tools/cache"
 	kclientcmd "k8s.io/client-go/tools/clientcmd"
@@ -448,7 +448,12 @@ func main() {
 	factory := informers.NewSharedInformerFactory(clientset, 0)
 
 	g.Go(func() error {
-		return SyncServicePods(ctx, db, factory.Core().V1().Services(), factory.Core().V1().Pods())
+		return SyncServicePods(
+			ctx,
+			db,
+			syncv1.Informers{factory.Core().V1().Services().Informer()},
+			syncv1.Informers{factory.Core().V1().Pods().Informer()},
+		)
 	})
 
 	if err := internal.SyncPrometheusConfig(ctx, db.DB, &cfg.Prometheus, clusterInstance.Uuid); err != nil {
@@ -480,11 +485,11 @@ func main() {
 		promMetricSync := metrics.NewPromMetricSync(promApiClient, db.DB, logs.GetChildLogger("prometheus"))
 
 		g.Go(func() error {
-			return promMetricSync.Nodes(ctx, factory.Core().V1().Nodes().Informer())
+			return promMetricSync.Nodes(ctx, syncv1.Informers{factory.Core().V1().Nodes().Informer()})
 		})
 
 		g.Go(func() error {
-			return promMetricSync.Pods(ctx, factory.Core().V1().Pods().Informer())
+			return promMetricSync.Pods(ctx, syncv1.Informers{factory.Core().V1().Pods().Informer()})
 		})
 	}
 
@@ -799,7 +804,7 @@ func dbHasSchema(db *kdatabase.DB, dbName string) (bool, error) {
 	return rows.Next(), rows.Err()
 }
 
-func SyncServicePods(ctx context.Context, db *kdatabase.DB, serviceList corev1.ServiceInformer, podList corev1.PodInformer) error {
+func SyncServicePods(ctx context.Context, db *kdatabase.DB, serviceList syncv1.Informers, podList syncv1.Informers) error {
 	servicePods := make(chan database.Entity)
 
 	g, ctx := errgroup.WithContext(ctx)
@@ -811,7 +816,7 @@ func SyncServicePods(ctx context.Context, db *kdatabase.DB, serviceList corev1.S
 		// Out() panics once the multiplexer has started, so subscribe before waiting for the cache.
 		ch := cachev1.Multiplexers().Pods().UpsertEvents().Out()
 
-		if !kcache.WaitForCacheSync(ctx.Done(), serviceList.Informer().HasSynced) {
+		if !kcache.WaitForCacheSync(ctx.Done(), serviceList.HasSynced) {
 			return ctx.Err()
 		}
 
@@ -822,7 +827,7 @@ func SyncServicePods(ctx context.Context, db *kdatabase.DB, serviceList corev1.S
 					return nil
 				}
 
-				services, err := serviceList.Lister().Services(pod.(*schemav1.Pod).Namespace).List(labels.NewSelector())
+				services, err := serviceList.ListByNamespace(pod.(*schemav1.Pod).Namespace, labels.Everything())
 				if err != nil {
 					return err
 				}
@@ -832,7 +837,8 @@ func SyncServicePods(ctx context.Context, db *kdatabase.DB, serviceList corev1.S
 					podLabels[label.Name] = label.Value
 				}
 
-				for _, service := range services {
+				for _, item := range services {
+					service := item.(*kcorev1.Service)
 					if len(service.Spec.Selector) == 0 {
 						continue
 					}
@@ -864,7 +870,7 @@ func SyncServicePods(ctx context.Context, db *kdatabase.DB, serviceList corev1.S
 		// Out() panics once the multiplexer has started, so subscribe before waiting for the cache.
 		ch := cachev1.Multiplexers().Services().UpsertEvents().Out()
 
-		if !kcache.WaitForCacheSync(ctx.Done(), podList.Informer().HasSynced) {
+		if !kcache.WaitForCacheSync(ctx.Done(), podList.HasSynced) {
 			return ctx.Err()
 		}
 
@@ -889,12 +895,14 @@ func SyncServicePods(ctx context.Context, db *kdatabase.DB, serviceList corev1.S
 					return err
 				}
 
-				pods, err := podList.Lister().Pods(service.(*schemav1.Service).Namespace).List(selector)
+				pods, err := podList.ListByNamespace(service.(*schemav1.Service).Namespace, selector)
 				if err != nil {
 					return err
 				}
 
-				for _, pod := range pods {
+				for _, item := range pods {
+					pod := item.(*kcorev1.Pod)
+
 					select {
 					case servicePods <- schemav1.ServicePod{
 						ServiceUuid: service.(*schemav1.Service).Uuid,

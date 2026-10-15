@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -60,4 +61,18 @@ func (i Informers) List() []any {
 	}
 
 	return items
+}
+
+// ListByNamespace returns the objects of all informers in namespace that match selector.
+func (i Informers) ListByNamespace(namespace string, selector labels.Selector) ([]any, error) {
+	var items []any
+	for _, informer := range i {
+		if err := cache.ListAllByNamespace(informer.GetIndexer(), namespace, selector, func(item any) {
+			items = append(items, item)
+		}); err != nil {
+			return nil, err
+		}
+	}
+
+	return items, nil
 }

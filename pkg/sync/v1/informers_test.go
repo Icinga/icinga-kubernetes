@@ -6,6 +6,7 @@ import (
 	"time"
 
 	kcorev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
@@ -30,6 +31,7 @@ func TestInformers(t *testing.T) {
 	}
 
 	wantTotal := 5
+	wantPerNamespace := map[string]int{"a": 2, "b": 3, "c": 0}
 
 	client := fake.NewClientset()
 	for _, tt := range tests {
@@ -59,5 +61,16 @@ func TestInformers(t *testing.T) {
 
 	if got := len(i.List()); got != wantTotal {
 		t.Errorf("List() returned %d items, want %d", got, wantTotal)
+	}
+
+	for ns, want := range wantPerNamespace {
+		items, err := i.ListByNamespace(ns, labels.Everything())
+		if err != nil {
+			t.Errorf("ListByNamespace(%q, labels.Everything()) returned an error: %v", ns, err)
+		}
+		got := len(items)
+		if got != want {
+			t.Errorf("ListByNamespace(%q, labels.Everything()) returned %d items, want %d", ns, got, want)
+		}
 	}
 }
