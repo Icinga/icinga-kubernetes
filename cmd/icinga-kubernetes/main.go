@@ -446,8 +446,6 @@ func main() {
 		})
 	}
 
-	factory := informers.NewSharedInformerFactory(clientset, 0)
-
 	clusterFactory := informers.NewSharedInformerFactory(clientset, 0)
 
 	var factories, namespaceFactories []informers.SharedInformerFactory
@@ -480,8 +478,12 @@ func main() {
 		return SyncServicePods(
 			ctx,
 			db,
-			sync.Informers{factory.Core().V1().Services().Informer()},
-			sync.Informers{factory.Core().V1().Pods().Informer()},
+			pick(factories, func(f informers.SharedInformerFactory) kcache.SharedIndexInformer {
+				return f.Core().V1().Services().Informer()
+			}),
+			pick(factories, func(f informers.SharedInformerFactory) kcache.SharedIndexInformer {
+				return f.Core().V1().Pods().Informer()
+			}),
 		)
 	})
 
@@ -514,16 +516,33 @@ func main() {
 		promMetricSync := metrics.NewPromMetricSync(promApiClient, db.DB, logs.GetChildLogger("prometheus"))
 
 		g.Go(func() error {
-			return promMetricSync.Nodes(ctx, sync.Informers{factory.Core().V1().Nodes().Informer()})
+			return promMetricSync.Nodes(
+				ctx,
+				pick([]informers.SharedInformerFactory{clusterFactory}, func(f informers.SharedInformerFactory) kcache.SharedIndexInformer {
+					return f.Core().V1().Nodes().Informer()
+				}),
+			)
 		})
 
 		g.Go(func() error {
-			return promMetricSync.Pods(ctx, sync.Informers{factory.Core().V1().Pods().Informer()})
+			return promMetricSync.Pods(
+				ctx,
+				pick(factories, func(f informers.SharedInformerFactory) kcache.SharedIndexInformer {
+					return f.Core().V1().Pods().Informer()
+				}),
+			)
 		})
 	}
 
 	g.Go(func() error {
-		s := sync.NewSync(db, sync.Informers{factory.Core().V1().Namespaces().Informer()}, logs.GetChildLogger("namespaces"), schema.NewNamespace)
+		s := sync.NewSync(
+			db,
+			pick(namespaceFactories, func(f informers.SharedInformerFactory) kcache.SharedIndexInformer {
+				return f.Core().V1().Namespaces().Informer()
+			}),
+			logs.GetChildLogger("namespaces"),
+			schema.NewNamespace,
+		)
 
 		return s.Run(ctx)
 	})
@@ -532,7 +551,14 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := sync.NewSync(db, sync.Informers{factory.Core().V1().Nodes().Informer()}, logs.GetChildLogger("nodes"), schema.NewNode)
+		s := sync.NewSync(
+			db,
+			pick([]informers.SharedInformerFactory{clusterFactory}, func(f informers.SharedInformerFactory) kcache.SharedIndexInformer {
+				return f.Core().V1().Nodes().Informer()
+			}),
+			logs.GetChildLogger("nodes"),
+			schema.NewNode,
+		)
 
 		var forwardForNotifications []sync.Feature
 		if cfg.Notifications.Url != "" {
@@ -558,8 +584,15 @@ func main() {
 			cache.Multiplexers().Pods().DeleteEvents().Out(),
 		)
 
-		f := schema.NewPodFactory(clientset)
-		s := sync.NewSync(db, sync.Informers{factory.Core().V1().Pods().Informer()}, logs.GetChildLogger("pods"), f.New)
+		podFactory := schema.NewPodFactory(clientset)
+		s := sync.NewSync(
+			db,
+			pick(factories, func(f informers.SharedInformerFactory) kcache.SharedIndexInformer {
+				return f.Core().V1().Pods().Informer()
+			}),
+			logs.GetChildLogger("pods"),
+			podFactory.New,
+		)
 
 		wg.Done()
 
@@ -572,7 +605,14 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := sync.NewSync(db, sync.Informers{factory.Apps().V1().Deployments().Informer()}, logs.GetChildLogger("deployments"), schema.NewDeployment)
+		s := sync.NewSync(
+			db,
+			pick(factories, func(f informers.SharedInformerFactory) kcache.SharedIndexInformer {
+				return f.Apps().V1().Deployments().Informer()
+			}),
+			logs.GetChildLogger("deployments"),
+			schema.NewDeployment,
+		)
 
 		var forwardForNotifications []sync.Feature
 		if cfg.Notifications.Url != "" {
@@ -590,7 +630,14 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := sync.NewSync(db, sync.Informers{factory.Apps().V1().DaemonSets().Informer()}, logs.GetChildLogger("daemon-sets"), schema.NewDaemonSet)
+		s := sync.NewSync(
+			db,
+			pick(factories, func(f informers.SharedInformerFactory) kcache.SharedIndexInformer {
+				return f.Apps().V1().DaemonSets().Informer()
+			}),
+			logs.GetChildLogger("daemon-sets"),
+			schema.NewDaemonSet,
+		)
 
 		var forwardForNotifications []sync.Feature
 		if cfg.Notifications.Url != "" {
@@ -608,7 +655,14 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := sync.NewSync(db, sync.Informers{factory.Apps().V1().ReplicaSets().Informer()}, logs.GetChildLogger("replica-sets"), schema.NewReplicaSet)
+		s := sync.NewSync(
+			db,
+			pick(factories, func(f informers.SharedInformerFactory) kcache.SharedIndexInformer {
+				return f.Apps().V1().ReplicaSets().Informer()
+			}),
+			logs.GetChildLogger("replica-sets"),
+			schema.NewReplicaSet,
+		)
 
 		var forwardForNotifications []sync.Feature
 		if cfg.Notifications.Url != "" {
@@ -626,7 +680,14 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := sync.NewSync(db, sync.Informers{factory.Apps().V1().StatefulSets().Informer()}, logs.GetChildLogger("stateful-sets"), schema.NewStatefulSet)
+		s := sync.NewSync(
+			db,
+			pick(factories, func(f informers.SharedInformerFactory) kcache.SharedIndexInformer {
+				return f.Apps().V1().StatefulSets().Informer()
+			}),
+			logs.GetChildLogger("stateful-sets"),
+			schema.NewStatefulSet,
+		)
 
 		var forwardForNotifications []sync.Feature
 		if cfg.Notifications.Url != "" {
@@ -643,8 +704,15 @@ func main() {
 	})
 
 	g.Go(func() error {
-		f := schema.NewServiceFactory(clientset)
-		s := sync.NewSync(db, sync.Informers{factory.Core().V1().Services().Informer()}, logs.GetChildLogger("services"), f.NewService)
+		serviceFactory := schema.NewServiceFactory(clientset)
+		s := sync.NewSync(
+			db,
+			pick(factories, func(f informers.SharedInformerFactory) kcache.SharedIndexInformer {
+				return f.Core().V1().Services().Informer()
+			}),
+			logs.GetChildLogger("services"),
+			serviceFactory.NewService,
+		)
 
 		return s.Run(
 			ctx,
@@ -653,54 +721,118 @@ func main() {
 	})
 
 	g.Go(func() error {
-		s := sync.NewSync(db, sync.Informers{factory.Discovery().V1().EndpointSlices().Informer()}, logs.GetChildLogger("endpoints"), schema.NewEndpointSlice)
+		s := sync.NewSync(
+			db,
+			pick(factories, func(f informers.SharedInformerFactory) kcache.SharedIndexInformer {
+				return f.Discovery().V1().EndpointSlices().Informer()
+			}),
+			logs.GetChildLogger("endpoints"),
+			schema.NewEndpointSlice,
+		)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := sync.NewSync(db, sync.Informers{factory.Core().V1().Secrets().Informer()}, logs.GetChildLogger("secrets"), schema.NewSecret)
+		s := sync.NewSync(
+			db,
+			pick(factories, func(f informers.SharedInformerFactory) kcache.SharedIndexInformer {
+				return f.Core().V1().Secrets().Informer()
+			}),
+			logs.GetChildLogger("secrets"),
+			schema.NewSecret,
+		)
+
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := sync.NewSync(db, sync.Informers{factory.Core().V1().ConfigMaps().Informer()}, logs.GetChildLogger("config-maps"), schema.NewConfigMap)
+		s := sync.NewSync(
+			db,
+			pick(factories, func(f informers.SharedInformerFactory) kcache.SharedIndexInformer {
+				return f.Core().V1().ConfigMaps().Informer()
+			}),
+			logs.GetChildLogger("config-maps"),
+			schema.NewConfigMap,
+		)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := sync.NewSync(db, sync.Informers{factory.Events().V1().Events().Informer()}, logs.GetChildLogger("events"), schema.NewEvent)
+		s := sync.NewSync(
+			db,
+			pick(factories, func(f informers.SharedInformerFactory) kcache.SharedIndexInformer {
+				return f.Events().V1().Events().Informer()
+			}),
+			logs.GetChildLogger("events"),
+			schema.NewEvent,
+		)
 
 		return s.Run(ctx, sync.WithNoDelete(), sync.WithNoWarmup())
 	})
 
 	g.Go(func() error {
-		s := sync.NewSync(db, sync.Informers{factory.Core().V1().PersistentVolumeClaims().Informer()}, logs.GetChildLogger("pvcs"), schema.NewPvc)
+		s := sync.NewSync(
+			db,
+			pick(factories, func(f informers.SharedInformerFactory) kcache.SharedIndexInformer {
+				return f.Core().V1().PersistentVolumeClaims().Informer()
+			}),
+			logs.GetChildLogger("pvcs"),
+			schema.NewPvc,
+		)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := sync.NewSync(db, sync.Informers{factory.Core().V1().PersistentVolumes().Informer()}, logs.GetChildLogger("persistent-volumes"), schema.NewPersistentVolume)
+		s := sync.NewSync(
+			db,
+			pick([]informers.SharedInformerFactory{clusterFactory}, func(f informers.SharedInformerFactory) kcache.SharedIndexInformer {
+				return f.Core().V1().PersistentVolumes().Informer()
+			}),
+			logs.GetChildLogger("persistent-volumes"),
+			schema.NewPersistentVolume,
+		)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := sync.NewSync(db, sync.Informers{factory.Batch().V1().Jobs().Informer()}, logs.GetChildLogger("jobs"), schema.NewJob)
+		s := sync.NewSync(
+			db,
+			pick(factories, func(f informers.SharedInformerFactory) kcache.SharedIndexInformer {
+				return f.Batch().V1().Jobs().Informer()
+			}),
+			logs.GetChildLogger("jobs"),
+			schema.NewJob,
+		)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := sync.NewSync(db, sync.Informers{factory.Batch().V1().CronJobs().Informer()}, logs.GetChildLogger("cron-jobs"), schema.NewCronJob)
+		s := sync.NewSync(
+			db,
+			pick(factories, func(f informers.SharedInformerFactory) kcache.SharedIndexInformer {
+				return f.Batch().V1().CronJobs().Informer()
+			}),
+			logs.GetChildLogger("cron-jobs"),
+			schema.NewCronJob,
+		)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := sync.NewSync(db, sync.Informers{factory.Networking().V1().Ingresses().Informer()}, logs.GetChildLogger("ingresses"), schema.NewIngress)
+		s := sync.NewSync(
+			db,
+			pick(factories, func(f informers.SharedInformerFactory) kcache.SharedIndexInformer {
+				return f.Networking().V1().Ingresses().Informer()
+			}),
+			logs.GetChildLogger("ingresses"),
+			schema.NewIngress,
+		)
 
 		return s.Run(ctx)
 	})
