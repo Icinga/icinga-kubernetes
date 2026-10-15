@@ -480,7 +480,7 @@ func main() {
 	}
 
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Core().V1().Namespaces().Informer(), logs.GetChildLogger("namespaces"), schemav1.NewNamespace)
+		s := syncv1.NewSync(kdb, syncv1.Informers{factory.Core().V1().Namespaces().Informer()}, logs.GetChildLogger("namespaces"), schemav1.NewNamespace)
 
 		return s.Run(ctx)
 	})
@@ -489,7 +489,7 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Core().V1().Nodes().Informer(), logs.GetChildLogger("nodes"), schemav1.NewNode)
+		s := syncv1.NewSync(kdb, syncv1.Informers{factory.Core().V1().Nodes().Informer()}, logs.GetChildLogger("nodes"), schemav1.NewNode)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -516,7 +516,7 @@ func main() {
 		)
 
 		f := schemav1.NewPodFactory(clientset)
-		s := syncv1.NewSync(kdb, factory.Core().V1().Pods().Informer(), logs.GetChildLogger("pods"), f.New)
+		s := syncv1.NewSync(kdb, syncv1.Informers{factory.Core().V1().Pods().Informer()}, logs.GetChildLogger("pods"), f.New)
 
 		wg.Done()
 
@@ -529,7 +529,7 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Apps().V1().Deployments().Informer(), logs.GetChildLogger("deployments"), schemav1.NewDeployment)
+		s := syncv1.NewSync(kdb, syncv1.Informers{factory.Apps().V1().Deployments().Informer()}, logs.GetChildLogger("deployments"), schemav1.NewDeployment)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -547,7 +547,7 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Apps().V1().DaemonSets().Informer(), logs.GetChildLogger("daemon-sets"), schemav1.NewDaemonSet)
+		s := syncv1.NewSync(kdb, syncv1.Informers{factory.Apps().V1().DaemonSets().Informer()}, logs.GetChildLogger("daemon-sets"), schemav1.NewDaemonSet)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -565,7 +565,7 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Apps().V1().ReplicaSets().Informer(), logs.GetChildLogger("replica-sets"), schemav1.NewReplicaSet)
+		s := syncv1.NewSync(kdb, syncv1.Informers{factory.Apps().V1().ReplicaSets().Informer()}, logs.GetChildLogger("replica-sets"), schemav1.NewReplicaSet)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -583,7 +583,7 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Apps().V1().StatefulSets().Informer(), logs.GetChildLogger("stateful-sets"), schemav1.NewStatefulSet)
+		s := syncv1.NewSync(kdb, syncv1.Informers{factory.Apps().V1().StatefulSets().Informer()}, logs.GetChildLogger("stateful-sets"), schemav1.NewStatefulSet)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -601,7 +601,7 @@ func main() {
 
 	g.Go(func() error {
 		f := schemav1.NewServiceFactory(clientset)
-		s := syncv1.NewSync(kdb, factory.Core().V1().Services().Informer(), logs.GetChildLogger("services"), f.NewService)
+		s := syncv1.NewSync(kdb, syncv1.Informers{factory.Core().V1().Services().Informer()}, logs.GetChildLogger("services"), f.NewService)
 
 		return s.Run(
 			ctx,
@@ -610,54 +610,54 @@ func main() {
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Discovery().V1().EndpointSlices().Informer(), logs.GetChildLogger("endpoints"), schemav1.NewEndpointSlice)
+		s := syncv1.NewSync(kdb, syncv1.Informers{factory.Discovery().V1().EndpointSlices().Informer()}, logs.GetChildLogger("endpoints"), schemav1.NewEndpointSlice)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Core().V1().Secrets().Informer(), logs.GetChildLogger("secrets"), schemav1.NewSecret)
+		s := syncv1.NewSync(kdb, syncv1.Informers{factory.Core().V1().Secrets().Informer()}, logs.GetChildLogger("secrets"), schemav1.NewSecret)
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Core().V1().ConfigMaps().Informer(), logs.GetChildLogger("config-maps"), schemav1.NewConfigMap)
+		s := syncv1.NewSync(kdb, syncv1.Informers{factory.Core().V1().ConfigMaps().Informer()}, logs.GetChildLogger("config-maps"), schemav1.NewConfigMap)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Events().V1().Events().Informer(), logs.GetChildLogger("events"), schemav1.NewEvent)
+		s := syncv1.NewSync(kdb, syncv1.Informers{factory.Events().V1().Events().Informer()}, logs.GetChildLogger("events"), schemav1.NewEvent)
 
 		return s.Run(ctx, syncv1.WithNoDelete(), syncv1.WithNoWarmup())
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Core().V1().PersistentVolumeClaims().Informer(), logs.GetChildLogger("pvcs"), schemav1.NewPvc)
+		s := syncv1.NewSync(kdb, syncv1.Informers{factory.Core().V1().PersistentVolumeClaims().Informer()}, logs.GetChildLogger("pvcs"), schemav1.NewPvc)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Core().V1().PersistentVolumes().Informer(), logs.GetChildLogger("persistent-volumes"), schemav1.NewPersistentVolume)
+		s := syncv1.NewSync(kdb, syncv1.Informers{factory.Core().V1().PersistentVolumes().Informer()}, logs.GetChildLogger("persistent-volumes"), schemav1.NewPersistentVolume)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Batch().V1().Jobs().Informer(), logs.GetChildLogger("jobs"), schemav1.NewJob)
+		s := syncv1.NewSync(kdb, syncv1.Informers{factory.Batch().V1().Jobs().Informer()}, logs.GetChildLogger("jobs"), schemav1.NewJob)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Batch().V1().CronJobs().Informer(), logs.GetChildLogger("cron-jobs"), schemav1.NewCronJob)
+		s := syncv1.NewSync(kdb, syncv1.Informers{factory.Batch().V1().CronJobs().Informer()}, logs.GetChildLogger("cron-jobs"), schemav1.NewCronJob)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Networking().V1().Ingresses().Informer(), logs.GetChildLogger("ingresses"), schemav1.NewIngress)
+		s := syncv1.NewSync(kdb, syncv1.Informers{factory.Networking().V1().Ingresses().Informer()}, logs.GetChildLogger("ingresses"), schemav1.NewIngress)
 
 		return s.Run(ctx)
 	})
