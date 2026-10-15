@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"regexp"
+	"strconv"
 	"strings"
 	stdsync "sync"
 	"time"
@@ -169,62 +171,62 @@ var (
 	promQueriesPod = []PromQuery{
 		{
 			"cpu.usage",
-			`sum by (instance, namespace, pod) (rate(container_cpu_usage_seconds_total[2m]))`,
+			`sum by (instance, namespace, pod) (rate(container_cpu_usage_seconds_total{NAMESPACE_MATCHER}[2m]))`,
 			"",
 		},
 		{
 			"memory.usage",
-			`sum by (instance, namespace, pod) (container_memory_usage_bytes) / on (instance) group_left () label_replace(sum by (node) (node_memory_MemTotal_bytes), "instance", "$1", "node", "(.*)")`,
+			`sum by (instance, namespace, pod) (container_memory_usage_bytes{NAMESPACE_MATCHER}) / on (instance) group_left () label_replace(sum by (node) (node_memory_MemTotal_bytes), "instance", "$1", "node", "(.*)")`,
 			"",
 		},
 		{
 			"cpu.usage.cores",
-			`sum by (namespace, pod) (rate(container_cpu_usage_seconds_total[2m]))`,
+			`sum by (namespace, pod) (rate(container_cpu_usage_seconds_total{NAMESPACE_MATCHER}[2m]))`,
 			"",
 		},
 		{
 			"memory.usage.bytes",
-			`sum by (namespace, pod) (container_memory_usage_bytes)`,
+			`sum by (namespace, pod) (container_memory_usage_bytes{NAMESPACE_MATCHER})`,
 			"",
 		},
 		{
 			"cpu.request",
-			`sum by (node, namespace, pod) (kube_pod_container_resource_requests{resource="cpu"})`,
+			`sum by (node, namespace, pod) (kube_pod_container_resource_requests{resource="cpu",NAMESPACE_MATCHER})`,
 			"",
 		},
 		{
 			"cpu.request.percentage",
-			`sum by (node, namespace, pod) (kube_pod_container_resource_requests{resource="cpu"}) / on(node) group_left() (sum by (node) (machine_cpu_cores))`,
+			`sum by (node, namespace, pod) (kube_pod_container_resource_requests{resource="cpu",NAMESPACE_MATCHER}) / on(node) group_left() (sum by (node) (machine_cpu_cores))`,
 			"",
 		},
 		{
 			"cpu.limit",
-			`sum by (node, namespace, pod) (kube_pod_container_resource_limits{resource="cpu"})`,
+			`sum by (node, namespace, pod) (kube_pod_container_resource_limits{resource="cpu",NAMESPACE_MATCHER})`,
 			"",
 		},
 		{
 			"cpu.limit.percentage",
-			`sum by (node, namespace, pod) (kube_pod_container_resource_limits{resource="cpu"}) / on(node) group_left() (sum by (node) (machine_cpu_cores))`,
+			`sum by (node, namespace, pod) (kube_pod_container_resource_limits{resource="cpu",NAMESPACE_MATCHER}) / on(node) group_left() (sum by (node) (machine_cpu_cores))`,
 			"",
 		},
 		{
 			"memory.request",
-			`sum by (node, namespace, pod) (kube_pod_container_resource_requests{resource="memory"})`,
+			`sum by (node, namespace, pod) (kube_pod_container_resource_requests{resource="memory",NAMESPACE_MATCHER})`,
 			"",
 		},
 		{
 			"memory.request.percentage",
-			`sum by (node, namespace, pod) (kube_pod_container_resource_requests{resource="memory"}) / on(node) group_left() (sum by (node) (machine_memory_bytes))`,
+			`sum by (node, namespace, pod) (kube_pod_container_resource_requests{resource="memory",NAMESPACE_MATCHER}) / on(node) group_left() (sum by (node) (machine_memory_bytes))`,
 			"",
 		},
 		{
 			"memory.limit",
-			`sum by (node, namespace, pod) (kube_pod_container_resource_limits{resource="memory"})`,
+			`sum by (node, namespace, pod) (kube_pod_container_resource_limits{resource="memory",NAMESPACE_MATCHER})`,
 			"",
 		},
 		{
 			"memory.limit.percentage",
-			`sum by (node, namespace, pod) (kube_pod_container_resource_limits{resource="memory"}) / on(node) group_left() (sum by (node) (machine_memory_bytes))`,
+			`sum by (node, namespace, pod) (kube_pod_container_resource_limits{resource="memory",NAMESPACE_MATCHER}) / on(node) group_left() (sum by (node) (machine_memory_bytes))`,
 			"",
 		},
 	}
@@ -273,20 +275,58 @@ var (
 	}
 )
 
-// PromMetricSync synchronizes prometheus metrics from the prometheus API to the database
-type PromMetricSync struct {
-	promApiClient v1.API
-	db            *database.DB
-	logger        *logging.Logger
+// namespaceMatcherPlaceholder marks where pod queries select series by namespace.
+const namespaceMatcherPlaceholder = "NAMESPACE_MATCHER"
+
+// NamespaceMatcher returns a PromQL label matcher that selects series of the
+// include namespaces, or of all namespaces but the exclude ones. It returns an
+// empty string if both are empty.
+func NamespaceMatcher(include, exclude []string) string {
+	op, namespaces := "=~", include
+	if len(exclude) > 0 {
+		op, namespaces = "!~", exclude
+	}
+
+	if len(namespaces) == 0 {
+		return ""
+	}
+
+	quoted := make([]string, 0, len(namespaces))
+	for _, ns := range namespaces {
+		quoted = append(quoted, regexp.QuoteMeta(ns))
+	}
+
+	return "namespace" + op + strconv.Quote(strings.Join(quoted, "|"))
 }
 
-// NewPromMetricSync creates a new PromMetricSync
-func NewPromMetricSync(promApiClient v1.API, db *database.DB, logger *logging.Logger) *PromMetricSync {
+// PromMetricSync synchronizes prometheus metrics from the prometheus API to the database
+type PromMetricSync struct {
+	promApiClient    v1.API
+	db               *database.DB
+	logger           *logging.Logger
+	namespaceMatcher string
+}
+
+// NewPromMetricSync creates a new PromMetricSync.
+// namespaceMatcher restricts pod metrics to certain namespaces, see NamespaceMatcher.
+func NewPromMetricSync(promApiClient v1.API, db *database.DB, logger *logging.Logger, namespaceMatcher string) *PromMetricSync {
 	return &PromMetricSync{
-		promApiClient: promApiClient,
-		db:            db,
-		logger:        logger,
+		promApiClient:    promApiClient,
+		db:               db,
+		logger:           logger,
+		namespaceMatcher: namespaceMatcher,
 	}
+}
+
+// podQueries returns promQueriesPod restricted to the namespaces selected by pms.namespaceMatcher.
+func (pms *PromMetricSync) podQueries() []PromQuery {
+	queries := make([]PromQuery, 0, len(promQueriesPod))
+	for _, q := range promQueriesPod {
+		q.query = strings.ReplaceAll(q.query, namespaceMatcherPlaceholder, pms.namespaceMatcher)
+		queries = append(queries, q)
+	}
+
+	return queries
 }
 
 // promMetricClusterUpsertStmt returns database upsert statement to upsert cluster metrics
@@ -499,7 +539,7 @@ func (pms *PromMetricSync) Pods(ctx context.Context, informers sync.Informers) e
 	g.Go(func() error {
 		return pms.run(
 			ctx,
-			promQueriesPod,
+			pms.podQueries(),
 			upsertMetrics,
 			func(query PromQuery, res *model.Sample) database.Entity {
 				if res.Metric["pod"] == "" {
