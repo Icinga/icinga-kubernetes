@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -768,11 +769,26 @@ func main() {
 	})
 
 	g.Go(func() error {
+		events := pick(factories, func(f informers.SharedInformerFactory) kcache.SharedIndexInformer {
+			return f.Events().V1().Events().Informer()
+		})
+
+		// Kubernetes records events about nodes, which are cluster-scoped, in the default namespace.
+		// Keep synchronizing them even if the default namespace is filtered out.
+		if (len(cfg.Namespaces.Include) > 0 && !slices.Contains(cfg.Namespaces.Include, v1.NamespaceDefault)) ||
+			slices.Contains(cfg.Namespaces.Exclude, v1.NamespaceDefault) {
+			nodeEvents := informers.NewSharedInformerFactoryWithOptions(
+				clientset,
+				0,
+				informers.WithNamespace(v1.NamespaceDefault),
+				withFieldSelector(fields.OneTermEqualSelector("regarding.kind", "Node")),
+			)
+			events = append(events, nodeEvents.Events().V1().Events().Informer())
+		}
+
 		s := syncv1.NewSync(
 			db,
-			pick(factories, func(f informers.SharedInformerFactory) kcache.SharedIndexInformer {
-				return f.Events().V1().Events().Informer()
-			}),
+			events,
 			logs.GetChildLogger("events"),
 			schemav1.NewEvent,
 		)
