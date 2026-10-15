@@ -44,6 +44,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	kcorev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -447,6 +448,34 @@ func main() {
 
 	factory := informers.NewSharedInformerFactory(clientset, 0)
 
+	clusterFactory := informers.NewSharedInformerFactory(clientset, 0)
+
+	var factories, namespaceFactories []informers.SharedInformerFactory
+
+	switch {
+	case len(cfg.Namespaces.Include) > 0:
+		for _, ns := range cfg.Namespaces.Include {
+			factories = append(factories, informers.NewSharedInformerFactoryWithOptions(
+				clientset, 0, informers.WithNamespace(ns)))
+			namespaceFactories = append(namespaceFactories, informers.NewSharedInformerFactoryWithOptions(
+				clientset, 0, withFieldSelector(fields.OneTermEqualSelector("metadata.name", ns))))
+		}
+	case len(cfg.Namespaces.Exclude) > 0:
+		var byNamespace, byName []fields.Selector
+		for _, ns := range cfg.Namespaces.Exclude {
+			byNamespace = append(byNamespace, fields.OneTermNotEqualSelector("metadata.namespace", ns))
+			byName = append(byName, fields.OneTermNotEqualSelector("metadata.name", ns))
+		}
+
+		factories = append(factories, informers.NewSharedInformerFactoryWithOptions(
+			clientset, 0, withFieldSelector(fields.AndSelectors(byNamespace...))))
+		namespaceFactories = append(namespaceFactories, informers.NewSharedInformerFactoryWithOptions(
+			clientset, 0, withFieldSelector(fields.AndSelectors(byName...))))
+	default:
+		factories = append(factories, clusterFactory)
+		namespaceFactories = append(namespaceFactories, clusterFactory)
+	}
+
 	g.Go(func() error {
 		return SyncServicePods(
 			ctx,
@@ -735,6 +764,26 @@ func main() {
 	if err := g.Wait(); err != nil {
 		logger.Fatalw("Cannot run Icinga for Kubernetes", logging.Error(err))
 	}
+}
+
+// withFieldSelector restricts all informers of a factory to objects matching selector.
+func withFieldSelector(selector fields.Selector) informers.SharedInformerOption {
+	return informers.WithTweakListOptions(func(o *v1.ListOptions) {
+		o.FieldSelector = selector.String()
+	})
+}
+
+// pick returns the informer that informer selects from each factory.
+func pick(
+	factories []informers.SharedInformerFactory,
+	informer func(informers.SharedInformerFactory) kcache.SharedIndexInformer,
+) syncv1.Informers {
+	var i syncv1.Informers
+	for _, f := range factories {
+		i = append(i, informer(f))
+	}
+
+	return i
 }
 
 // removeCluster deletes the cluster with the given UUID and all data that references it from db.
