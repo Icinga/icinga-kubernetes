@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
-	"sync"
+	stdsync "sync"
 	"time"
 
 	"github.com/icinga/icinga-go-library/backoff"
@@ -15,6 +15,7 @@ import (
 	"github.com/icinga/icinga-go-library/retry"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/internal/schema"
+	"github.com/icinga/icinga-kubernetes/internal/sync"
 	"github.com/pkg/errors"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
@@ -411,14 +412,14 @@ func (pms *PromMetricSync) run(
 	return g.Wait()
 }
 
-func (pms *PromMetricSync) Nodes(ctx context.Context, informer kcache.SharedIndexInformer) error {
-	if !kcache.WaitForCacheSync(ctx.Done(), informer.HasSynced) {
+func (pms *PromMetricSync) Nodes(ctx context.Context, informers sync.Informers) error {
+	if !kcache.WaitForCacheSync(ctx.Done(), informers.HasSynced) {
 		return errors.New("timed out waiting for caches to sync")
 	}
 
-	nodes := sync.Map{}
+	nodes := stdsync.Map{}
 	defer periodic.Start(ctx, 1*time.Hour, func(tick periodic.Tick) {
-		for _, item := range informer.GetStore().List() {
+		for _, item := range informers.List() {
 			node := item.(*kcorev1.Node)
 			uuid := schema.EnsureUUID(node.UID)
 			nodes.Store(node.Name, uuid)
@@ -486,8 +487,8 @@ func (pms *PromMetricSync) Nodes(ctx context.Context, informer kcache.SharedInde
 	return g.Wait()
 }
 
-func (pms *PromMetricSync) Pods(ctx context.Context, informer kcache.SharedIndexInformer) error {
-	if !kcache.WaitForCacheSync(ctx.Done(), informer.HasSynced) {
+func (pms *PromMetricSync) Pods(ctx context.Context, informers sync.Informers) error {
+	if !kcache.WaitForCacheSync(ctx.Done(), informers.HasSynced) {
 		return errors.New("timed out waiting for caches to sync")
 	}
 
@@ -505,7 +506,7 @@ func (pms *PromMetricSync) Pods(ctx context.Context, informer kcache.SharedIndex
 					return nil
 				}
 
-				obj, exists, err := informer.GetStore().GetByKey(
+				obj, exists, err := informers.GetByKey(
 					kcache.NewObjectName(string(res.Metric["namespace"]), string(res.Metric["pod"])).String())
 				if err != nil {
 					//return errors.Wrap(err, "cannot get pod from store")
@@ -541,8 +542,8 @@ func (pms *PromMetricSync) Pods(ctx context.Context, informer kcache.SharedIndex
 	return g.Wait()
 }
 
-func (pms *PromMetricSync) Containers(ctx context.Context, informer kcache.SharedIndexInformer) error {
-	if !kcache.WaitForCacheSync(ctx.Done(), informer.HasSynced) {
+func (pms *PromMetricSync) Containers(ctx context.Context, informers sync.Informers) error {
+	if !kcache.WaitForCacheSync(ctx.Done(), informers.HasSynced) {
 		pms.logger.Fatal("Timed out waiting for caches to sync")
 	}
 
@@ -588,8 +589,8 @@ func (pms *PromMetricSync) Containers(ctx context.Context, informer kcache.Share
 	return g.Wait()
 }
 
-func (pms *PromMetricSync) Clusters(ctx context.Context, informer kcache.SharedIndexInformer) error {
-	if !kcache.WaitForCacheSync(ctx.Done(), informer.HasSynced) {
+func (pms *PromMetricSync) Clusters(ctx context.Context, informers sync.Informers) error {
+	if !kcache.WaitForCacheSync(ctx.Done(), informers.HasSynced) {
 		pms.logger.Fatal("Timed out waiting for caches to sync")
 	}
 
