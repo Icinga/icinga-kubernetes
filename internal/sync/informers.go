@@ -1,10 +1,20 @@
 package sync
 
 import (
+	"context"
+	"sync"
+
+	"github.com/icinga/icinga-go-library/logging"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/cache"
 )
+
+// forbiddenInformers holds the informers that were denied to list or watch.
+// It is shared, as the same informer can be part of several Informers,
+// e.g., pods for their sync and their metrics.
+var forbiddenInformers sync.Map
 
 // Informers combines informers of the same resource, e.g., one per watched
 // namespace, so that they can be used like a single one.
@@ -21,6 +31,29 @@ func (i Informers) AddEventHandler(handler cache.ResourceEventHandler) error {
 	return nil
 }
 
+// SkipForbidden makes informers that are denied to list or watch count as synced,
+// so that they do not hold up the others. Each logs a warning once and keeps
+// retrying quietly, so it catches up once permitted. It must be called before Run.
+func (i Informers) SkipForbidden(log *logging.Logger) error {
+	for _, informer := range i {
+		if err := informer.SetWatchErrorHandlerWithContext(func(ctx context.Context, r *cache.Reflector, err error) {
+			if !kerrors.IsForbidden(err) {
+				cache.DefaultWatchErrorHandler(ctx, r, err)
+
+				return
+			}
+
+			if _, warned := forbiddenInformers.LoadOrStore(informer, struct{}{}); !warned {
+				log.Warnw("Cannot list and watch. Skipping until permitted", logging.Error(err))
+			}
+		}); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // Run runs all informers until stopCh is closed.
 func (i Informers) Run(stopCh <-chan struct{}) {
 	for _, informer := range i {
@@ -30,10 +63,10 @@ func (i Informers) Run(stopCh <-chan struct{}) {
 	<-stopCh
 }
 
-// HasSynced reports whether all informers have synced.
+// HasSynced reports whether all informers have synced or were denied to list or watch.
 func (i Informers) HasSynced() bool {
 	for _, informer := range i {
-		if !informer.HasSynced() {
+		if _, forbidden := forbiddenInformers.Load(informer); !forbidden && !informer.HasSynced() {
 			return false
 		}
 	}
