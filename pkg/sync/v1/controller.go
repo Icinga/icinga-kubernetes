@@ -6,6 +6,7 @@ import (
 	"github.com/icinga/icinga-go-library/logging"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -28,7 +29,23 @@ func NewController(informers Informers, log *logging.Logger) *Controller {
 }
 
 func (c *Controller) Stream(ctx context.Context, sink *Sink) error {
-	err := c.informers.AddEventHandler(NewEventHandler(c.queue, c.log))
+	ctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+
+	// Informers retry failed lists and watches forever, so a missing permission would keep the sync waiting
+	// for its initial list without any hint but the logs. Fail instead.
+	err := c.informers.SetWatchErrorHandler(func(ctx context.Context, r *cache.Reflector, err error) {
+		if kerrors.IsForbidden(err) {
+			cancel(errors.Wrap(err, "missing permission to list and watch"))
+		}
+
+		cache.DefaultWatchErrorHandler(ctx, r, err)
+	})
+	if err != nil {
+		return err
+	}
+
+	err = c.informers.AddEventHandler(NewEventHandler(c.queue, c.log))
 	if err != nil {
 		return err
 	}
@@ -41,10 +58,14 @@ func (c *Controller) Stream(ctx context.Context, sink *Sink) error {
 	go c.informers.Run(ctx.Done())
 
 	if !cache.WaitForCacheSync(ctx.Done(), c.informers.HasSynced) {
-		return errors.New("timed out waiting for caches to sync")
+		return context.Cause(ctx)
 	}
 
-	return c.stream(ctx, sink)
+	if err := c.stream(ctx, sink); ctx.Err() == nil {
+		return err
+	}
+
+	return context.Cause(ctx)
 }
 
 func (c *Controller) stream(ctx context.Context, sink *Sink) error {
