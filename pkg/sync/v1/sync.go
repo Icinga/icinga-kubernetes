@@ -112,6 +112,13 @@ func (s *Sync) deleteVanished(ctx context.Context, sink *Sink, synced map[string
 		return ctx.Err()
 	}
 
+	// What may not be listed cannot be told apart from what is gone, so keep it as last seen.
+	if s.informers.Forbidden() {
+		s.log.Info("Keeping possibly vanished objects as not permitted to list all of them")
+
+		return nil
+	}
+
 	for key, id := range synced {
 		obj, exists, err := s.informers.Object(key)
 		if err != nil {
