@@ -56,37 +56,47 @@ func TestControllerStreamForbidden(t *testing.T) {
 		return NewController(i, logging.NewLogger(zap.NewNop().Sugar(), time.Second))
 	}
 
-	t.Run("Forbidden", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
-		defer cancel()
-
-		err := newController("b").Stream(ctx, NewSink(func(i *Item) database.Entity { return keyEntity{key: i.Key} }, nil))
-		if !kerrors.IsForbidden(err) {
-			t.Fatalf("Stream() = %v, want forbidden error", err)
-		}
-	})
-
-	t.Run("Permitted", func(t *testing.T) {
+	// stream runs the controller until want pods arrived and returns their keys and whether any informer was forbidden.
+	stream := func(t *testing.T, c *Controller, want int) ([]string, bool) {
 		ctx, cancel := context.WithCancel(t.Context())
 		sink := NewSink(func(i *Item) database.Entity { return keyEntity{key: i.Key} }, nil)
 
 		errs := make(chan error, 1)
-		go func() { errs <- newController("").Stream(ctx, sink) }()
+		go func() { errs <- c.Stream(ctx, sink) }()
 
-		// Both pods arriving means the initial list succeeded and the stream is running.
-		for range 2 {
+		var keys []string
+		for range want {
 			select {
-			case <-sink.UpsertCh():
+			case key := <-sink.UpsertCh():
+				keys = append(keys, key.(keyEntity).key)
 			case err := <-errs:
 				t.Fatalf("Stream() returned early: %v", err)
 			case <-time.After(30 * time.Second):
-				t.Fatal("timed out waiting for pods")
+				t.Fatalf("timed out waiting for pods, got %v", keys)
 			}
 		}
+
+		forbidden := c.informers.Forbidden()
 
 		cancel()
 		if err := <-errs; !errors.Is(err, context.Canceled) {
 			t.Fatalf("Stream() = %v, want context.Canceled", err)
+		}
+
+		return keys, forbidden
+	}
+
+	t.Run("Forbidden", func(t *testing.T) {
+		keys, forbidden := stream(t, newController("b"), 1)
+		if len(keys) != 1 || keys[0] != "a/pod" || !forbidden {
+			t.Fatalf("got %v, forbidden %v, want [a/pod], forbidden true", keys, forbidden)
+		}
+	})
+
+	t.Run("Permitted", func(t *testing.T) {
+		keys, forbidden := stream(t, newController(""), 2)
+		if len(keys) != 2 || forbidden {
+			t.Fatalf("got %v, forbidden %v, want both pods, forbidden false", keys, forbidden)
 		}
 	})
 }
