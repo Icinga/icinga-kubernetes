@@ -67,6 +67,18 @@ func (i TypedInformers[T]) AddEventHandler(handler cache.ResourceEventHandler) e
 	return nil
 }
 
+// SetWatchErrorHandler sets handler for the list and watch errors of all informers.
+// It must be called before Run.
+func (i Informers) SetWatchErrorHandler(handler cache.WatchErrorHandlerWithContext) error {
+	for _, informer := range i {
+		if err := informer.SetWatchErrorHandlerWithContext(handler); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // Run runs all informers until stopCh is closed.
 func (i TypedInformers[T]) Run(stopCh <-chan struct{}) {
 	for _, informer := range i {
