@@ -12,15 +12,15 @@ import (
 )
 
 type Controller struct {
-	informer cache.SharedIndexInformer
-	log      *logging.Logger
-	queue    workqueue.TypedRateLimitingInterface[EventHandlerItem]
+	informers Informers
+	log       *logging.Logger
+	queue     workqueue.TypedRateLimitingInterface[EventHandlerItem]
 }
 
-func NewController(informer cache.SharedIndexInformer, log *logging.Logger) *Controller {
+func NewController(informers Informers, log *logging.Logger) *Controller {
 	return &Controller{
-		informer: informer,
-		log:      log,
+		informers: informers,
+		log:       log,
 		queue: workqueue.NewTypedRateLimitingQueue[EventHandlerItem](
 			workqueue.DefaultTypedControllerRateLimiter[EventHandlerItem](),
 		),
@@ -28,7 +28,7 @@ func NewController(informer cache.SharedIndexInformer, log *logging.Logger) *Con
 }
 
 func (c *Controller) Stream(ctx context.Context, sink *Sink) error {
-	_, err := c.informer.AddEventHandler(NewEventHandler(c.queue, c.log))
+	err := c.informers.AddEventHandler(NewEventHandler(c.queue, c.log))
 	if err != nil {
 		return err
 	}
@@ -38,9 +38,9 @@ func (c *Controller) Stream(ctx context.Context, sink *Sink) error {
 		c.queue.ShutDown()
 	}()
 
-	go c.informer.Run(ctx.Done())
+	go c.informers.Run(ctx.Done())
 
-	if !cache.WaitForCacheSync(ctx.Done(), c.informer.HasSynced) {
+	if !cache.WaitForCacheSync(ctx.Done(), c.informers.HasSynced) {
 		return errors.New("timed out waiting for caches to sync")
 	}
 
@@ -61,7 +61,7 @@ func (c *Controller) stream(ctx context.Context, sink *Sink) error {
 
 		key = eventHandlerItem.KKey
 
-		item, exists, err := c.informer.GetStore().GetByKey(key)
+		item, exists, err := c.informers.GetByKey(key)
 		if err != nil {
 			if c.queue.NumRequeues(eventHandlerItem) < 5 {
 				c.log.Errorw("Cannot fetch key. Retrying", zap.String("key", key), logging.Error(err))

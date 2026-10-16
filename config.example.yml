@@ -41,6 +41,19 @@ logging:
   # Overridden by the -v/--v command line flag.
 #  kubernetes: 0
 
+# Namespaces to synchronize. At most one of 'include' and 'exclude' may be set.
+# By default, all namespaces are synchronized.
+# Cluster-scoped resources, i.e. nodes and persistent volumes, are always synchronized.
+namespaces:
+  # Synchronize only these namespaces.
+#  include:
+#    - production
+#    - staging
+
+  # Synchronize all namespaces except these.
+#  exclude:
+#    - kube-system
+
 # Configuration for Prometheus metrics API.
 prometheus:
   # Prometheus server URL.
