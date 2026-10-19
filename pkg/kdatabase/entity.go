@@ -1,4 +1,4 @@
-package database
+package kdatabase
 
 import "github.com/icinga/icinga-go-library/database"
 

@@ -8,7 +8,7 @@ import (
 
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/types"
-	kdatabase "github.com/icinga/icinga-kubernetes/pkg/database"
+	"github.com/icinga/icinga-kubernetes/pkg/kdatabase"
 	"github.com/icinga/icinga-kubernetes/pkg/notifications"
 	"github.com/pkg/errors"
 	kcorev1 "k8s.io/api/core/v1"

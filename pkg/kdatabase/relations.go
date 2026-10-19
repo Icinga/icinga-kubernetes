@@ -1,4 +1,4 @@
-package database
+package kdatabase
 
 import (
 	"context"

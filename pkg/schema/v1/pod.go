@@ -10,7 +10,7 @@ import (
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
-	kdatabase "github.com/icinga/icinga-kubernetes/pkg/database"
+	"github.com/icinga/icinga-kubernetes/pkg/kdatabase"
 	"github.com/icinga/icinga-kubernetes/pkg/notifications"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

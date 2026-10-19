@@ -16,7 +16,7 @@ import (
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/cluster"
-	kdatabase "github.com/icinga/icinga-kubernetes/pkg/database"
+	"github.com/icinga/icinga-kubernetes/pkg/kdatabase"
 	"golang.org/x/sync/errgroup"
 	kcorev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
