@@ -130,6 +130,32 @@ func (s *Sync) deleteVanished(ctx context.Context, sink *Sink, synced map[string
 	return nil
 }
 
+// vanished returns the UUIDs of the given entities that the informer no longer
+// has, or has under a different UID.
+func (s *Sync) vanished(entities []kmetav1.Object) ([]any, error) {
+	var ids []any
+
+	for _, entity := range entities {
+		key, err := cache.MetaNamespaceKeyFunc(entity)
+		if err != nil {
+			return nil, err
+		}
+
+		obj, exists, err := s.informer.GetStore().GetByKey(key)
+		if err != nil {
+			return nil, err
+		}
+
+		if exists && obj.(kmetav1.Object).GetUID() == entity.GetUID() {
+			continue
+		}
+
+		ids = append(ids, schema.EnsureUUID(entity.GetUID()))
+	}
+
+	return ids, nil
+}
+
 func (s *Sync) sync(ctx context.Context, c *Controller, synced map[string]types.UUID, with *Features) error {
 	sink := NewSink(func(i *Item) database.Entity {
 		entity := s.factory()
@@ -141,6 +167,53 @@ func (s *Sync) sync(ctx context.Context, c *Controller, synced map[string]types.
 	})
 
 	g, ctx := errgroup.WithContext(ctx)
+
+	onUpsert := with.OnUpsert()
+	if !with.NoDelete() {
+		original := onUpsert
+
+		// Upserts and deletes are batched and flushed independently, so the
+		// delete of an entity can run before its first upsert, match no row
+		// and leave the upserted row undeleted. The informer drops an entity
+		// before it reports the deletion, so whatever it lacks once the upsert
+		// has been written is deleted again. Deleting twice is harmless, as the
+		// soft delete skips rows already marked as deleted, but WithOnDelete()
+		// callbacks see such a deletion twice.
+		onUpsert = func(bulkCtx context.Context, entities []database.Entity) error {
+			if original != nil {
+				if err := original(bulkCtx, entities); err != nil {
+					return err
+				}
+			}
+
+			objects := make([]kmetav1.Object, 0, len(entities))
+			for _, e := range entities {
+				objects = append(objects, e.(kmetav1.Object))
+			}
+
+			ids, err := s.vanished(objects)
+			if err != nil {
+				return err
+			}
+
+			if len(ids) > 0 {
+				// Not sent from here, as this holds a slot of the table's
+				// semaphore, which the delete needs as well.
+				g.Go(func() error {
+					for _, id := range ids {
+						if err := sink.Delete(ctx, id); err != nil {
+							return err
+						}
+					}
+
+					return nil
+				})
+			}
+
+			return nil
+		}
+	}
+
 	g.Go(func() error {
 		return c.Stream(ctx, sink)
 	})
@@ -148,7 +221,7 @@ func (s *Sync) sync(ctx context.Context, c *Controller, synced map[string]types.
 		return s.deleteVanished(ctx, sink, synced)
 	})
 	g.Go(func() error {
-		return s.db.UpsertStreamedCascading(ctx, sink.UpsertCh(), with.OnUpsert())
+		return s.db.UpsertStreamedCascading(ctx, sink.UpsertCh(), onUpsert)
 	})
 	g.Go(func() error {
 		if with.NoDelete() {
