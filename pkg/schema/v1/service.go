@@ -53,6 +53,7 @@ type Service struct {
 }
 
 type ServiceSelector struct {
+	kdatabase.EntityStub
 	ServiceUuid  types.UUID
 	SelectorUuid types.UUID
 }
@@ -61,15 +62,8 @@ func (s ServiceSelector) ID() database.ID {
 	return compoundId{id: s.ServiceUuid.String() + s.SelectorUuid.String()}
 }
 
-func (s ServiceSelector) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (s ServiceSelector) Fingerprint() database.Fingerprinter {
-	return s
-}
-
 type ServicePort struct {
+	kdatabase.EntityStub
 	ServiceUuid types.UUID
 	Name        string
 	Protocol    string
@@ -83,15 +77,8 @@ func (s ServicePort) ID() database.ID {
 	return compoundId{id: s.ServiceUuid.String() + s.Name}
 }
 
-func (s ServicePort) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (s ServicePort) Fingerprint() database.Fingerprinter {
-	return s
-}
-
 type ServiceCondition struct {
+	kdatabase.EntityStub
 	ServiceUuid        types.UUID
 	Type               string
 	Status             string
@@ -105,15 +92,8 @@ func (s ServiceCondition) ID() database.ID {
 	return compoundId{id: s.ServiceUuid.String() + s.Type}
 }
 
-func (s ServiceCondition) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (s ServiceCondition) Fingerprint() database.Fingerprinter {
-	return s
-}
-
 type ServiceLabel struct {
+	kdatabase.EntityStub
 	ServiceUuid types.UUID
 	LabelUuid   types.UUID
 }
@@ -122,15 +102,8 @@ func (s ServiceLabel) ID() database.ID {
 	return compoundId{id: s.ServiceUuid.String() + s.LabelUuid.String()}
 }
 
-func (s ServiceLabel) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (s ServiceLabel) Fingerprint() database.Fingerprinter {
-	return s
-}
-
 type ServiceAnnotation struct {
+	kdatabase.EntityStub
 	ServiceUuid    types.UUID
 	AnnotationUuid types.UUID
 }
@@ -139,29 +112,14 @@ func (s ServiceAnnotation) ID() database.ID {
 	return compoundId{id: s.ServiceUuid.String() + s.AnnotationUuid.String()}
 }
 
-func (s ServiceAnnotation) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (s ServiceAnnotation) Fingerprint() database.Fingerprinter {
-	return s
-}
-
 type ServicePod struct {
+	kdatabase.EntityStub
 	ServiceUuid types.UUID
 	PodUuid     types.UUID
 }
 
 func (s ServicePod) ID() database.ID {
 	return compoundId{id: s.ServiceUuid.String() + s.PodUuid.String()}
-}
-
-func (s ServicePod) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (s ServicePod) Fingerprint() database.Fingerprinter {
-	return s
 }
 
 func NewServiceFactory(clientset *kubernetes.Clientset) *ServiceFactory {

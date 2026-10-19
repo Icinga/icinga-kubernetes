@@ -23,6 +23,7 @@ type EndpointSlice struct {
 }
 
 type EndpointSliceLabel struct {
+	kdatabase.EntityStub
 	EndpointSliceUuid types.UUID
 	LabelUuid         types.UUID
 }
@@ -31,15 +32,8 @@ func (e EndpointSliceLabel) ID() database.ID {
 	return compoundId{id: e.EndpointSliceUuid.String() + e.LabelUuid.String()}
 }
 
-func (e EndpointSliceLabel) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (e EndpointSliceLabel) Fingerprint() database.Fingerprinter {
-	return e
-}
-
 type Endpoint struct {
+	kdatabase.EntityStub
 	Uuid              types.UUID
 	EndpointSliceUuid types.UUID
 	HostName          string
@@ -58,15 +52,8 @@ func (e Endpoint) ID() database.ID {
 	return e.Uuid
 }
 
-func (e Endpoint) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (e Endpoint) Fingerprint() database.Fingerprinter {
-	return e
-}
-
 type EndpointTargetRef struct {
+	kdatabase.EntityStub
 	EndpointSliceUuid types.UUID
 	Kind              sql.NullString
 	Namespace         string
@@ -78,14 +65,6 @@ type EndpointTargetRef struct {
 
 func (e EndpointTargetRef) ID() database.ID {
 	return e.EndpointSliceUuid
-}
-
-func (e EndpointTargetRef) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (e EndpointTargetRef) Fingerprint() database.Fingerprinter {
-	return e
 }
 
 func NewEndpointSlice() Resource {

@@ -209,12 +209,11 @@ func TestBuildDeleteStmt(t *testing.T) {
 
 // testRow provides the uuid column and the database.Entity methods of the test entities.
 type testRow struct {
+	EntityStub
 	Uuid uuid.UUID
 }
 
-func (r testRow) ID() database.ID                     { return r.Uuid }
-func (r testRow) SetID(database.ID)                   {}
-func (r testRow) Fingerprint() database.Fingerprinter { return r }
+func (r testRow) ID() database.ID { return r.Uuid }
 
 // testParent has every kind of relation the cascades handle: plain ones, one
 // to the same table, one to entities with relations of their own, and one

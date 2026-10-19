@@ -44,6 +44,7 @@ type DaemonSet struct {
 }
 
 type DaemonSetCondition struct {
+	kdatabase.EntityStub
 	DaemonSetUuid  types.UUID
 	Type           string
 	Status         string
@@ -56,15 +57,8 @@ func (d DaemonSetCondition) ID() database.ID {
 	return compoundId{id: d.DaemonSetUuid.String() + d.Type}
 }
 
-func (d DaemonSetCondition) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (d DaemonSetCondition) Fingerprint() database.Fingerprinter {
-	return d
-}
-
 type DaemonSetOwner struct {
+	kdatabase.EntityStub
 	DaemonSetUuid      types.UUID
 	OwnerUuid          types.UUID
 	Kind               string
@@ -78,15 +72,8 @@ func (d DaemonSetOwner) ID() database.ID {
 	return compoundId{id: d.DaemonSetUuid.String() + d.OwnerUuid.String()}
 }
 
-func (d DaemonSetOwner) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (d DaemonSetOwner) Fingerprint() database.Fingerprinter {
-	return d
-}
-
 type DaemonSetLabel struct {
+	kdatabase.EntityStub
 	DaemonSetUuid types.UUID
 	LabelUuid     types.UUID
 }
@@ -95,29 +82,14 @@ func (d DaemonSetLabel) ID() database.ID {
 	return compoundId{id: d.DaemonSetUuid.String() + d.LabelUuid.String()}
 }
 
-func (d DaemonSetLabel) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (d DaemonSetLabel) Fingerprint() database.Fingerprinter {
-	return d
-}
-
 type DaemonSetAnnotation struct {
+	kdatabase.EntityStub
 	DaemonSetUuid  types.UUID
 	AnnotationUuid types.UUID
 }
 
 func (d DaemonSetAnnotation) ID() database.ID {
 	return compoundId{id: d.DaemonSetUuid.String() + d.AnnotationUuid.String()}
-}
-
-func (d DaemonSetAnnotation) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (d DaemonSetAnnotation) Fingerprint() database.Fingerprinter {
-	return d
 }
 
 func NewDaemonSet() Resource {

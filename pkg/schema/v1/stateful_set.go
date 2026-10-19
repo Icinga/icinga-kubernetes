@@ -48,6 +48,7 @@ type StatefulSet struct {
 }
 
 type StatefulSetCondition struct {
+	kdatabase.EntityStub
 	StatefulSetUuid types.UUID
 	Type            string
 	Status          string
@@ -60,15 +61,8 @@ func (s StatefulSetCondition) ID() database.ID {
 	return compoundId{id: s.StatefulSetUuid.String() + s.Type}
 }
 
-func (s StatefulSetCondition) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (s StatefulSetCondition) Fingerprint() database.Fingerprinter {
-	return s
-}
-
 type StatefulSetOwner struct {
+	kdatabase.EntityStub
 	StatefulSetUuid    types.UUID
 	OwnerUuid          types.UUID
 	Kind               string
@@ -82,15 +76,8 @@ func (s StatefulSetOwner) ID() database.ID {
 	return compoundId{id: s.StatefulSetUuid.String() + s.OwnerUuid.String()}
 }
 
-func (s StatefulSetOwner) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (s StatefulSetOwner) Fingerprint() database.Fingerprinter {
-	return s
-}
-
 type StatefulSetLabel struct {
+	kdatabase.EntityStub
 	StatefulSetUuid types.UUID
 	LabelUuid       types.UUID
 }
@@ -99,29 +86,14 @@ func (s StatefulSetLabel) ID() database.ID {
 	return compoundId{id: s.StatefulSetUuid.String() + s.LabelUuid.String()}
 }
 
-func (s StatefulSetLabel) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (s StatefulSetLabel) Fingerprint() database.Fingerprinter {
-	return s
-}
-
 type StatefulSetAnnotation struct {
+	kdatabase.EntityStub
 	StatefulSetUuid types.UUID
 	AnnotationUuid  types.UUID
 }
 
 func (s StatefulSetAnnotation) ID() database.ID {
 	return compoundId{id: s.StatefulSetUuid.String() + s.AnnotationUuid.String()}
-}
-
-func (s StatefulSetAnnotation) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (s StatefulSetAnnotation) Fingerprint() database.Fingerprinter {
-	return s
 }
 
 func NewStatefulSet() Resource {

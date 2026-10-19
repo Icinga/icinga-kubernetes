@@ -58,6 +58,7 @@ type Pvc struct {
 }
 
 type PvcCondition struct {
+	kdatabase.EntityStub
 	PvcUuid        types.UUID
 	Type           string
 	Status         string
@@ -71,15 +72,8 @@ func (p PvcCondition) ID() database.ID {
 	return compoundId{id: p.PvcUuid.String() + p.Type}
 }
 
-func (p PvcCondition) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (p PvcCondition) Fingerprint() database.Fingerprinter {
-	return p
-}
-
 type PvcLabel struct {
+	kdatabase.EntityStub
 	PvcUuid   types.UUID
 	LabelUuid types.UUID
 }
@@ -88,29 +82,14 @@ func (p PvcLabel) ID() database.ID {
 	return compoundId{id: p.PvcUuid.String() + p.LabelUuid.String()}
 }
 
-func (p PvcLabel) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (p PvcLabel) Fingerprint() database.Fingerprinter {
-	return p
-}
-
 type PvcAnnotation struct {
+	kdatabase.EntityStub
 	PvcUuid        types.UUID
 	AnnotationUuid types.UUID
 }
 
 func (p PvcAnnotation) ID() database.ID {
 	return compoundId{id: p.PvcUuid.String() + p.AnnotationUuid.String()}
-}
-
-func (p PvcAnnotation) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (p PvcAnnotation) Fingerprint() database.Fingerprinter {
-	return p
 }
 
 func NewPvc() Resource {

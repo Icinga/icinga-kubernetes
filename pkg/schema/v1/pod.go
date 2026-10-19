@@ -67,6 +67,7 @@ type PodYaml struct {
 }
 
 type PodCondition struct {
+	kdatabase.EntityStub
 	PodUuid        types.UUID
 	Type           string
 	Status         string
@@ -80,15 +81,8 @@ func (p PodCondition) ID() database.ID {
 	return compoundId{id: p.PodUuid.String() + p.Type}
 }
 
-func (p PodCondition) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (p PodCondition) Fingerprint() database.Fingerprinter {
-	return p
-}
-
 type PodLabel struct {
+	kdatabase.EntityStub
 	PodUuid   types.UUID
 	LabelUuid types.UUID
 }
@@ -97,15 +91,8 @@ func (p PodLabel) ID() database.ID {
 	return compoundId{id: p.PodUuid.String() + p.LabelUuid.String()}
 }
 
-func (p PodLabel) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (p PodLabel) Fingerprint() database.Fingerprinter {
-	return p
-}
-
 type PodAnnotation struct {
+	kdatabase.EntityStub
 	PodUuid        types.UUID
 	AnnotationUuid types.UUID
 }
@@ -114,15 +101,8 @@ func (p PodAnnotation) ID() database.ID {
 	return compoundId{id: p.PodUuid.String() + p.AnnotationUuid.String()}
 }
 
-func (p PodAnnotation) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (p PodAnnotation) Fingerprint() database.Fingerprinter {
-	return p
-}
-
 type PodOwner struct {
+	kdatabase.EntityStub
 	PodUuid            types.UUID
 	OwnerUuid          types.UUID
 	Kind               string
@@ -136,15 +116,8 @@ func (p PodOwner) ID() database.ID {
 	return compoundId{id: p.PodUuid.String() + p.OwnerUuid.String()}
 }
 
-func (p PodOwner) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (p PodOwner) Fingerprint() database.Fingerprinter {
-	return p
-}
-
 type PodVolume struct {
+	kdatabase.EntityStub
 	PodUuid    types.UUID
 	VolumeName string
 	Type       string
@@ -155,15 +128,8 @@ func (p PodVolume) ID() database.ID {
 	return compoundId{id: p.PodUuid.String() + p.VolumeName}
 }
 
-func (p PodVolume) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (p PodVolume) Fingerprint() database.Fingerprinter {
-	return p
-}
-
 type PodPvc struct {
+	kdatabase.EntityStub
 	PodUuid    types.UUID
 	VolumeName string
 	ClaimName  string
@@ -172,14 +138,6 @@ type PodPvc struct {
 
 func (p PodPvc) ID() database.ID {
 	return compoundId{id: p.PodUuid.String() + p.VolumeName + p.ClaimName}
-}
-
-func (p PodPvc) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (p PodPvc) Fingerprint() database.Fingerprinter {
-	return p
 }
 
 func NewPodFactory(clientset *kubernetes.Clientset) *PodFactory {

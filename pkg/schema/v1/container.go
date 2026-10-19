@@ -46,6 +46,7 @@ const (
 )
 
 type ContainerCommon struct {
+	kdatabase.EntityStub
 	Uuid              types.UUID
 	PodUuid           types.UUID
 	Name              string
@@ -61,14 +62,6 @@ type ContainerCommon struct {
 
 func (c ContainerCommon) ID() database.ID {
 	return c.Uuid
-}
-
-func (c ContainerCommon) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (c ContainerCommon) Fingerprint() database.Fingerprinter {
-	return c
 }
 
 func (c *ContainerCommon) Obtain(podUuid types.UUID, container kcorev1.Container, status kcorev1.ContainerStatus) {
@@ -244,6 +237,7 @@ func NewContainer(podUuid types.UUID, container kcorev1.Container, status kcorev
 }
 
 type ContainerDevice struct {
+	kdatabase.EntityStub
 	ContainerUuid types.UUID
 	PodUuid       types.UUID
 	Name          string
@@ -254,15 +248,8 @@ func (c ContainerDevice) ID() database.ID {
 	return compoundId{id: c.ContainerUuid.String() + c.Name}
 }
 
-func (c ContainerDevice) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (c ContainerDevice) Fingerprint() database.Fingerprinter {
-	return c
-}
-
 type ContainerMount struct {
+	kdatabase.EntityStub
 	ContainerUuid types.UUID
 	PodUuid       types.UUID
 	VolumeName    string
@@ -275,20 +262,13 @@ func (c ContainerMount) ID() database.ID {
 	return compoundId{id: c.ContainerUuid.String() + c.VolumeName}
 }
 
-func (c ContainerMount) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (c ContainerMount) Fingerprint() database.Fingerprinter {
-	return c
-}
-
 type ContainerLogMeta struct {
 	Logs       string          `db:"logs"`
 	LastUpdate types.UnixMilli `db:"last_update"`
 }
 
 type ContainerLog struct {
+	kdatabase.EntityStub
 	PodUuid       types.UUID `db:"pod_uuid"`
 	ContainerUuid types.UUID `db:"container_uuid"`
 	ContainerLogMeta
@@ -300,14 +280,6 @@ type ContainerLog struct {
 
 func (cl ContainerLog) ID() database.ID {
 	return cl.ContainerUuid
-}
-
-func (cl ContainerLog) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (cl ContainerLog) Fingerprint() database.Fingerprinter {
-	return cl
 }
 
 type ContainerStateReasonAndMassage [2]string

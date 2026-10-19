@@ -47,6 +47,7 @@ type Job struct {
 }
 
 type JobCondition struct {
+	kdatabase.EntityStub
 	JobUuid        types.UUID
 	Type           string
 	Status         string
@@ -60,15 +61,8 @@ func (j JobCondition) ID() database.ID {
 	return compoundId{id: j.JobUuid.String() + j.Type}
 }
 
-func (j JobCondition) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (j JobCondition) Fingerprint() database.Fingerprinter {
-	return j
-}
-
 type JobLabel struct {
+	kdatabase.EntityStub
 	JobUuid   types.UUID
 	LabelUuid types.UUID
 }
@@ -77,15 +71,8 @@ func (j JobLabel) ID() database.ID {
 	return compoundId{id: j.JobUuid.String() + j.LabelUuid.String()}
 }
 
-func (j JobLabel) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (j JobLabel) Fingerprint() database.Fingerprinter {
-	return j
-}
-
 type JobAnnotation struct {
+	kdatabase.EntityStub
 	JobUuid        types.UUID
 	AnnotationUuid types.UUID
 }
@@ -94,15 +81,8 @@ func (j JobAnnotation) ID() database.ID {
 	return compoundId{id: j.JobUuid.String() + j.AnnotationUuid.String()}
 }
 
-func (j JobAnnotation) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (j JobAnnotation) Fingerprint() database.Fingerprinter {
-	return j
-}
-
 type JobOwner struct {
+	kdatabase.EntityStub
 	JobUuid            types.UUID
 	OwnerUuid          types.UUID
 	Kind               string
@@ -114,14 +94,6 @@ type JobOwner struct {
 
 func (j JobOwner) ID() database.ID {
 	return compoundId{id: j.JobUuid.String() + j.OwnerUuid.String()}
-}
-
-func (j JobOwner) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (j JobOwner) Fingerprint() database.Fingerprinter {
-	return j
 }
 
 func NewJob() Resource {

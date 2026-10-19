@@ -41,6 +41,7 @@ type CronJob struct {
 }
 
 type CronJobLabel struct {
+	kdatabase.EntityStub
 	CronJobUuid types.UUID
 	LabelUuid   types.UUID
 }
@@ -49,29 +50,14 @@ func (c CronJobLabel) ID() database.ID {
 	return compoundId{id: c.CronJobUuid.String() + c.LabelUuid.String()}
 }
 
-func (c CronJobLabel) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (c CronJobLabel) Fingerprint() database.Fingerprinter {
-	return c
-}
-
 type CronJobAnnotation struct {
+	kdatabase.EntityStub
 	CronJobUuid    types.UUID
 	AnnotationUuid types.UUID
 }
 
 func (c CronJobAnnotation) ID() database.ID {
 	return compoundId{id: c.CronJobUuid.String() + c.AnnotationUuid.String()}
-}
-
-func (c CronJobAnnotation) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (c CronJobAnnotation) Fingerprint() database.Fingerprinter {
-	return c
 }
 
 func NewCronJob() Resource {

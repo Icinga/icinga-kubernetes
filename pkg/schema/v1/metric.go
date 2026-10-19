@@ -5,9 +5,11 @@ import (
 
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/types"
+	kdatabase "github.com/icinga/icinga-kubernetes/pkg/database"
 )
 
 type PrometheusClusterMetric struct {
+	kdatabase.EntityStub
 	ClusterUuid types.UUID
 	Timestamp   int64
 	Category    string
@@ -19,15 +21,8 @@ func (m PrometheusClusterMetric) ID() database.ID {
 	return compoundId{id: m.ClusterUuid.String() + strconv.FormatInt(m.Timestamp, 10) + m.Category + m.Name}
 }
 
-func (m PrometheusClusterMetric) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (m PrometheusClusterMetric) Fingerprint() database.Fingerprinter {
-	return m
-}
-
 type PrometheusNodeMetric struct {
+	kdatabase.EntityStub
 	NodeUuid  types.UUID
 	Timestamp int64
 	Category  string
@@ -39,15 +34,8 @@ func (m PrometheusNodeMetric) ID() database.ID {
 	return compoundId{id: m.NodeUuid.String() + strconv.FormatInt(m.Timestamp, 10) + m.Category + m.Name}
 }
 
-func (m PrometheusNodeMetric) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (m PrometheusNodeMetric) Fingerprint() database.Fingerprinter {
-	return m
-}
-
 type PrometheusPodMetric struct {
+	kdatabase.EntityStub
 	PodUuid   types.UUID
 	Timestamp int64
 	Category  string
@@ -59,15 +47,8 @@ func (m PrometheusPodMetric) ID() database.ID {
 	return compoundId{id: m.PodUuid.String() + strconv.FormatInt(m.Timestamp, 10) + m.Category + m.Name}
 }
 
-func (m PrometheusPodMetric) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (m PrometheusPodMetric) Fingerprint() database.Fingerprinter {
-	return m
-}
-
 type PrometheusContainerMetric struct {
+	kdatabase.EntityStub
 	ContainerUuid types.UUID
 	Timestamp     int64
 	Category      string
@@ -77,12 +58,4 @@ type PrometheusContainerMetric struct {
 
 func (m PrometheusContainerMetric) ID() database.ID {
 	return compoundId{id: m.ContainerUuid.String() + strconv.FormatInt(m.Timestamp, 10) + m.Category + m.Name}
-}
-
-func (m PrometheusContainerMetric) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (m PrometheusContainerMetric) Fingerprint() database.Fingerprinter {
-	return m
 }

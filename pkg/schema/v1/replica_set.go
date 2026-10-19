@@ -42,6 +42,7 @@ type ReplicaSet struct {
 }
 
 type ReplicaSetCondition struct {
+	kdatabase.EntityStub
 	ReplicaSetUuid types.UUID
 	Type           string
 	Status         string
@@ -54,15 +55,8 @@ func (r ReplicaSetCondition) ID() database.ID {
 	return compoundId{id: r.ReplicaSetUuid.String() + r.Type}
 }
 
-func (r ReplicaSetCondition) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (r ReplicaSetCondition) Fingerprint() database.Fingerprinter {
-	return r
-}
-
 type ReplicaSetOwner struct {
+	kdatabase.EntityStub
 	ReplicaSetUuid     types.UUID
 	OwnerUuid          types.UUID
 	Kind               string
@@ -76,15 +70,8 @@ func (r ReplicaSetOwner) ID() database.ID {
 	return compoundId{id: r.ReplicaSetUuid.String() + r.OwnerUuid.String()}
 }
 
-func (r ReplicaSetOwner) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (r ReplicaSetOwner) Fingerprint() database.Fingerprinter {
-	return r
-}
-
 type ReplicaSetLabel struct {
+	kdatabase.EntityStub
 	ReplicaSetUuid types.UUID
 	LabelUuid      types.UUID
 }
@@ -93,29 +80,14 @@ func (r ReplicaSetLabel) ID() database.ID {
 	return compoundId{id: r.ReplicaSetUuid.String() + r.LabelUuid.String()}
 }
 
-func (r ReplicaSetLabel) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (r ReplicaSetLabel) Fingerprint() database.Fingerprinter {
-	return r
-}
-
 type ReplicaSetAnnotation struct {
+	kdatabase.EntityStub
 	ReplicaSetUuid types.UUID
 	AnnotationUuid types.UUID
 }
 
 func (r ReplicaSetAnnotation) ID() database.ID {
 	return compoundId{id: r.ReplicaSetUuid.String() + r.AnnotationUuid.String()}
-}
-
-func (r ReplicaSetAnnotation) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (r ReplicaSetAnnotation) Fingerprint() database.Fingerprinter {
-	return r
 }
 
 func NewReplicaSet() Resource {

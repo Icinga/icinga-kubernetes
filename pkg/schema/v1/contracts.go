@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/types"
+	kdatabase "github.com/icinga/icinga-kubernetes/pkg/database"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ktypes "k8s.io/apimachinery/pkg/types"
 )
@@ -29,6 +30,7 @@ func (i compoundId) String() string {
 }
 
 type Meta struct {
+	kdatabase.EntityStub
 	Uuid            types.UUID
 	ClusterUuid     types.UUID
 	Uid             ktypes.UID
@@ -50,14 +52,6 @@ func (m *Meta) ObtainMeta(k8s kmetav1.Object, clusterUuid types.UUID) {
 
 func (m Meta) ID() database.ID {
 	return m.Uuid
-}
-
-func (m Meta) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (m Meta) Fingerprint() database.Fingerprinter {
-	return m
 }
 
 func (m *Meta) GetNamespace() string                           { return m.Namespace }

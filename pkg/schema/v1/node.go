@@ -56,6 +56,7 @@ type Node struct {
 }
 
 type NodeCondition struct {
+	kdatabase.EntityStub
 	NodeUuid       types.UUID
 	Type           string
 	Status         string
@@ -69,15 +70,8 @@ func (n NodeCondition) ID() database.ID {
 	return compoundId{id: n.NodeUuid.String() + n.Type}
 }
 
-func (n NodeCondition) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (n NodeCondition) Fingerprint() database.Fingerprinter {
-	return n
-}
-
 type NodeVolume struct {
+	kdatabase.EntityStub
 	NodeUuid   types.UUID
 	Name       kcorev1.UniqueVolumeName
 	DevicePath string
@@ -88,15 +82,8 @@ func (n NodeVolume) ID() database.ID {
 	return compoundId{id: n.NodeUuid.String() + string(n.Name)}
 }
 
-func (n NodeVolume) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (n NodeVolume) Fingerprint() database.Fingerprinter {
-	return n
-}
-
 type NodeLabel struct {
+	kdatabase.EntityStub
 	NodeUuid  types.UUID
 	LabelUuid types.UUID
 }
@@ -105,29 +92,14 @@ func (n NodeLabel) ID() database.ID {
 	return compoundId{id: n.NodeUuid.String() + n.LabelUuid.String()}
 }
 
-func (n NodeLabel) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (n NodeLabel) Fingerprint() database.Fingerprinter {
-	return n
-}
-
 type NodeAnnotation struct {
+	kdatabase.EntityStub
 	NodeUuid       types.UUID
 	AnnotationUuid types.UUID
 }
 
 func (n NodeAnnotation) ID() database.ID {
 	return compoundId{id: n.NodeUuid.String() + n.AnnotationUuid.String()}
-}
-
-func (n NodeAnnotation) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (n NodeAnnotation) Fingerprint() database.Fingerprinter {
-	return n
 }
 
 func NewNode() Resource {

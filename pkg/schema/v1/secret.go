@@ -23,6 +23,7 @@ type Secret struct {
 }
 
 type SecretLabel struct {
+	kdatabase.EntityStub
 	SecretUuid types.UUID
 	LabelUuid  types.UUID
 }
@@ -31,29 +32,14 @@ func (s SecretLabel) ID() database.ID {
 	return compoundId{id: s.SecretUuid.String() + s.LabelUuid.String()}
 }
 
-func (s SecretLabel) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (s SecretLabel) Fingerprint() database.Fingerprinter {
-	return s
-}
-
 type SecretAnnotation struct {
+	kdatabase.EntityStub
 	SecretUuid     types.UUID
 	AnnotationUuid types.UUID
 }
 
 func (s SecretAnnotation) ID() database.ID {
 	return compoundId{id: s.SecretUuid.String() + s.AnnotationUuid.String()}
-}
-
-func (s SecretAnnotation) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (s SecretAnnotation) Fingerprint() database.Fingerprinter {
-	return s
 }
 
 func NewSecret() Resource {

@@ -31,6 +31,7 @@ type Ingress struct {
 }
 
 type IngressTls struct {
+	kdatabase.EntityStub
 	IngressUuid types.UUID
 	TlsHost     string
 	TlsSecret   string
@@ -40,15 +41,8 @@ func (i IngressTls) ID() database.ID {
 	return i.IngressUuid
 }
 
-func (i IngressTls) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (i IngressTls) Fingerprint() database.Fingerprinter {
-	return i
-}
-
 type IngressBackendService struct {
+	kdatabase.EntityStub
 	ServiceUuid       types.UUID
 	IngressUuid       types.UUID
 	IngressRuleUuid   types.UUID
@@ -61,15 +55,8 @@ func (i IngressBackendService) ID() database.ID {
 	return compoundId{id: i.ServiceUuid.String() + i.IngressUuid.String()}
 }
 
-func (i IngressBackendService) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (i IngressBackendService) Fingerprint() database.Fingerprinter {
-	return i
-}
-
 type IngressBackendResource struct {
+	kdatabase.EntityStub
 	ResourceUuid    types.UUID
 	IngressUuid     types.UUID
 	IngressRuleUuid types.UUID
@@ -82,15 +69,8 @@ func (i IngressBackendResource) ID() database.ID {
 	return compoundId{id: i.ResourceUuid.String() + i.IngressUuid.String()}
 }
 
-func (i IngressBackendResource) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (i IngressBackendResource) Fingerprint() database.Fingerprinter {
-	return i
-}
-
 type IngressRule struct {
+	kdatabase.EntityStub
 	Uuid        types.UUID
 	BackendUuid types.UUID
 	IngressUuid types.UUID
@@ -103,15 +83,8 @@ func (i IngressRule) ID() database.ID {
 	return i.Uuid
 }
 
-func (i IngressRule) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (i IngressRule) Fingerprint() database.Fingerprinter {
-	return i
-}
-
 type IngressLabel struct {
+	kdatabase.EntityStub
 	IngressUuid types.UUID
 	LabelUuid   types.UUID
 }
@@ -120,29 +93,14 @@ func (i IngressLabel) ID() database.ID {
 	return compoundId{id: i.IngressUuid.String() + i.LabelUuid.String()}
 }
 
-func (i IngressLabel) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (i IngressLabel) Fingerprint() database.Fingerprinter {
-	return i
-}
-
 type IngressAnnotation struct {
+	kdatabase.EntityStub
 	IngressUuid    types.UUID
 	AnnotationUuid types.UUID
 }
 
 func (i IngressAnnotation) ID() database.ID {
 	return compoundId{id: i.IngressUuid.String() + i.AnnotationUuid.String()}
-}
-
-func (i IngressAnnotation) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (i IngressAnnotation) Fingerprint() database.Fingerprinter {
-	return i
 }
 
 func NewIngress() Resource {

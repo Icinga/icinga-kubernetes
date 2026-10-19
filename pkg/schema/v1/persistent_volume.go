@@ -39,6 +39,7 @@ type PersistentVolume struct {
 }
 
 type PersistentVolumeClaimRef struct {
+	kdatabase.EntityStub
 	PersistentVolumeUuid types.UUID
 	Kind                 string
 	Name                 string
@@ -49,15 +50,8 @@ func (p PersistentVolumeClaimRef) ID() database.ID {
 	return compoundId{id: p.PersistentVolumeUuid.String() + string(p.Uid)}
 }
 
-func (p PersistentVolumeClaimRef) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (p PersistentVolumeClaimRef) Fingerprint() database.Fingerprinter {
-	return p
-}
-
 type PersistentVolumeLabel struct {
+	kdatabase.EntityStub
 	PersistentVolumeUuid types.UUID
 	LabelUuid            types.UUID
 }
@@ -66,29 +60,14 @@ func (p PersistentVolumeLabel) ID() database.ID {
 	return compoundId{id: p.PersistentVolumeUuid.String() + p.LabelUuid.String()}
 }
 
-func (p PersistentVolumeLabel) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (p PersistentVolumeLabel) Fingerprint() database.Fingerprinter {
-	return p
-}
-
 type PersistentVolumeAnnotation struct {
+	kdatabase.EntityStub
 	PersistentVolumeUuid types.UUID
 	AnnotationUuid       types.UUID
 }
 
 func (p PersistentVolumeAnnotation) ID() database.ID {
 	return compoundId{id: p.PersistentVolumeUuid.String() + p.AnnotationUuid.String()}
-}
-
-func (p PersistentVolumeAnnotation) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (p PersistentVolumeAnnotation) Fingerprint() database.Fingerprinter {
-	return p
 }
 
 func NewPersistentVolume() Resource {

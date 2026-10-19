@@ -28,6 +28,7 @@ type Namespace struct {
 }
 
 type NamespaceCondition struct {
+	kdatabase.EntityStub
 	NamespaceUuid  types.UUID
 	Type           string
 	Status         string
@@ -40,15 +41,8 @@ func (n NamespaceCondition) ID() database.ID {
 	return compoundId{id: n.NamespaceUuid.String() + n.Type}
 }
 
-func (n NamespaceCondition) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (n NamespaceCondition) Fingerprint() database.Fingerprinter {
-	return n
-}
-
 type NamespaceLabel struct {
+	kdatabase.EntityStub
 	NamespaceUuid types.UUID
 	LabelUuid     types.UUID
 }
@@ -57,29 +51,14 @@ func (n NamespaceLabel) ID() database.ID {
 	return compoundId{id: n.NamespaceUuid.String() + n.LabelUuid.String()}
 }
 
-func (n NamespaceLabel) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (n NamespaceLabel) Fingerprint() database.Fingerprinter {
-	return n
-}
-
 type NamespaceAnnotation struct {
+	kdatabase.EntityStub
 	NamespaceUuid  types.UUID
 	AnnotationUuid types.UUID
 }
 
 func (n NamespaceAnnotation) ID() database.ID {
 	return compoundId{id: n.NamespaceUuid.String() + n.AnnotationUuid.String()}
-}
-
-func (n NamespaceAnnotation) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (n NamespaceAnnotation) Fingerprint() database.Fingerprinter {
-	return n
 }
 
 func NewNamespace() Resource {

@@ -46,6 +46,7 @@ type Deployment struct {
 }
 
 type DeploymentCondition struct {
+	kdatabase.EntityStub
 	DeploymentUuid types.UUID
 	Type           string
 	Status         string
@@ -59,15 +60,8 @@ func (d DeploymentCondition) ID() database.ID {
 	return compoundId{id: d.DeploymentUuid.String() + d.Type}
 }
 
-func (d DeploymentCondition) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (d DeploymentCondition) Fingerprint() database.Fingerprinter {
-	return d
-}
-
 type DeploymentOwner struct {
+	kdatabase.EntityStub
 	DeploymentUuid     types.UUID
 	OwnerUuid          types.UUID
 	Kind               string
@@ -81,15 +75,8 @@ func (d DeploymentOwner) ID() database.ID {
 	return compoundId{id: d.DeploymentUuid.String() + d.OwnerUuid.String()}
 }
 
-func (d DeploymentOwner) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (d DeploymentOwner) Fingerprint() database.Fingerprinter {
-	return d
-}
-
 type DeploymentLabel struct {
+	kdatabase.EntityStub
 	DeploymentUuid types.UUID
 	LabelUuid      types.UUID
 }
@@ -98,29 +85,14 @@ func (d DeploymentLabel) ID() database.ID {
 	return compoundId{id: d.DeploymentUuid.String() + d.LabelUuid.String()}
 }
 
-func (d DeploymentLabel) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (d DeploymentLabel) Fingerprint() database.Fingerprinter {
-	return d
-}
-
 type DeploymentAnnotation struct {
+	kdatabase.EntityStub
 	DeploymentUuid types.UUID
 	AnnotationUuid types.UUID
 }
 
 func (d DeploymentAnnotation) ID() database.ID {
 	return compoundId{id: d.DeploymentUuid.String() + d.AnnotationUuid.String()}
-}
-
-func (d DeploymentAnnotation) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (d DeploymentAnnotation) Fingerprint() database.Fingerprinter {
-	return d
 }
 
 func NewDeployment() Resource {

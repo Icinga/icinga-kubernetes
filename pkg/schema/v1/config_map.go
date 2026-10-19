@@ -22,6 +22,7 @@ type ConfigMap struct {
 }
 
 type ConfigMapLabel struct {
+	kdatabase.EntityStub
 	ConfigMapUuid types.UUID
 	LabelUuid     types.UUID
 }
@@ -30,29 +31,14 @@ func (c ConfigMapLabel) ID() database.ID {
 	return compoundId{id: c.ConfigMapUuid.String() + c.LabelUuid.String()}
 }
 
-func (c ConfigMapLabel) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (c ConfigMapLabel) Fingerprint() database.Fingerprinter {
-	return c
-}
-
 type ConfigMapAnnotation struct {
+	kdatabase.EntityStub
 	ConfigMapUuid  types.UUID
 	AnnotationUuid types.UUID
 }
 
 func (c ConfigMapAnnotation) ID() database.ID {
 	return compoundId{id: c.ConfigMapUuid.String() + c.AnnotationUuid.String()}
-}
-
-func (c ConfigMapAnnotation) SetID(_ database.ID) {
-	panic("Not expected to be called")
-}
-
-func (c ConfigMapAnnotation) Fingerprint() database.Fingerprinter {
-	return c
 }
 
 func NewConfigMap() Resource {
