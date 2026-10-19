@@ -115,7 +115,7 @@ func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *metrics.
 // AutoDetectPrometheus tries to auto-detect the Prometheus service in the
 // monitoring namespace and if found sets the URL in the supplied Prometheus
 // configuration. The first service with the label "app.kubernetes.io/name=prometheus"
-// is used. Until now the ServiceTypes ClusterIP and NodePort are supported.
+// is used. Currently, only the ServiceTypes ClusterIP and NodePort are supported.
 func AutoDetectPrometheus(ctx context.Context, clientset *kubernetes.Clientset, config *metrics.PrometheusConfig) error {
 	services, err := clientset.CoreV1().Services("monitoring").List(ctx, kmetav1.ListOptions{
 		LabelSelector: "app.kubernetes.io/name=prometheus",
