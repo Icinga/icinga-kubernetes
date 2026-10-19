@@ -3,8 +3,9 @@ package v1
 import (
 	"strings"
 
+	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-kubernetes/pkg/database"
+	"github.com/icinga/icinga-kubernetes/pkg/kdatabase"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -21,13 +22,23 @@ type ConfigMap struct {
 }
 
 type ConfigMapLabel struct {
+	kdatabase.EntityStub
 	ConfigMapUuid types.UUID
 	LabelUuid     types.UUID
 }
 
+func (c ConfigMapLabel) ID() database.ID {
+	return compoundId{id: c.ConfigMapUuid.String() + c.LabelUuid.String()}
+}
+
 type ConfigMapAnnotation struct {
+	kdatabase.EntityStub
 	ConfigMapUuid  types.UUID
 	AnnotationUuid types.UUID
+}
+
+func (c ConfigMapAnnotation) ID() database.ID {
+	return compoundId{id: c.ConfigMapUuid.String() + c.AnnotationUuid.String()}
 }
 
 func NewConfigMap() Resource {
@@ -83,15 +94,15 @@ func (c *ConfigMap) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	}
 }
 
-func (c *ConfigMap) Relations() []database.Relation {
-	fk := database.WithForeignKey("config_map_uuid")
+func (c *ConfigMap) Relations() []kdatabase.Relation {
+	fk := kdatabase.WithForeignKey("config_map_uuid")
 
-	return []database.Relation{
-		database.HasMany(c.ResourceLabels, database.WithForeignKey("resource_uuid")),
-		database.HasMany(c.Labels, database.WithoutCascadeDelete()),
-		database.HasMany(c.ConfigMapLabels, fk),
-		database.HasMany(c.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
-		database.HasMany(c.Annotations, database.WithoutCascadeDelete()),
-		database.HasMany(c.ConfigMapAnnotations, fk),
+	return []kdatabase.Relation{
+		kdatabase.HasMany(c.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(c.Labels, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(c.ConfigMapLabels, fk),
+		kdatabase.HasMany(c.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(c.Annotations, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(c.ConfigMapAnnotations, fk),
 	}
 }

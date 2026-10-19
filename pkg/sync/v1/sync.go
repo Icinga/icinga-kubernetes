@@ -4,10 +4,11 @@ import (
 	"context"
 
 	"github.com/icinga/icinga-go-library/com"
+	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/cluster"
-	"github.com/icinga/icinga-kubernetes/pkg/database"
+	"github.com/icinga/icinga-kubernetes/pkg/kdatabase"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
 	"golang.org/x/sync/errgroup"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,14 +16,14 @@ import (
 )
 
 type Sync struct {
-	db       *database.Database
+	db       *kdatabase.DB
 	informer cache.SharedIndexInformer
 	log      *logging.Logger
 	factory  func() schemav1.Resource
 }
 
 func NewSync(
-	db *database.Database,
+	db *kdatabase.DB,
 	informer cache.SharedIndexInformer,
 	log *logging.Logger,
 	factory func() schemav1.Resource,
@@ -60,9 +61,7 @@ func (s *Sync) warmup(ctx context.Context) (map[string]types.UUID, error) {
 	meta := &schemav1.Meta{ClusterUuid: cluster.ClusterUuidFromContext(ctx)}
 	query := s.db.BuildSelectStmt(s.factory(), meta) + ` WHERE cluster_uuid=:cluster_uuid`
 
-	entities, errs := s.db.YieldAll(ctx, func() (any, error) {
-		return s.factory(), nil
-	}, query, meta)
+	entities, errs := s.db.YieldAll(ctx, func() database.Entity { return s.factory() }, query, meta)
 
 	// Let errors from YieldAll() cancel the group.
 	com.ErrgroupReceive(g, errs)
@@ -132,7 +131,7 @@ func (s *Sync) deleteVanished(ctx context.Context, sink *Sink, synced map[string
 }
 
 func (s *Sync) sync(ctx context.Context, c *Controller, synced map[string]types.UUID, with *Features) error {
-	sink := NewSink(func(i *Item) any {
+	sink := NewSink(func(i *Item) database.Entity {
 		entity := s.factory()
 		entity.Obtain(*i.Item, cluster.ClusterUuidFromContext(ctx))
 
@@ -149,12 +148,7 @@ func (s *Sync) sync(ctx context.Context, c *Controller, synced map[string]types.
 		return s.deleteVanished(ctx, sink, synced)
 	})
 	g.Go(func() error {
-		return s.db.UpsertStreamed(
-			ctx,
-			sink.UpsertCh(),
-			database.WithCascading(),
-			database.WithOnSuccess(with.OnUpsert()),
-		)
+		return s.db.UpsertStreamedCascading(ctx, sink.UpsertCh(), with.OnUpsert())
 	})
 	g.Go(func() error {
 		if with.NoDelete() {
@@ -170,14 +164,7 @@ func (s *Sync) sync(ctx context.Context, c *Controller, synced map[string]types.
 
 			}
 		} else {
-			return s.db.DeleteStreamed(
-				ctx,
-				s.factory(),
-				sink.DeleteCh(),
-				database.WithBlocking(),
-				database.WithCascading(),
-				database.WithOnSuccess(with.OnDelete()),
-			)
+			return s.db.DeleteStreamedCascading(ctx, s.factory(), sink.DeleteCh(), with.OnDelete())
 		}
 	})
 

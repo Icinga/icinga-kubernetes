@@ -4,9 +4,10 @@ import (
 	"database/sql"
 	"strings"
 
+	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-kubernetes/pkg/database"
+	"github.com/icinga/icinga-kubernetes/pkg/kdatabase"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kruntime "k8s.io/apimachinery/pkg/runtime"
@@ -57,6 +58,7 @@ type Pvc struct {
 }
 
 type PvcCondition struct {
+	kdatabase.EntityStub
 	PvcUuid        types.UUID
 	Type           string
 	Status         string
@@ -66,14 +68,28 @@ type PvcCondition struct {
 	Message        string
 }
 
+func (p PvcCondition) ID() database.ID {
+	return compoundId{id: p.PvcUuid.String() + p.Type}
+}
+
 type PvcLabel struct {
+	kdatabase.EntityStub
 	PvcUuid   types.UUID
 	LabelUuid types.UUID
 }
 
+func (p PvcLabel) ID() database.ID {
+	return compoundId{id: p.PvcUuid.String() + p.LabelUuid.String()}
+}
+
 type PvcAnnotation struct {
+	kdatabase.EntityStub
 	PvcUuid        types.UUID
 	AnnotationUuid types.UUID
+}
+
+func (p PvcAnnotation) ID() database.ID {
+	return compoundId{id: p.PvcUuid.String() + p.AnnotationUuid.String()}
 }
 
 func NewPvc() Resource {
@@ -163,17 +179,17 @@ func (p *Pvc) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	p.Yaml = string(output)
 }
 
-func (p *Pvc) Relations() []database.Relation {
-	fk := database.WithForeignKey("pvc_uuid")
+func (p *Pvc) Relations() []kdatabase.Relation {
+	fk := kdatabase.WithForeignKey("pvc_uuid")
 
-	return []database.Relation{
-		database.HasMany(p.Conditions, fk),
-		database.HasMany(p.ResourceLabels, database.WithForeignKey("resource_uuid")),
-		database.HasMany(p.Labels, database.WithoutCascadeDelete()),
-		database.HasMany(p.PvcLabels, fk),
-		database.HasMany(p.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
-		database.HasMany(p.Annotations, database.WithoutCascadeDelete()),
-		database.HasMany(p.PvcAnnotations, fk),
-		database.HasMany(p.Favorites, database.WithForeignKey("resource_uuid")),
+	return []kdatabase.Relation{
+		kdatabase.HasMany(p.Conditions, fk),
+		kdatabase.HasMany(p.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(p.Labels, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(p.PvcLabels, fk),
+		kdatabase.HasMany(p.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(p.Annotations, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(p.PvcAnnotations, fk),
+		kdatabase.HasMany(p.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

@@ -3,8 +3,9 @@ package v1
 import (
 	"strings"
 
+	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-kubernetes/pkg/database"
+	"github.com/icinga/icinga-kubernetes/pkg/kdatabase"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kruntime "k8s.io/apimachinery/pkg/runtime"
@@ -27,6 +28,7 @@ type Namespace struct {
 }
 
 type NamespaceCondition struct {
+	kdatabase.EntityStub
 	NamespaceUuid  types.UUID
 	Type           string
 	Status         string
@@ -35,14 +37,28 @@ type NamespaceCondition struct {
 	Message        string
 }
 
+func (n NamespaceCondition) ID() database.ID {
+	return compoundId{id: n.NamespaceUuid.String() + n.Type}
+}
+
 type NamespaceLabel struct {
+	kdatabase.EntityStub
 	NamespaceUuid types.UUID
 	LabelUuid     types.UUID
 }
 
+func (n NamespaceLabel) ID() database.ID {
+	return compoundId{id: n.NamespaceUuid.String() + n.LabelUuid.String()}
+}
+
 type NamespaceAnnotation struct {
+	kdatabase.EntityStub
 	NamespaceUuid  types.UUID
 	AnnotationUuid types.UUID
+}
+
+func (n NamespaceAnnotation) ID() database.ID {
+	return compoundId{id: n.NamespaceUuid.String() + n.AnnotationUuid.String()}
 }
 
 func NewNamespace() Resource {
@@ -108,17 +124,17 @@ func (n *Namespace) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	n.Yaml = string(output)
 }
 
-func (n *Namespace) Relations() []database.Relation {
-	fk := database.WithForeignKey("namespace_uuid")
+func (n *Namespace) Relations() []kdatabase.Relation {
+	fk := kdatabase.WithForeignKey("namespace_uuid")
 
-	return []database.Relation{
-		database.HasMany(n.Conditions, fk),
-		database.HasMany(n.ResourceLabels, database.WithForeignKey("resource_uuid")),
-		database.HasMany(n.Labels, database.WithoutCascadeDelete()),
-		database.HasMany(n.NamespaceLabels, fk),
-		database.HasMany(n.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
-		database.HasMany(n.Annotations, database.WithoutCascadeDelete()),
-		database.HasMany(n.NamespaceAnnotations, fk),
-		database.HasMany(n.Favorites, database.WithForeignKey("resource_uuid")),
+	return []kdatabase.Relation{
+		kdatabase.HasMany(n.Conditions, fk),
+		kdatabase.HasMany(n.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(n.Labels, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(n.NamespaceLabels, fk),
+		kdatabase.HasMany(n.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(n.Annotations, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(n.NamespaceAnnotations, fk),
+		kdatabase.HasMany(n.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

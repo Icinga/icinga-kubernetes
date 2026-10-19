@@ -8,7 +8,7 @@ type Features struct {
 	noDelete bool
 	noWarmup bool
 	onDelete database.OnSuccess[any]
-	onUpsert database.OnSuccess[any]
+	onUpsert database.OnSuccess[database.Entity]
 }
 
 func NewFeatures(features ...Feature) *Features {
@@ -32,7 +32,7 @@ func (f *Features) OnDelete() database.OnSuccess[any] {
 	return f.onDelete
 }
 
-func (f *Features) OnUpsert() database.OnSuccess[any] {
+func (f *Features) OnUpsert() database.OnSuccess[database.Entity] {
 	return f.onUpsert
 }
 
@@ -54,7 +54,7 @@ func WithOnDelete(fn database.OnSuccess[any]) Feature {
 	}
 }
 
-func WithOnUpsert(fn database.OnSuccess[any]) Feature {
+func WithOnUpsert(fn database.OnSuccess[database.Entity]) Feature {
 	return func(f *Features) {
 		f.onUpsert = fn
 	}

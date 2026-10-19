@@ -4,8 +4,9 @@ import (
 	"database/sql"
 	"strings"
 
+	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-kubernetes/pkg/database"
+	"github.com/icinga/icinga-kubernetes/pkg/kdatabase"
 	v1 "k8s.io/api/core/v1"
 	kdiscoveryv1 "k8s.io/api/discovery/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -22,11 +23,17 @@ type EndpointSlice struct {
 }
 
 type EndpointSliceLabel struct {
+	kdatabase.EntityStub
 	EndpointSliceUuid types.UUID
 	LabelUuid         types.UUID
 }
 
+func (e EndpointSliceLabel) ID() database.ID {
+	return compoundId{id: e.EndpointSliceUuid.String() + e.LabelUuid.String()}
+}
+
 type Endpoint struct {
+	kdatabase.EntityStub
 	Uuid              types.UUID
 	EndpointSliceUuid types.UUID
 	HostName          string
@@ -41,7 +48,12 @@ type Endpoint struct {
 	AppProtocol       string
 }
 
+func (e Endpoint) ID() database.ID {
+	return e.Uuid
+}
+
 type EndpointTargetRef struct {
+	kdatabase.EntityStub
 	EndpointSliceUuid types.UUID
 	Kind              sql.NullString
 	Namespace         string
@@ -49,6 +61,10 @@ type EndpointTargetRef struct {
 	Uid               ktypes.UID
 	ApiVersion        string
 	ResourceVersion   string
+}
+
+func (e EndpointTargetRef) ID() database.ID {
+	return e.EndpointSliceUuid
 }
 
 func NewEndpointSlice() Resource {
@@ -150,13 +166,13 @@ func (e *EndpointSlice) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	}
 }
 
-func (e *EndpointSlice) Relations() []database.Relation {
-	fk := database.WithForeignKey("endpoint_slice_uuid")
+func (e *EndpointSlice) Relations() []kdatabase.Relation {
+	fk := kdatabase.WithForeignKey("endpoint_slice_uuid")
 
-	return []database.Relation{
-		database.HasMany(e.Endpoints, fk),
-		database.HasMany(e.Labels, database.WithoutCascadeDelete()),
-		database.HasMany(e.EndpointLabels, fk),
-		database.HasMany(e.EndpointTargetRefs, fk),
+	return []kdatabase.Relation{
+		kdatabase.HasMany(e.Endpoints, fk),
+		kdatabase.HasMany(e.Labels, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(e.EndpointLabels, fk),
+		kdatabase.HasMany(e.EndpointTargetRefs, fk),
 	}
 }

@@ -1,4 +1,4 @@
-package database
+package kdatabase
 
 import (
 	"context"
@@ -7,11 +7,10 @@ import (
 
 	"github.com/icinga/icinga-go-library/backoff"
 	"github.com/icinga/icinga-go-library/com"
-	"github.com/icinga/icinga-go-library/logging"
+	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/periodic"
 	"github.com/icinga/icinga-go-library/retry"
 	"github.com/icinga/icinga-go-library/types"
-	"go.uber.org/zap"
 )
 
 // CleanupStmt defines information needed to compose cleanup statements.
@@ -24,9 +23,9 @@ type CleanupStmt struct {
 // Build assembles the cleanup statement for the specified database driver with the given limit.
 func (stmt *CleanupStmt) Build(driverName string, limit uint64) string {
 	switch driverName {
-	case MySQL, "mysql":
+	case database.MySQL:
 		return fmt.Sprintf(`DELETE FROM %[1]s WHERE %[2]s < :time LIMIT %[3]d`, stmt.Table, stmt.Column, limit)
-	case PostgreSQL, "postgres":
+	case database.PostgreSQL:
 		return fmt.Sprintf(`WITH rows AS (SELECT %[1]s FROM %[2]s WHERE %[3]s < :time LIMIT %[4]d)
 DELETE FROM %[2]s WHERE %[1]s IN (SELECT %[1]s FROM rows)`, stmt.PK, stmt.Table, stmt.Column, limit)
 	default:
@@ -34,19 +33,34 @@ DELETE FROM %[2]s WHERE %[1]s IN (SELECT %[1]s FROM rows)`, stmt.PK, stmt.Table,
 	}
 }
 
+type cleanupWhere struct {
+	Time types.UnixMilli
+}
+
+// Cleanup deletes rows older than a given time in batches of limited size.
+type Cleanup struct {
+	db *DB
+}
+
+// NewCleanup returns a new Cleanup that deletes rows through db.
+func NewCleanup(db *DB) *Cleanup {
+	return &Cleanup{
+		db: db,
+	}
+}
+
 // CleanupOlderThan deletes all rows with the specified statement that are older
 // than the given time. Deletes a maximum of as many rows per round as defined
 // in count. Actually deleted rows will be passed to onSuccess. Returns the total
 // number of rows deleted.
-func (db *Database) CleanupOlderThan(
-	ctx context.Context, stmt CleanupStmt,
-	count uint64, olderThan time.Time, onSuccess ...OnSuccess[struct{}],
+func (c *Cleanup) CleanupOlderThan(
+	ctx context.Context, stmt CleanupStmt, count uint64, olderThan time.Time, onSuccess ...database.OnSuccess[struct{}],
 ) (uint64, error) {
 	var counter com.Counter
 
-	q := db.Rebind(stmt.Build(db.DriverName(), count))
+	q := c.db.Rebind(stmt.Build(c.db.DriverName(), count))
 
-	defer db.periodicLog(ctx, q, &counter).Stop()
+	defer c.db.Log(ctx, q, &counter).Stop()
 
 	for {
 		var rowsDeleted int64
@@ -54,11 +68,11 @@ func (db *Database) CleanupOlderThan(
 		err := retry.WithBackoff(
 			ctx,
 			func(ctx context.Context) error {
-				rs, err := db.NamedExecContext(ctx, q, cleanupWhere{
+				rs, err := c.db.NamedExecContext(ctx, q, cleanupWhere{
 					Time: types.UnixMilli(olderThan),
 				})
 				if err != nil {
-					return CantPerformQuery(err, q)
+					return database.CantPerformQuery(err, q)
 				}
 
 				rowsDeleted, err = rs.RowsAffected()
@@ -66,25 +80,8 @@ func (db *Database) CleanupOlderThan(
 				return err
 			},
 			retry.Retryable,
-			backoff.NewExponentialWithJitter(1*time.Millisecond, 1*time.Second),
-			retry.Settings{
-				Timeout: retry.DefaultTimeout,
-				OnRetryableError: func(_ time.Duration, _ uint64, err, lastErr error) {
-					if lastErr == nil || err.Error() != lastErr.Error() {
-						db.log.Warnw("Cannot execute query. Retrying", logging.Error(err))
-					}
-				},
-				OnSuccess: func(elapsed time.Duration, attempt uint64, lastErr error) {
-					if attempt > 1 {
-						db.log.Infow(
-							"Query retried successfully after error",
-							zap.Duration("after", elapsed),
-							zap.Uint64("attempts", attempt),
-							logging.Error(lastErr),
-						)
-					}
-				},
-			},
+			backoff.DefaultBackoff,
+			c.db.GetDefaultRetrySettings(),
 		)
 		if err != nil {
 			return 0, err
@@ -106,21 +103,16 @@ func (db *Database) CleanupOlderThan(
 	return counter.Total(), nil
 }
 
-type cleanupWhere struct {
-	Time types.UnixMilli
-}
-
-func (db *Database) PeriodicCleanup(ctx context.Context, stmt CleanupStmt) error {
+// PeriodicCleanup deletes the rows of stmt that are older than one day, once
+// right away and then every hour, in batches of 5000. It blocks until a cleanup
+// fails or ctx is done, and returns the cleanup error or ctx.Err().
+func (c *Cleanup) PeriodicCleanup(ctx context.Context, stmt CleanupStmt) error {
 	errs := make(chan error, 1)
-	defer close(errs)
 
-	periodic.Start(ctx, time.Hour, func(tick periodic.Tick) {
+	defer periodic.Start(ctx, time.Hour, func(tick periodic.Tick) {
 		olderThan := tick.Time.AddDate(0, 0, -1)
 
-		_, err := db.CleanupOlderThan(
-			ctx, stmt, 5000, olderThan,
-		)
-
+		_, err := c.CleanupOlderThan(ctx, stmt, 5000, olderThan)
 		if err != nil {
 			select {
 			case errs <- err:

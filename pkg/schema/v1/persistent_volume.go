@@ -4,8 +4,9 @@ import (
 	"database/sql"
 	"strings"
 
+	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-kubernetes/pkg/database"
+	"github.com/icinga/icinga-kubernetes/pkg/kdatabase"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kruntime "k8s.io/apimachinery/pkg/runtime"
@@ -38,20 +39,35 @@ type PersistentVolume struct {
 }
 
 type PersistentVolumeClaimRef struct {
+	kdatabase.EntityStub
 	PersistentVolumeUuid types.UUID
 	Kind                 string
 	Name                 string
 	Uid                  ktypes.UID
 }
 
+func (p PersistentVolumeClaimRef) ID() database.ID {
+	return compoundId{id: p.PersistentVolumeUuid.String() + string(p.Uid)}
+}
+
 type PersistentVolumeLabel struct {
+	kdatabase.EntityStub
 	PersistentVolumeUuid types.UUID
 	LabelUuid            types.UUID
 }
 
+func (p PersistentVolumeLabel) ID() database.ID {
+	return compoundId{id: p.PersistentVolumeUuid.String() + p.LabelUuid.String()}
+}
+
 type PersistentVolumeAnnotation struct {
+	kdatabase.EntityStub
 	PersistentVolumeUuid types.UUID
 	AnnotationUuid       types.UUID
+}
+
+func (p PersistentVolumeAnnotation) ID() database.ID {
+	return compoundId{id: p.PersistentVolumeUuid.String() + p.AnnotationUuid.String()}
 }
 
 func NewPersistentVolume() Resource {
@@ -134,17 +150,17 @@ func (p *PersistentVolume) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	p.Yaml = string(output)
 }
 
-func (p *PersistentVolume) Relations() []database.Relation {
-	fk := database.WithForeignKey("persistent_volume_uuid")
+func (p *PersistentVolume) Relations() []kdatabase.Relation {
+	fk := kdatabase.WithForeignKey("persistent_volume_uuid")
 
-	return []database.Relation{
-		database.HasOne(p.Claim, fk),
-		database.HasMany(p.ResourceLabels, database.WithForeignKey("resource_uuid")),
-		database.HasMany(p.Labels, database.WithoutCascadeDelete()),
-		database.HasMany(p.PersistentVolumeLabels, fk),
-		database.HasMany(p.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
-		database.HasMany(p.Annotations, database.WithoutCascadeDelete()),
-		database.HasMany(p.PersistentVolumeAnnotations, fk),
-		database.HasMany(p.Favorites, database.WithForeignKey("resource_uuid")),
+	return []kdatabase.Relation{
+		kdatabase.HasOne(p.Claim, fk),
+		kdatabase.HasMany(p.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(p.Labels, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(p.PersistentVolumeLabels, fk),
+		kdatabase.HasMany(p.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(p.Annotations, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(p.PersistentVolumeAnnotations, fk),
+		kdatabase.HasMany(p.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

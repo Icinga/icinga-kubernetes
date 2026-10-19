@@ -6,8 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-kubernetes/pkg/database"
+	"github.com/icinga/icinga-kubernetes/pkg/kdatabase"
 	kbatchv1 "k8s.io/api/batch/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kruntime "k8s.io/apimachinery/pkg/runtime"
@@ -40,13 +41,23 @@ type CronJob struct {
 }
 
 type CronJobLabel struct {
+	kdatabase.EntityStub
 	CronJobUuid types.UUID
 	LabelUuid   types.UUID
 }
 
+func (c CronJobLabel) ID() database.ID {
+	return compoundId{id: c.CronJobUuid.String() + c.LabelUuid.String()}
+}
+
 type CronJobAnnotation struct {
+	kdatabase.EntityStub
 	CronJobUuid    types.UUID
 	AnnotationUuid types.UUID
+}
+
+func (c CronJobAnnotation) ID() database.ID {
+	return compoundId{id: c.CronJobUuid.String() + c.AnnotationUuid.String()}
 }
 
 func NewCronJob() Resource {
@@ -161,16 +172,16 @@ func (c *CronJob) getIcingaState() (IcingaState, string) {
 		c.Name, c.LastSuccessfulTime.Time().Format(time.RFC3339))
 }
 
-func (c *CronJob) Relations() []database.Relation {
-	fk := database.WithForeignKey("cron_job_uuid")
+func (c *CronJob) Relations() []kdatabase.Relation {
+	fk := kdatabase.WithForeignKey("cron_job_uuid")
 
-	return []database.Relation{
-		database.HasMany(c.ResourceLabels, database.WithForeignKey("resource_uuid")),
-		database.HasMany(c.Labels, database.WithoutCascadeDelete()),
-		database.HasMany(c.CronJobLabels, fk),
-		database.HasMany(c.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
-		database.HasMany(c.Annotations, database.WithoutCascadeDelete()),
-		database.HasMany(c.CronJobAnnotations, fk),
-		database.HasMany(c.Favorites, database.WithForeignKey("resource_uuid")),
+	return []kdatabase.Relation{
+		kdatabase.HasMany(c.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(c.Labels, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(c.CronJobLabels, fk),
+		kdatabase.HasMany(c.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(c.Annotations, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(c.CronJobAnnotations, fk),
+		kdatabase.HasMany(c.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

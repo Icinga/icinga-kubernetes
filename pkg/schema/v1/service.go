@@ -4,9 +4,10 @@ import (
 	"database/sql"
 	"strings"
 
+	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-kubernetes/pkg/database"
+	"github.com/icinga/icinga-kubernetes/pkg/kdatabase"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kruntime "k8s.io/apimachinery/pkg/runtime"
@@ -52,11 +53,17 @@ type Service struct {
 }
 
 type ServiceSelector struct {
+	kdatabase.EntityStub
 	ServiceUuid  types.UUID
 	SelectorUuid types.UUID
 }
 
+func (s ServiceSelector) ID() database.ID {
+	return compoundId{id: s.ServiceUuid.String() + s.SelectorUuid.String()}
+}
+
 type ServicePort struct {
+	kdatabase.EntityStub
 	ServiceUuid types.UUID
 	Name        string
 	Protocol    string
@@ -66,7 +73,12 @@ type ServicePort struct {
 	NodePort    int32
 }
 
+func (s ServicePort) ID() database.ID {
+	return compoundId{id: s.ServiceUuid.String() + s.Name}
+}
+
 type ServiceCondition struct {
+	kdatabase.EntityStub
 	ServiceUuid        types.UUID
 	Type               string
 	Status             string
@@ -76,19 +88,38 @@ type ServiceCondition struct {
 	Message            string
 }
 
+func (s ServiceCondition) ID() database.ID {
+	return compoundId{id: s.ServiceUuid.String() + s.Type}
+}
+
 type ServiceLabel struct {
+	kdatabase.EntityStub
 	ServiceUuid types.UUID
 	LabelUuid   types.UUID
 }
 
+func (s ServiceLabel) ID() database.ID {
+	return compoundId{id: s.ServiceUuid.String() + s.LabelUuid.String()}
+}
+
 type ServiceAnnotation struct {
+	kdatabase.EntityStub
 	ServiceUuid    types.UUID
 	AnnotationUuid types.UUID
 }
 
+func (s ServiceAnnotation) ID() database.ID {
+	return compoundId{id: s.ServiceUuid.String() + s.AnnotationUuid.String()}
+}
+
 type ServicePod struct {
+	kdatabase.EntityStub
 	ServiceUuid types.UUID
 	PodUuid     types.UUID
+}
+
+func (s ServicePod) ID() database.ID {
+	return compoundId{id: s.ServiceUuid.String() + s.PodUuid.String()}
 }
 
 func NewServiceFactory(clientset *kubernetes.Clientset) *ServiceFactory {
@@ -243,21 +274,21 @@ func (s *Service) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	s.Yaml = string(output)
 }
 
-func (s *Service) Relations() []database.Relation {
-	fk := database.WithForeignKey("service_uuid")
+func (s *Service) Relations() []kdatabase.Relation {
+	fk := kdatabase.WithForeignKey("service_uuid")
 
-	return []database.Relation{
-		database.HasMany(s.Conditions, fk),
-		database.HasMany(s.Ports, fk),
-		database.HasMany(s.Selectors, database.WithoutCascadeDelete()),
-		database.HasMany(s.ServiceSelectors, fk),
-		database.HasMany(s.ResourceLabels, database.WithForeignKey("resource_uuid")),
-		database.HasMany(s.Labels, database.WithoutCascadeDelete()),
-		database.HasMany(s.ServiceLabels, fk),
-		database.HasMany(s.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
-		database.HasMany(s.Annotations, database.WithoutCascadeDelete()),
-		database.HasMany(s.ServiceAnnotations, fk),
-		database.HasMany(s.ServicePods, fk),
-		database.HasMany(s.Favorites, database.WithForeignKey("resource_uuid")),
+	return []kdatabase.Relation{
+		kdatabase.HasMany(s.Conditions, fk),
+		kdatabase.HasMany(s.Ports, fk),
+		kdatabase.HasMany(s.Selectors, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(s.ServiceSelectors, fk),
+		kdatabase.HasMany(s.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(s.Labels, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(s.ServiceLabels, fk),
+		kdatabase.HasMany(s.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(s.Annotations, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(s.ServiceAnnotations, fk),
+		kdatabase.HasMany(s.ServicePods, fk),
+		kdatabase.HasMany(s.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

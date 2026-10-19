@@ -5,9 +5,10 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-kubernetes/pkg/database"
+	"github.com/icinga/icinga-kubernetes/pkg/kdatabase"
 	"github.com/icinga/icinga-kubernetes/pkg/notifications"
 	kappsv1 "k8s.io/api/apps/v1"
 	kcorev1 "k8s.io/api/core/v1"
@@ -41,6 +42,7 @@ type ReplicaSet struct {
 }
 
 type ReplicaSetCondition struct {
+	kdatabase.EntityStub
 	ReplicaSetUuid types.UUID
 	Type           string
 	Status         string
@@ -49,7 +51,12 @@ type ReplicaSetCondition struct {
 	Message        string
 }
 
+func (r ReplicaSetCondition) ID() database.ID {
+	return compoundId{id: r.ReplicaSetUuid.String() + r.Type}
+}
+
 type ReplicaSetOwner struct {
+	kdatabase.EntityStub
 	ReplicaSetUuid     types.UUID
 	OwnerUuid          types.UUID
 	Kind               string
@@ -59,14 +66,28 @@ type ReplicaSetOwner struct {
 	BlockOwnerDeletion types.Bool
 }
 
+func (r ReplicaSetOwner) ID() database.ID {
+	return compoundId{id: r.ReplicaSetUuid.String() + r.OwnerUuid.String()}
+}
+
 type ReplicaSetLabel struct {
+	kdatabase.EntityStub
 	ReplicaSetUuid types.UUID
 	LabelUuid      types.UUID
 }
 
+func (r ReplicaSetLabel) ID() database.ID {
+	return compoundId{id: r.ReplicaSetUuid.String() + r.LabelUuid.String()}
+}
+
 type ReplicaSetAnnotation struct {
+	kdatabase.EntityStub
 	ReplicaSetUuid types.UUID
 	AnnotationUuid types.UUID
+}
+
+func (r ReplicaSetAnnotation) ID() database.ID {
+	return compoundId{id: r.ReplicaSetUuid.String() + r.AnnotationUuid.String()}
 }
 
 func NewReplicaSet() Resource {
@@ -211,18 +232,18 @@ func (r *ReplicaSet) getIcingaState() (IcingaState, string) {
 	}
 }
 
-func (r *ReplicaSet) Relations() []database.Relation {
-	fk := database.WithForeignKey("replica_set_uuid")
+func (r *ReplicaSet) Relations() []kdatabase.Relation {
+	fk := kdatabase.WithForeignKey("replica_set_uuid")
 
-	return []database.Relation{
-		database.HasMany(r.Conditions, fk),
-		database.HasMany(r.Owners, fk),
-		database.HasMany(r.ResourceLabels, database.WithForeignKey("resource_uuid")),
-		database.HasMany(r.Labels, database.WithoutCascadeDelete()),
-		database.HasMany(r.ReplicaSetLabels, fk),
-		database.HasMany(r.ResourceAnnotations, database.WithForeignKey("resource_uuid")),
-		database.HasMany(r.Annotations, database.WithoutCascadeDelete()),
-		database.HasMany(r.ReplicaSetAnnotations, fk),
-		database.HasMany(r.Favorites, database.WithForeignKey("resource_uuid")),
+	return []kdatabase.Relation{
+		kdatabase.HasMany(r.Conditions, fk),
+		kdatabase.HasMany(r.Owners, fk),
+		kdatabase.HasMany(r.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(r.Labels, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(r.ReplicaSetLabels, fk),
+		kdatabase.HasMany(r.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(r.Annotations, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(r.ReplicaSetAnnotations, fk),
+		kdatabase.HasMany(r.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

@@ -5,9 +5,11 @@ import (
 
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/types"
+	"github.com/icinga/icinga-kubernetes/pkg/kdatabase"
 )
 
 type PrometheusClusterMetric struct {
+	kdatabase.EntityStub
 	ClusterUuid types.UUID
 	Timestamp   int64
 	Category    string
@@ -15,19 +17,12 @@ type PrometheusClusterMetric struct {
 	Value       float64
 }
 
-func (m *PrometheusClusterMetric) ID() database.ID {
+func (m PrometheusClusterMetric) ID() database.ID {
 	return compoundId{id: m.ClusterUuid.String() + strconv.FormatInt(m.Timestamp, 10) + m.Category + m.Name}
 }
 
-func (m *PrometheusClusterMetric) SetID(id database.ID) {
-	panic("Not expected to be called")
-}
-
-func (m *PrometheusClusterMetric) Fingerprint() database.Fingerprinter {
-	return m
-}
-
 type PrometheusNodeMetric struct {
+	kdatabase.EntityStub
 	NodeUuid  types.UUID
 	Timestamp int64
 	Category  string
@@ -35,19 +30,12 @@ type PrometheusNodeMetric struct {
 	Value     float64
 }
 
-func (m *PrometheusNodeMetric) ID() database.ID {
+func (m PrometheusNodeMetric) ID() database.ID {
 	return compoundId{id: m.NodeUuid.String() + strconv.FormatInt(m.Timestamp, 10) + m.Category + m.Name}
 }
 
-func (m *PrometheusNodeMetric) SetID(id database.ID) {
-	panic("Not expected to be called")
-}
-
-func (m *PrometheusNodeMetric) Fingerprint() database.Fingerprinter {
-	return m
-}
-
 type PrometheusPodMetric struct {
+	kdatabase.EntityStub
 	PodUuid   types.UUID
 	Timestamp int64
 	Category  string
@@ -55,19 +43,12 @@ type PrometheusPodMetric struct {
 	Value     float64
 }
 
-func (m *PrometheusPodMetric) ID() database.ID {
+func (m PrometheusPodMetric) ID() database.ID {
 	return compoundId{id: m.PodUuid.String() + strconv.FormatInt(m.Timestamp, 10) + m.Category + m.Name}
 }
 
-func (m *PrometheusPodMetric) SetID(id database.ID) {
-	panic("Not expected to be called")
-}
-
-func (m *PrometheusPodMetric) Fingerprint() database.Fingerprinter {
-	return m
-}
-
 type PrometheusContainerMetric struct {
+	kdatabase.EntityStub
 	ContainerUuid types.UUID
 	Timestamp     int64
 	Category      string
@@ -75,22 +56,6 @@ type PrometheusContainerMetric struct {
 	Value         float64
 }
 
-func (m *PrometheusContainerMetric) ID() database.ID {
+func (m PrometheusContainerMetric) ID() database.ID {
 	return compoundId{id: m.ContainerUuid.String() + strconv.FormatInt(m.Timestamp, 10) + m.Category + m.Name}
-}
-
-func (m *PrometheusContainerMetric) SetID(id database.ID) {
-	panic("Not expected to be called")
-}
-
-func (m *PrometheusContainerMetric) Fingerprint() database.Fingerprinter {
-	return m
-}
-
-type compoundId struct {
-	id string
-}
-
-func (i compoundId) String() string {
-	return i.id
 }

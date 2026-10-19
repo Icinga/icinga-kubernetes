@@ -28,7 +28,7 @@ import (
 	"github.com/icinga/icinga-kubernetes/pkg/cluster"
 	kcom "github.com/icinga/icinga-kubernetes/pkg/com"
 	"github.com/icinga/icinga-kubernetes/pkg/daemon"
-	kdatabase "github.com/icinga/icinga-kubernetes/pkg/database"
+	"github.com/icinga/icinga-kubernetes/pkg/kdatabase"
 	"github.com/icinga/icinga-kubernetes/pkg/metrics"
 	"github.com/icinga/icinga-kubernetes/pkg/notifications"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
@@ -134,15 +134,11 @@ func main() {
 
 	dbLog := logs.GetChildLogger("database")
 
-	db, err := database.NewDbFromConfig(&cfg.Database, dbLog, database.RetryConnectorCallbacks{})
+	db, err := kdatabase.NewFromConfig(&cfg.Database, dbLog)
 	if err != nil {
 		logger.Fatalw("Cannot create database", logging.Error(err))
 	}
-
-	kdb, err := kdatabase.NewFromSqlxDb(&cfg.Database, dbLog, db.DB)
-	if err != nil {
-		logger.Fatalw("Cannot create database wrapper", logging.Error(err))
-	}
+	defer func() { _ = db.Close() }()
 
 	// When started by systemd, NOTIFY_SOCKET is set by systemd for Type=notify
 	// supervised services, which was the default setting for the Icinga for Kubernetes
@@ -150,11 +146,11 @@ func main() {
 	// systemd, that Icinga for Kubernetes finished starting up.
 	_ = sdnotify.Ready()
 
-	if !kdb.Connect() {
+	if !db.Connect() {
 		return
 	}
 
-	hasSchema, err := dbHasSchema(kdb, cfg.Database.Database)
+	hasSchema, err := dbHasSchema(db, cfg.Database.Database)
 	if err != nil {
 		logger.Fatalw("Cannot query whether the database has a kubernetes_schema table", logging.Error(err))
 	}
@@ -168,9 +164,9 @@ func main() {
 			ctx,
 			func(ctx context.Context) (err error) {
 				query := "SELECT version FROM kubernetes_schema ORDER BY id DESC LIMIT 1"
-				err = kdb.QueryRowxContext(ctx, query).Scan(&version)
+				err = db.QueryRowxContext(ctx, query).Scan(&version)
 				if err != nil {
-					err = kdatabase.CantPerformQuery(err, query)
+					err = database.CantPerformQuery(err, query)
 				}
 				return
 			},
@@ -185,8 +181,8 @@ func main() {
 			err = retry.WithBackoff(
 				ctx,
 				func(ctx context.Context) (err error) {
-					rows, err := kdb.Query(
-						kdb.Rebind("SELECT table_name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=?"),
+					rows, err := db.Query(
+						db.Rebind("SELECT table_name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=?"),
 						cfg.Database.Database,
 					)
 					if err != nil {
@@ -204,7 +200,7 @@ func main() {
 							logger.Fatalw("Cannot scan table name", logging.Error(err))
 						}
 
-						_, err := kdb.Exec(fmt.Sprintf(`DROP TABLE %s`, tableName))
+						_, err := db.Exec(fmt.Sprintf(`DROP TABLE %s`, tableName))
 						if err != nil {
 							logger.Fatalw("Cannot drop table", zap.String("table", tableName), logging.Error(err))
 						}
@@ -227,7 +223,7 @@ func main() {
 
 		for ddl := range strings.SplitSeq(k8sMysql.Schema, ";") {
 			if ddl = strings.TrimSpace(ddl); ddl != "" {
-				if _, err := kdb.Exec(ddl); err != nil {
+				if _, err := db.Exec(ddl); err != nil {
 					logger.Fatalw("Cannot execute schema statement", logging.Error(err))
 				}
 			}
@@ -256,12 +252,12 @@ func main() {
 
 	ctx = cluster.NewClusterUuidContext(ctx, clusterInstance.Uuid)
 
-	stmt, _ := kdb.BuildUpsertStmt(clusterInstance)
-	if _, err := kdb.NamedExecContext(ctx, stmt, clusterInstance); err != nil {
+	stmt, _ := db.BuildUpsertStmt(clusterInstance)
+	if _, err := db.NamedExecContext(ctx, stmt, clusterInstance); err != nil {
 		logger.Errorw("Cannot update cluster", logging.Error(err))
 	}
 
-	if _, err := kdb.ExecContext(ctx, "DELETE FROM kubernetes_instance WHERE cluster_uuid = ?", clusterInstance.Uuid); err != nil {
+	if _, err := db.ExecContext(ctx, "DELETE FROM kubernetes_instance WHERE cluster_uuid = ?", clusterInstance.Uuid); err != nil {
 		logger.Fatalw("Cannot delete instance", logging.Error(err))
 	}
 	// ,omitempty
@@ -289,14 +285,14 @@ func main() {
 			Heartbeat: types.UnixMilli(tick.Time),
 		}
 
-		stmt, _ := kdb.BuildUpsertStmt(instance)
+		stmt, _ := db.BuildUpsertStmt(instance)
 
-		if _, err := kdb.NamedExecContext(ctx, stmt, instance); err != nil {
+		if _, err := db.NamedExecContext(ctx, stmt, instance); err != nil {
 			logger.Errorw("Cannot update instance", logging.Error(err))
 		}
 	}, periodic.Immediate()).Stop()
 
-	if err := internal.SyncNotificationsConfig(ctx, db, &cfg.Notifications, clusterInstance.Uuid); err != nil {
+	if err := internal.SyncNotificationsConfig(ctx, db.DB, &cfg.Notifications, clusterInstance.Uuid); err != nil {
 		logger.Fatalw("Cannot sync notifications configuration", logging.Error(err))
 	}
 
@@ -306,7 +302,7 @@ func main() {
 		nclient, err := notifications.NewClient(
 			"icinga-kubernetes/"+internal.Version.Version,
 			cfg.Notifications,
-			db,
+			db.DB,
 			logs.GetChildLogger("notifications"),
 		)
 		if err != nil {
@@ -437,10 +433,10 @@ func main() {
 	factory := informers.NewSharedInformerFactory(clientset, 0)
 
 	g.Go(func() error {
-		return SyncServicePods(ctx, kdb, factory.Core().V1().Services(), factory.Core().V1().Pods())
+		return SyncServicePods(ctx, db, factory.Core().V1().Services(), factory.Core().V1().Pods())
 	})
 
-	err = internal.SyncPrometheusConfig(ctx, db, &cfg.Prometheus, clusterInstance.Uuid)
+	err = internal.SyncPrometheusConfig(ctx, db.DB, &cfg.Prometheus, clusterInstance.Uuid)
 	if err != nil {
 		logger.Errorw("Cannot sync prometheus config", logging.Error(err))
 	}
@@ -468,7 +464,7 @@ func main() {
 		}
 
 		promApiClient := promv1.NewAPI(promClient)
-		promMetricSync := metrics.NewPromMetricSync(promApiClient, db, logs.GetChildLogger("prometheus"))
+		promMetricSync := metrics.NewPromMetricSync(promApiClient, db.DB, logs.GetChildLogger("prometheus"))
 
 		g.Go(func() error {
 			return promMetricSync.Nodes(ctx, factory.Core().V1().Nodes().Informer())
@@ -480,7 +476,7 @@ func main() {
 	}
 
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Core().V1().Namespaces().Informer(), logs.GetChildLogger("namespaces"), schemav1.NewNamespace)
+		s := syncv1.NewSync(db, factory.Core().V1().Namespaces().Informer(), logs.GetChildLogger("namespaces"), schemav1.NewNamespace)
 
 		return s.Run(ctx)
 	})
@@ -489,7 +485,7 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Core().V1().Nodes().Informer(), logs.GetChildLogger("nodes"), schemav1.NewNode)
+		s := syncv1.NewSync(db, factory.Core().V1().Nodes().Informer(), logs.GetChildLogger("nodes"), schemav1.NewNode)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -509,14 +505,14 @@ func main() {
 	g.Go(func() error {
 		schemav1.SyncContainers(
 			ctx,
-			kdb,
+			db,
 			g,
 			cachev1.Multiplexers().Pods().UpsertEvents().Out(),
 			cachev1.Multiplexers().Pods().DeleteEvents().Out(),
 		)
 
 		f := schemav1.NewPodFactory(clientset)
-		s := syncv1.NewSync(kdb, factory.Core().V1().Pods().Informer(), logs.GetChildLogger("pods"), f.New)
+		s := syncv1.NewSync(db, factory.Core().V1().Pods().Informer(), logs.GetChildLogger("pods"), f.New)
 
 		wg.Done()
 
@@ -529,7 +525,7 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Apps().V1().Deployments().Informer(), logs.GetChildLogger("deployments"), schemav1.NewDeployment)
+		s := syncv1.NewSync(db, factory.Apps().V1().Deployments().Informer(), logs.GetChildLogger("deployments"), schemav1.NewDeployment)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -547,7 +543,7 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Apps().V1().DaemonSets().Informer(), logs.GetChildLogger("daemon-sets"), schemav1.NewDaemonSet)
+		s := syncv1.NewSync(db, factory.Apps().V1().DaemonSets().Informer(), logs.GetChildLogger("daemon-sets"), schemav1.NewDaemonSet)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -565,7 +561,7 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Apps().V1().ReplicaSets().Informer(), logs.GetChildLogger("replica-sets"), schemav1.NewReplicaSet)
+		s := syncv1.NewSync(db, factory.Apps().V1().ReplicaSets().Informer(), logs.GetChildLogger("replica-sets"), schemav1.NewReplicaSet)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -583,7 +579,7 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Apps().V1().StatefulSets().Informer(), logs.GetChildLogger("stateful-sets"), schemav1.NewStatefulSet)
+		s := syncv1.NewSync(db, factory.Apps().V1().StatefulSets().Informer(), logs.GetChildLogger("stateful-sets"), schemav1.NewStatefulSet)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -601,7 +597,7 @@ func main() {
 
 	g.Go(func() error {
 		f := schemav1.NewServiceFactory(clientset)
-		s := syncv1.NewSync(kdb, factory.Core().V1().Services().Informer(), logs.GetChildLogger("services"), f.NewService)
+		s := syncv1.NewSync(db, factory.Core().V1().Services().Informer(), logs.GetChildLogger("services"), f.NewService)
 
 		return s.Run(
 			ctx,
@@ -610,54 +606,54 @@ func main() {
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Discovery().V1().EndpointSlices().Informer(), logs.GetChildLogger("endpoints"), schemav1.NewEndpointSlice)
+		s := syncv1.NewSync(db, factory.Discovery().V1().EndpointSlices().Informer(), logs.GetChildLogger("endpoints"), schemav1.NewEndpointSlice)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Core().V1().Secrets().Informer(), logs.GetChildLogger("secrets"), schemav1.NewSecret)
+		s := syncv1.NewSync(db, factory.Core().V1().Secrets().Informer(), logs.GetChildLogger("secrets"), schemav1.NewSecret)
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Core().V1().ConfigMaps().Informer(), logs.GetChildLogger("config-maps"), schemav1.NewConfigMap)
+		s := syncv1.NewSync(db, factory.Core().V1().ConfigMaps().Informer(), logs.GetChildLogger("config-maps"), schemav1.NewConfigMap)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Events().V1().Events().Informer(), logs.GetChildLogger("events"), schemav1.NewEvent)
+		s := syncv1.NewSync(db, factory.Events().V1().Events().Informer(), logs.GetChildLogger("events"), schemav1.NewEvent)
 
 		return s.Run(ctx, syncv1.WithNoDelete(), syncv1.WithNoWarmup())
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Core().V1().PersistentVolumeClaims().Informer(), logs.GetChildLogger("pvcs"), schemav1.NewPvc)
+		s := syncv1.NewSync(db, factory.Core().V1().PersistentVolumeClaims().Informer(), logs.GetChildLogger("pvcs"), schemav1.NewPvc)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Core().V1().PersistentVolumes().Informer(), logs.GetChildLogger("persistent-volumes"), schemav1.NewPersistentVolume)
+		s := syncv1.NewSync(db, factory.Core().V1().PersistentVolumes().Informer(), logs.GetChildLogger("persistent-volumes"), schemav1.NewPersistentVolume)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Batch().V1().Jobs().Informer(), logs.GetChildLogger("jobs"), schemav1.NewJob)
+		s := syncv1.NewSync(db, factory.Batch().V1().Jobs().Informer(), logs.GetChildLogger("jobs"), schemav1.NewJob)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Batch().V1().CronJobs().Informer(), logs.GetChildLogger("cron-jobs"), schemav1.NewCronJob)
+		s := syncv1.NewSync(db, factory.Batch().V1().CronJobs().Informer(), logs.GetChildLogger("cron-jobs"), schemav1.NewCronJob)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(kdb, factory.Networking().V1().Ingresses().Informer(), logs.GetChildLogger("ingresses"), schemav1.NewIngress)
+		s := syncv1.NewSync(db, factory.Networking().V1().Ingresses().Informer(), logs.GetChildLogger("ingresses"), schemav1.NewIngress)
 
 		return s.Run(ctx)
 	})
@@ -670,8 +666,10 @@ func main() {
 		return cachev1.Multiplexers().Run(ctx)
 	})
 
+	cleanup := kdatabase.NewCleanup(db)
+
 	g.Go(func() error {
-		return kdb.PeriodicCleanup(ctx, kdatabase.CleanupStmt{
+		return cleanup.PeriodicCleanup(ctx, kdatabase.CleanupStmt{
 			Table:  "event",
 			PK:     "uuid",
 			Column: "created",
@@ -679,7 +677,7 @@ func main() {
 	})
 
 	g.Go(func() error {
-		return kdb.PeriodicCleanup(ctx, kdatabase.CleanupStmt{
+		return cleanup.PeriodicCleanup(ctx, kdatabase.CleanupStmt{
 			Table:  "prometheus_cluster_metric",
 			PK:     "(cluster_uuid, timestamp, category, name)",
 			Column: "timestamp",
@@ -687,7 +685,7 @@ func main() {
 	})
 
 	g.Go(func() error {
-		return kdb.PeriodicCleanup(ctx, kdatabase.CleanupStmt{
+		return cleanup.PeriodicCleanup(ctx, kdatabase.CleanupStmt{
 			Table:  "prometheus_node_metric",
 			PK:     "(node_uuid, timestamp, category, name)",
 			Column: "timestamp",
@@ -695,7 +693,7 @@ func main() {
 	})
 
 	g.Go(func() error {
-		return kdb.PeriodicCleanup(ctx, kdatabase.CleanupStmt{
+		return cleanup.PeriodicCleanup(ctx, kdatabase.CleanupStmt{
 			Table:  "prometheus_pod_metric",
 			PK:     "(pod_uuid, timestamp, category, name)",
 			Column: "timestamp",
@@ -703,7 +701,7 @@ func main() {
 	})
 
 	g.Go(func() error {
-		return kdb.PeriodicCleanup(ctx, kdatabase.CleanupStmt{
+		return cleanup.PeriodicCleanup(ctx, kdatabase.CleanupStmt{
 			Table:  "prometheus_container_metric",
 			PK:     "(container_uuid, timestamp, category, name)",
 			Column: "timestamp",
@@ -716,7 +714,7 @@ func main() {
 }
 
 // dbHasSchema queries via db whether the database dbName has a table named "kubernetes_schema".
-func dbHasSchema(db *kdatabase.Database, dbName string) (bool, error) {
+func dbHasSchema(db *kdatabase.DB, dbName string) (bool, error) {
 	rows, err := db.Query(
 		db.Rebind("SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=? AND TABLE_NAME='kubernetes_schema'"),
 		dbName,
@@ -730,8 +728,8 @@ func dbHasSchema(db *kdatabase.Database, dbName string) (bool, error) {
 	return rows.Next(), rows.Err()
 }
 
-func SyncServicePods(ctx context.Context, db *kdatabase.Database, serviceList corev1.ServiceInformer, podList corev1.PodInformer) error {
-	servicePods := make(chan any)
+func SyncServicePods(ctx context.Context, db *kdatabase.DB, serviceList corev1.ServiceInformer, podList corev1.PodInformer) error {
+	servicePods := make(chan database.Entity)
 
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
