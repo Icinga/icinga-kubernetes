@@ -754,30 +754,42 @@ func main() {
 	})
 
 	g.Go(func() error {
-		events := syncv1.NewTypedInformers[*keventsv1.Event](factories...)
-
-		// Kubernetes records events about nodes, which are cluster-scoped, in the default namespace.
-		// Keep synchronizing them even if the default namespace is filtered out.
-		if (len(cfg.Namespaces.Include) > 0 && !slices.Contains(cfg.Namespaces.Include, v1.NamespaceDefault)) ||
-			slices.Contains(cfg.Namespaces.Exclude, v1.NamespaceDefault) {
-			nodeEvents := informers.NewSharedInformerFactoryWithOptions(
-				clientset,
-				0,
-				informers.WithNamespace(v1.NamespaceDefault),
-				withFieldSelector(fields.OneTermEqualSelector("regarding.kind", "Node")),
-			)
-			events = append(events, syncv1.NewTypedInformers[*keventsv1.Event](nodeEvents)...)
-		}
-
 		s := syncv1.NewSync(
 			db,
-			events,
+			syncv1.NewTypedInformers[*keventsv1.Event](factories...),
 			logs.GetChildLogger("events"),
 			schemav1.NewEvent,
 		)
 
 		return s.Run(ctx, syncv1.WithNoDelete(), syncv1.WithNoWarmup())
 	})
+
+	// Kubernetes records events about nodes, which are cluster-scoped, in the
+	// default namespace. Keep synchronizing them even if the default namespace
+	// is filtered out. A sync waits until all its informers have synced, so they
+	// get a sync of their own. Otherwise, missing permission for events in the
+	// default namespace would block all events.
+	if (len(cfg.Namespaces.Include) > 0 &&
+		!slices.Contains(cfg.Namespaces.Include, v1.NamespaceDefault)) ||
+		slices.Contains(cfg.Namespaces.Exclude, v1.NamespaceDefault) {
+		g.Go(func() error {
+			nodeEvents := informers.NewSharedInformerFactoryWithOptions(
+				clientset,
+				0,
+				informers.WithNamespace(v1.NamespaceDefault),
+				withFieldSelector(fields.OneTermEqualSelector("regarding.kind", "Node")),
+			)
+
+			s := syncv1.NewSync(
+				db,
+				syncv1.NewTypedInformers[*keventsv1.Event](nodeEvents),
+				logs.GetChildLogger("events"),
+				schemav1.NewEvent,
+			)
+
+			return s.Run(ctx, syncv1.WithNoDelete(), syncv1.WithNoWarmup())
+		})
+	}
 
 	g.Go(func() error {
 		s := syncv1.NewSync(
