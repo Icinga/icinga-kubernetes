@@ -2,12 +2,14 @@ package daemon
 
 import (
 	"slices"
+	"strings"
 
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-kubernetes/pkg/metrics"
 	"github.com/icinga/icinga-kubernetes/pkg/notifications"
 	"github.com/pkg/errors"
+	apivalidation "k8s.io/apimachinery/pkg/api/validation"
 )
 
 // DefaultConfigPath specifies the default location of Icinga for Kubernetes's
@@ -30,28 +32,26 @@ type NamespacesConfig struct {
 
 func (c *NamespacesConfig) Validate() error {
 	if len(c.Exclude) > 0 && len(c.Include) > 0 {
-		return errors.New("exclude and include can not be set at the same time")
+		return errors.New("exclude and include cannot be set at the same time")
 	}
 
-	if slices.Contains(c.Include, "") {
-		return errors.New("include namespace can not be empty")
-	}
-
-	if slices.Contains(c.Exclude, "") {
-		return errors.New("exclude namespace can not be empty")
+	for _, namespace := range slices.Concat(c.Include, c.Exclude) {
+		if errs := apivalidation.ValidateNamespaceName(namespace, false); len(errs) > 0 {
+			return errors.Errorf("invalid namespace %q: %s", namespace, strings.Join(errs, ", "))
+		}
 	}
 
 	var found []string
 	for _, namespace := range c.Include {
 		if slices.Contains(found, namespace) {
-			return errors.New("namespace can not be included twice")
+			return errors.Errorf("namespace %q cannot be included twice", namespace)
 		}
 		found = append(found, namespace)
 	}
 
 	for _, namespace := range c.Exclude {
 		if slices.Contains(found, namespace) {
-			return errors.New("namespace can not be excluded twice")
+			return errors.Errorf("namespace %q cannot be excluded twice", namespace)
 		}
 		found = append(found, namespace)
 	}
