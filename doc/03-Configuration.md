@@ -200,7 +200,7 @@ namespaces:
 
 Only the listed namespaces, or all but the listed ones, and their resources
 are synchronized. Cluster-scoped resources, i.e. nodes and persistent volumes,
-are always synchronized completely, and so are events about nodes, which
+are always synchronized completely, and so are events about them, which
 Kubernetes records in the `default` namespace. When the filter changes, the
 database is brought in line with it on the next start, except for events,
 which are kept until they expire.
