@@ -113,12 +113,12 @@ func (s *Sync) deleteVanished(ctx context.Context, sink *Sink, synced map[string
 	}
 
 	for key, id := range synced {
-		obj, exists, err := s.informers.GetByKey(key)
+		obj, exists, err := s.informers.Object(key)
 		if err != nil {
 			return err
 		}
 
-		if exists && schemav1.EnsureUUID(obj.(kmetav1.Object).GetUID()) == id {
+		if exists && schemav1.EnsureUUID(obj.GetUID()) == id {
 			continue
 		}
 

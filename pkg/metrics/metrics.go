@@ -24,6 +24,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	kcorev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	kcache "k8s.io/client-go/tools/cache"
 )
 
@@ -456,15 +457,14 @@ func (pms *PromMetricSync) run(
 	return g.Wait()
 }
 
-func (pms *PromMetricSync) Nodes(ctx context.Context, informers syncv1.Informers) error {
+func (pms *PromMetricSync) Nodes(ctx context.Context, informers syncv1.TypedInformers[*kcorev1.Node]) error {
 	if !kcache.WaitForCacheSync(ctx.Done(), informers.HasSynced) {
 		return errors.New("timed out waiting for caches to sync")
 	}
 
 	nodes := sync.Map{}
 	defer periodic.Start(ctx, 1*time.Hour, func(tick periodic.Tick) {
-		for _, item := range informers.List() {
-			node := item.(*kcorev1.Node)
+		for _, node := range informers.List(labels.Everything()) {
 			uuid := schemav1.EnsureUUID(node.UID)
 			nodes.Store(node.Name, uuid)
 			for _, address := range node.Status.Addresses {
@@ -531,7 +531,7 @@ func (pms *PromMetricSync) Nodes(ctx context.Context, informers syncv1.Informers
 	return g.Wait()
 }
 
-func (pms *PromMetricSync) Pods(ctx context.Context, informers syncv1.Informers) error {
+func (pms *PromMetricSync) Pods(ctx context.Context, informers syncv1.TypedInformers[*kcorev1.Pod]) error {
 	if !kcache.WaitForCacheSync(ctx.Done(), informers.HasSynced) {
 		return errors.New("timed out waiting for caches to sync")
 	}
@@ -550,7 +550,7 @@ func (pms *PromMetricSync) Pods(ctx context.Context, informers syncv1.Informers)
 					return nil
 				}
 
-				obj, exists, err := informers.GetByKey(
+				pod, exists, err := informers.GetByKey(
 					kcache.NewObjectName(string(res.Metric["namespace"]), string(res.Metric["pod"])).String())
 				if err != nil {
 					//return errors.Wrap(err, "cannot get pod from store")
@@ -559,7 +559,6 @@ func (pms *PromMetricSync) Pods(ctx context.Context, informers syncv1.Informers)
 				if !exists {
 					return nil
 				}
-				pod := obj.(*kcorev1.Pod)
 
 				name := ""
 				if query.nameLabel != "" {
@@ -586,7 +585,9 @@ func (pms *PromMetricSync) Pods(ctx context.Context, informers syncv1.Informers)
 	return g.Wait()
 }
 
-func (pms *PromMetricSync) Containers(ctx context.Context, informers syncv1.Informers) error {
+// TODO: Containers is currently not in use and does not read the informers' objects,
+// so their type *kcorev1.Pod is only a guess.
+func (pms *PromMetricSync) Containers(ctx context.Context, informers syncv1.TypedInformers[*kcorev1.Pod]) error {
 	if !kcache.WaitForCacheSync(ctx.Done(), informers.HasSynced) {
 		pms.logger.Fatal("Timed out waiting for caches to sync")
 	}
@@ -633,7 +634,9 @@ func (pms *PromMetricSync) Containers(ctx context.Context, informers syncv1.Info
 	return g.Wait()
 }
 
-func (pms *PromMetricSync) Clusters(ctx context.Context, informers syncv1.Informers) error {
+// TODO: Clusters is currently not in use and does not read the informers' objects,
+// so their type *kcorev1.Node is only a guess.
+func (pms *PromMetricSync) Clusters(ctx context.Context, informers syncv1.TypedInformers[*kcorev1.Node]) error {
 	if !kcache.WaitForCacheSync(ctx.Done(), informers.HasSynced) {
 		pms.logger.Fatal("Timed out waiting for caches to sync")
 	}
