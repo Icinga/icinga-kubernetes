@@ -766,32 +766,46 @@ func main() {
 	})
 
 	g.Go(func() error {
-		events := pick(factories, func(f informers.SharedInformerFactory) kcache.SharedIndexInformer {
-			return f.Events().V1().Events().Informer()
-		})
-
-		// Kubernetes records events about nodes, which are cluster-scoped, in the default namespace.
-		// Keep synchronizing them even if the default namespace is filtered out.
-		if (len(cfg.Namespaces.Include) > 0 && !slices.Contains(cfg.Namespaces.Include, v1.NamespaceDefault)) ||
-			slices.Contains(cfg.Namespaces.Exclude, v1.NamespaceDefault) {
-			nodeEvents := informers.NewSharedInformerFactoryWithOptions(
-				clientset,
-				0,
-				informers.WithNamespace(v1.NamespaceDefault),
-				withFieldSelector(fields.OneTermEqualSelector("regarding.kind", "Node")),
-			)
-			events = append(events, nodeEvents.Events().V1().Events().Informer())
-		}
-
 		s := syncv1.NewSync(
 			db,
-			events,
+			pick(factories, func(f informers.SharedInformerFactory) kcache.SharedIndexInformer {
+				return f.Events().V1().Events().Informer()
+			}),
 			logs.GetChildLogger("events"),
 			schemav1.NewEvent,
 		)
 
 		return s.Run(ctx, syncv1.WithNoDelete(), syncv1.WithNoWarmup())
 	})
+
+	// Kubernetes records events about cluster-scoped objects, e.g., nodes and
+	// persistent volumes, in the default namespace. Keep synchronizing them even
+	// if the default namespace is filtered out. A sync waits until all its
+	// informers have synced, so they get a sync of their own. Otherwise, missing
+	// permission for events in the default namespace would block all events.
+	if (len(cfg.Namespaces.Include) > 0 &&
+		!slices.Contains(cfg.Namespaces.Include, v1.NamespaceDefault)) ||
+		slices.Contains(cfg.Namespaces.Exclude, v1.NamespaceDefault) {
+		g.Go(func() error {
+			clusterEvents := informers.NewSharedInformerFactoryWithOptions(
+				clientset,
+				0,
+				informers.WithNamespace(v1.NamespaceDefault),
+				withFieldSelector(fields.OneTermEqualSelector("regarding.namespace", "")),
+			)
+
+			s := syncv1.NewSync(
+				db,
+				pick([]informers.SharedInformerFactory{clusterEvents}, func(f informers.SharedInformerFactory) kcache.SharedIndexInformer {
+					return f.Events().V1().Events().Informer()
+				}),
+				logs.GetChildLogger("events"),
+				schemav1.NewEvent,
+			)
+
+			return s.Run(ctx, syncv1.WithNoDelete(), syncv1.WithNoWarmup())
+		})
+	}
 
 	g.Go(func() error {
 		s := syncv1.NewSync(
