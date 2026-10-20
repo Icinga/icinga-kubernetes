@@ -492,12 +492,7 @@ func main() {
 	}
 
 	g.Go(func() error {
-		return SyncServicePods(
-			ctx,
-			db,
-			syncv1.NewTypedInformers[*kcorev1.Service](factories...),
-			syncv1.NewTypedInformers[*kcorev1.Pod](factories...),
-		)
+		return SyncServicePods(ctx, db, syncv1.NewTypedInformers[*kcorev1.Service](factories...), syncv1.NewTypedInformers[*kcorev1.Pod](factories...))
 	})
 
 	err = internal.SyncPrometheusConfig(ctx, db.DB, &cfg.Prometheus, clusterInstance.Uuid)
@@ -536,27 +531,16 @@ func main() {
 		)
 
 		g.Go(func() error {
-			return promMetricSync.Nodes(
-				ctx,
-				syncv1.NewTypedInformers[*kcorev1.Node](clusterFactory),
-			)
+			return promMetricSync.Nodes(ctx, syncv1.NewTypedInformers[*kcorev1.Node](clusterFactory))
 		})
 
 		g.Go(func() error {
-			return promMetricSync.Pods(
-				ctx,
-				syncv1.NewTypedInformers[*kcorev1.Pod](factories...),
-			)
+			return promMetricSync.Pods(ctx, syncv1.NewTypedInformers[*kcorev1.Pod](factories...))
 		})
 	}
 
 	g.Go(func() error {
-		s := syncv1.NewSync(
-			db,
-			syncv1.NewTypedInformers[*kcorev1.Namespace](namespaceFactory),
-			logs.GetChildLogger("namespaces"),
-			schemav1.NewNamespace,
-		)
+		s := syncv1.NewSync(db, syncv1.NewTypedInformers[*kcorev1.Namespace](namespaceFactory), logs.GetChildLogger("namespaces"), schemav1.NewNamespace)
 
 		return s.Run(ctx)
 	})
@@ -565,12 +549,7 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := syncv1.NewSync(
-			db,
-			syncv1.NewTypedInformers[*kcorev1.Node](clusterFactory),
-			logs.GetChildLogger("nodes"),
-			schemav1.NewNode,
-		)
+		s := syncv1.NewSync(db, syncv1.NewTypedInformers[*kcorev1.Node](clusterFactory), logs.GetChildLogger("nodes"), schemav1.NewNode)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -588,21 +567,10 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		schemav1.SyncContainers(
-			ctx,
-			db,
-			g,
-			cachev1.Multiplexers().Pods().UpsertEvents().Out(),
-			cachev1.Multiplexers().Pods().DeleteEvents().Out(),
-		)
+		schemav1.SyncContainers(ctx, db, g, cachev1.Multiplexers().Pods().UpsertEvents().Out(), cachev1.Multiplexers().Pods().DeleteEvents().Out())
 
-		podFactory := schemav1.NewPodFactory(clientset)
-		s := syncv1.NewSync(
-			db,
-			syncv1.NewTypedInformers[*kcorev1.Pod](factories...),
-			logs.GetChildLogger("pods"),
-			podFactory.New,
-		)
+		f := schemav1.NewPodFactory(clientset)
+		s := syncv1.NewSync(db, syncv1.NewTypedInformers[*kcorev1.Pod](factories...), logs.GetChildLogger("pods"), f.New)
 
 		wg.Done()
 
@@ -615,12 +583,7 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := syncv1.NewSync(
-			db,
-			syncv1.NewTypedInformers[*kappsv1.Deployment](factories...),
-			logs.GetChildLogger("deployments"),
-			schemav1.NewDeployment,
-		)
+		s := syncv1.NewSync(db, syncv1.NewTypedInformers[*kappsv1.Deployment](factories...), logs.GetChildLogger("deployments"), schemav1.NewDeployment)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -638,12 +601,7 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := syncv1.NewSync(
-			db,
-			syncv1.NewTypedInformers[*kappsv1.DaemonSet](factories...),
-			logs.GetChildLogger("daemon-sets"),
-			schemav1.NewDaemonSet,
-		)
+		s := syncv1.NewSync(db, syncv1.NewTypedInformers[*kappsv1.DaemonSet](factories...), logs.GetChildLogger("daemon-sets"), schemav1.NewDaemonSet)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -661,12 +619,7 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := syncv1.NewSync(
-			db,
-			syncv1.NewTypedInformers[*kappsv1.ReplicaSet](factories...),
-			logs.GetChildLogger("replica-sets"),
-			schemav1.NewReplicaSet,
-		)
+		s := syncv1.NewSync(db, syncv1.NewTypedInformers[*kappsv1.ReplicaSet](factories...), logs.GetChildLogger("replica-sets"), schemav1.NewReplicaSet)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -684,12 +637,7 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := syncv1.NewSync(
-			db,
-			syncv1.NewTypedInformers[*kappsv1.StatefulSet](factories...),
-			logs.GetChildLogger("stateful-sets"),
-			schemav1.NewStatefulSet,
-		)
+		s := syncv1.NewSync(db, syncv1.NewTypedInformers[*kappsv1.StatefulSet](factories...), logs.GetChildLogger("stateful-sets"), schemav1.NewStatefulSet)
 
 		var forwardForNotifications []syncv1.Feature
 		if cfg.Notifications.Url != "" {
@@ -706,13 +654,8 @@ func main() {
 	})
 
 	g.Go(func() error {
-		serviceFactory := schemav1.NewServiceFactory(clientset)
-		s := syncv1.NewSync(
-			db,
-			syncv1.NewTypedInformers[*kcorev1.Service](factories...),
-			logs.GetChildLogger("services"),
-			serviceFactory.NewService,
-		)
+		f := schemav1.NewServiceFactory(clientset)
+		s := syncv1.NewSync(db, syncv1.NewTypedInformers[*kcorev1.Service](factories...), logs.GetChildLogger("services"), f.NewService)
 
 		return s.Run(
 			ctx,
@@ -721,45 +664,25 @@ func main() {
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(
-			db,
-			syncv1.NewTypedInformers[*kdiscoveryv1.EndpointSlice](factories...),
-			logs.GetChildLogger("endpoints"),
-			schemav1.NewEndpointSlice,
-		)
+		s := syncv1.NewSync(db, syncv1.NewTypedInformers[*kdiscoveryv1.EndpointSlice](factories...), logs.GetChildLogger("endpoints"), schemav1.NewEndpointSlice)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(
-			db,
-			syncv1.NewTypedInformers[*kcorev1.Secret](factories...),
-			logs.GetChildLogger("secrets"),
-			schemav1.NewSecret,
-		)
+		s := syncv1.NewSync(db, syncv1.NewTypedInformers[*kcorev1.Secret](factories...), logs.GetChildLogger("secrets"), schemav1.NewSecret)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(
-			db,
-			syncv1.NewTypedInformers[*kcorev1.ConfigMap](factories...),
-			logs.GetChildLogger("config-maps"),
-			schemav1.NewConfigMap,
-		)
+		s := syncv1.NewSync(db, syncv1.NewTypedInformers[*kcorev1.ConfigMap](factories...), logs.GetChildLogger("config-maps"), schemav1.NewConfigMap)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(
-			db,
-			syncv1.NewTypedInformers[*keventsv1.Event](factories...),
-			logs.GetChildLogger("events"),
-			schemav1.NewEvent,
-		)
+		s := syncv1.NewSync(db, syncv1.NewTypedInformers[*keventsv1.Event](factories...), logs.GetChildLogger("events"), schemav1.NewEvent)
 
 		return s.Run(ctx, syncv1.WithNoDelete(), syncv1.WithNoWarmup())
 	})
@@ -780,68 +703,38 @@ func main() {
 				withFieldSelector(fields.OneTermEqualSelector("regarding.namespace", "")),
 			)
 
-			s := syncv1.NewSync(
-				db,
-				syncv1.NewTypedInformers[*keventsv1.Event](clusterEvents),
-				logs.GetChildLogger("events"),
-				schemav1.NewEvent,
-			)
+			s := syncv1.NewSync(db, syncv1.NewTypedInformers[*keventsv1.Event](clusterEvents), logs.GetChildLogger("events"), schemav1.NewEvent)
 
 			return s.Run(ctx, syncv1.WithNoDelete(), syncv1.WithNoWarmup())
 		})
 	}
 
 	g.Go(func() error {
-		s := syncv1.NewSync(
-			db,
-			syncv1.NewTypedInformers[*kcorev1.PersistentVolumeClaim](factories...),
-			logs.GetChildLogger("pvcs"),
-			schemav1.NewPvc,
-		)
+		s := syncv1.NewSync(db, syncv1.NewTypedInformers[*kcorev1.PersistentVolumeClaim](factories...), logs.GetChildLogger("pvcs"), schemav1.NewPvc)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(
-			db,
-			syncv1.NewTypedInformers[*kcorev1.PersistentVolume](clusterFactory),
-			logs.GetChildLogger("persistent-volumes"),
-			schemav1.NewPersistentVolume,
-		)
+		s := syncv1.NewSync(db, syncv1.NewTypedInformers[*kcorev1.PersistentVolume](clusterFactory), logs.GetChildLogger("persistent-volumes"), schemav1.NewPersistentVolume)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(
-			db,
-			syncv1.NewTypedInformers[*kbatchv1.Job](factories...),
-			logs.GetChildLogger("jobs"),
-			schemav1.NewJob,
-		)
+		s := syncv1.NewSync(db, syncv1.NewTypedInformers[*kbatchv1.Job](factories...), logs.GetChildLogger("jobs"), schemav1.NewJob)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(
-			db,
-			syncv1.NewTypedInformers[*kbatchv1.CronJob](factories...),
-			logs.GetChildLogger("cron-jobs"),
-			schemav1.NewCronJob,
-		)
+		s := syncv1.NewSync(db, syncv1.NewTypedInformers[*kbatchv1.CronJob](factories...), logs.GetChildLogger("cron-jobs"), schemav1.NewCronJob)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := syncv1.NewSync(
-			db,
-			syncv1.NewTypedInformers[*knetworkingv1.Ingress](factories...),
-			logs.GetChildLogger("ingresses"),
-			schemav1.NewIngress,
-		)
+		s := syncv1.NewSync(db, syncv1.NewTypedInformers[*knetworkingv1.Ingress](factories...), logs.GetChildLogger("ingresses"), schemav1.NewIngress)
 
 		return s.Run(ctx)
 	})
