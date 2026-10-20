@@ -46,6 +46,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	kcache "k8s.io/client-go/tools/cache"
@@ -448,30 +449,34 @@ func main() {
 
 	clusterFactory := informers.NewSharedInformerFactory(clientset, 0)
 
-	var factories, namespaceFactories []informers.SharedInformerFactory
+	factories := []informers.SharedInformerFactory{clusterFactory}
+	namespaceFactory := clusterFactory
 
 	switch {
 	case len(cfg.Namespaces.Include) > 0:
-		for _, ns := range cfg.Namespaces.Include {
-			factories = append(factories, informers.NewSharedInformerFactoryWithOptions(
-				clientset, 0, informers.WithNamespace(ns)))
-			namespaceFactories = append(namespaceFactories, informers.NewSharedInformerFactoryWithOptions(
-				clientset, 0, withFieldSelector(fields.OneTermEqualSelector("metadata.name", ns))))
-		}
-	case len(cfg.Namespaces.Exclude) > 0:
-		var byNamespace, byName []fields.Selector
-		for _, ns := range cfg.Namespaces.Exclude {
-			byNamespace = append(byNamespace, fields.OneTermNotEqualSelector("metadata.namespace", ns))
-			byName = append(byName, fields.OneTermNotEqualSelector("metadata.name", ns))
+		factories = nil
+		for _, n := range cfg.Namespaces.Include {
+			factories = append(factories, informers.NewSharedInformerFactoryWithOptions(clientset, 0, informers.WithNamespace(n)))
 		}
 
-		factories = append(factories, informers.NewSharedInformerFactoryWithOptions(
-			clientset, 0, withFieldSelector(fields.AndSelectors(byNamespace...))))
-		namespaceFactories = append(namespaceFactories, informers.NewSharedInformerFactoryWithOptions(
-			clientset, 0, withFieldSelector(fields.AndSelectors(byName...))))
-	default:
-		factories = append(factories, clusterFactory)
-		namespaceFactories = append(namespaceFactories, clusterFactory)
+		namespaceFactory, err = newNamespaceFactory(clientset, selection.In, cfg.Namespaces.Include)
+		if err != nil {
+			logger.Fatalw("Cannot select included namespaces", logging.Error(err))
+		}
+	case len(cfg.Namespaces.Exclude) > 0:
+		var byNamespace []fields.Selector
+		for _, n := range cfg.Namespaces.Exclude {
+			byNamespace = append(byNamespace, fields.OneTermNotEqualSelector("metadata.namespace", n))
+		}
+
+		factories = []informers.SharedInformerFactory{
+			informers.NewSharedInformerFactoryWithOptions(clientset, 0, withFieldSelector(fields.AndSelectors(byNamespace...))),
+		}
+
+		namespaceFactory, err = newNamespaceFactory(clientset, selection.NotIn, cfg.Namespaces.Exclude)
+		if err != nil {
+			logger.Fatalw("Cannot select excluded namespaces", logging.Error(err))
+		}
 	}
 
 	g.Go(func() error {
@@ -542,7 +547,7 @@ func main() {
 	g.Go(func() error {
 		s := sync.NewSync(
 			db,
-			pick(namespaceFactories, func(f informers.SharedInformerFactory) kcache.SharedIndexInformer {
+			pick([]informers.SharedInformerFactory{namespaceFactory}, func(f informers.SharedInformerFactory) kcache.SharedIndexInformer {
 				return f.Core().V1().Namespaces().Informer()
 			}),
 			logs.GetChildLogger("namespaces"),
@@ -930,6 +935,26 @@ func main() {
 	if err := g.Wait(); err != nil {
 		logger.Fatalw("Cannot run Icinga for Kubernetes", logging.Error(err))
 	}
+}
+
+// newNamespaceFactory returns a factory whose informers only see the namespaces that op selects from names.
+// It selects by the name label that Kubernetes sets on every namespace,
+// because field selectors can only match a single name.
+func newNamespaceFactory(
+	clientset kubernetes.Interface, op selection.Operator, names []string,
+) (informers.SharedInformerFactory, error) {
+	byName, err := labels.NewRequirement(kcorev1.LabelMetadataName, op, names)
+	if err != nil {
+		return nil, err
+	}
+
+	return informers.NewSharedInformerFactoryWithOptions(
+		clientset,
+		0,
+		informers.WithTweakListOptions(func(o *v1.ListOptions) {
+			o.LabelSelector = byName.String()
+		}),
+	), nil
 }
 
 // withFieldSelector restricts all informers of a factory to objects matching selector.
