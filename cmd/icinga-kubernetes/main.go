@@ -792,24 +792,6 @@ func removeCluster(ctx context.Context, db *kdatabase.DB, logger *logging.Logger
 		)
 	}
 
-	// Pods don't cascade deletes to their containers, so remove the containers first.
-	for _, container := range []database.Entity{&schema.Container{}, &schema.InitContainer{}, &schema.SidecarContainer{}} {
-		query := db.Rebind(db.BuildSelectStmt(container, uuidColumn{}) + fmt.Sprintf(
-			` WHERE "pod_uuid" IN (SELECT "uuid" FROM %q WHERE "cluster_uuid"=?)`,
-			database.TableName(&schema.Pod{}),
-		))
-
-		// Scanned into []any so that the UUIDs can feed DeleteStreamed's <-chan any.
-		var uuids []any
-		if err := db.SelectContext(ctx, &uuids, query, clusterUuid); err != nil {
-			return database.CantPerformQuery(err, query)
-		}
-
-		if err := db.DeleteStreamedCascading(ctx, container, utils.ChanFromSlice(uuids)); err != nil {
-			return errors.Wrapf(err, "cannot remove rows from %q", database.TableName(container))
-		}
-	}
-
 	if err := db.DeleteStreamedCascading(ctx, &schema.Cluster{}, utils.ChanFromSlice([]any{clusterUuid})); err != nil {
 		return errors.Wrap(err, "cannot remove cluster rows")
 	}
