@@ -21,6 +21,7 @@ type TypedInformers[T kmetav1.Object] []cache.SharedIndexInformer
 // Informers is what Sync and Controller need from informers, independent of the object type.
 type Informers interface {
 	AddEventHandler(handler cache.ResourceEventHandler) error
+	SetWatchErrorHandler(handler cache.WatchErrorHandlerWithContext) error
 	Run(stopCh <-chan struct{})
 	HasSynced() bool
 	Object(key string) (kmetav1.Object, bool, error)
@@ -69,7 +70,7 @@ func (i TypedInformers[T]) AddEventHandler(handler cache.ResourceEventHandler) e
 
 // SetWatchErrorHandler sets handler for the list and watch errors of all informers.
 // It must be called before Run.
-func (i Informers) SetWatchErrorHandler(handler cache.WatchErrorHandlerWithContext) error {
+func (i TypedInformers[T]) SetWatchErrorHandler(handler cache.WatchErrorHandlerWithContext) error {
 	for _, informer := range i {
 		if err := informer.SetWatchErrorHandlerWithContext(handler); err != nil {
 			return err

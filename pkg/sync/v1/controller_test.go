@@ -6,7 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/logging"
+	"github.com/icinga/icinga-kubernetes/pkg/kdatabase"
 	"go.uber.org/zap"
 	kcorev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -18,6 +20,17 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	ktesting "k8s.io/client-go/testing"
 )
+
+// keyEntity is the database.Entity a test sink emits for an upserted object,
+// identified by its key.
+type keyEntity struct {
+	kdatabase.EntityStub
+	key string
+}
+
+func (e keyEntity) ID() database.ID { return e }
+
+func (e keyEntity) String() string { return e.key }
 
 func TestControllerStreamForbidden(t *testing.T) {
 	newController := func(forbidden string) *Controller {
@@ -34,7 +47,7 @@ func TestControllerStreamForbidden(t *testing.T) {
 			return a.GetNamespace() == forbidden, nil, deny
 		})
 
-		var i Informers
+		var i TypedInformers[*kcorev1.Pod]
 		for _, ns := range []string{"a", "b"} {
 			factory := informers.NewSharedInformerFactoryWithOptions(client, 0, informers.WithNamespace(ns))
 			i = append(i, factory.Core().V1().Pods().Informer())
@@ -47,7 +60,7 @@ func TestControllerStreamForbidden(t *testing.T) {
 		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 		defer cancel()
 
-		err := newController("b").Stream(ctx, NewSink(func(*Item) any { return nil }, nil))
+		err := newController("b").Stream(ctx, NewSink(func(i *Item) database.Entity { return keyEntity{key: i.Key} }, nil))
 		if !kerrors.IsForbidden(err) {
 			t.Fatalf("Stream() = %v, want forbidden error", err)
 		}
@@ -55,7 +68,7 @@ func TestControllerStreamForbidden(t *testing.T) {
 
 	t.Run("Permitted", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
-		sink := NewSink(func(*Item) any { return nil }, nil)
+		sink := NewSink(func(i *Item) database.Entity { return keyEntity{key: i.Key} }, nil)
 
 		errs := make(chan error, 1)
 		go func() { errs <- newController("").Stream(ctx, sink) }()
