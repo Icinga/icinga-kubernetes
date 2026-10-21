@@ -729,11 +729,6 @@ func main() {
 		})
 	})
 
-	interval := time.Hour
-	if cfg.DeletedRetention < time.Hour {
-		interval = time.Minute
-	}
-
 	// Every kind synced without WithNoDelete() is soft-deleted, so it
 	// needs a deleted column in the schema and an entry in this list.
 	// Otherwise, its soft delete fails, or its rows are never purged.
@@ -763,8 +758,8 @@ func main() {
 					Column:      "deleted",
 					ClusterUuid: cluster.ClusterUuidFromContext(ctx),
 				},
-				kdatabase.WithInterval(interval),
-				kdatabase.WithRetention(cfg.DeletedRetention),
+				kdatabase.WithInterval(time.Minute),
+				kdatabase.WithRetention(5*time.Minute),
 			)
 		})
 	}
