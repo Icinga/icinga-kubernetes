@@ -30,11 +30,9 @@ type CronJob struct {
 	Yaml                       string
 	IcingaState                IcingaState
 	IcingaStateReason          string
-	Labels                     []Label              `db:"-"`
-	ResourceLabels             []ResourceLabel      `db:"-"`
-	Annotations                []Annotation         `db:"-"`
-	ResourceAnnotations        []ResourceAnnotation `db:"-"`
-	Favorites                  []Favorite           `db:"-"`
+	Labels                     []Label      `db:"-"`
+	Annotations                []Annotation `db:"-"`
+	Favorites                  []Favorite   `db:"-"`
 }
 
 func NewCronJob() Resource {
@@ -82,10 +80,6 @@ func (c *CronJob) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			Name:         labelName,
 			Value:        labelValue,
 		})
-		c.ResourceLabels = append(c.ResourceLabels, ResourceLabel{
-			ResourceUuid: c.Uuid,
-			LabelUuid:    labelUuid,
-		})
 	}
 
 	for annotationName, annotationValue := range cronJob.Annotations {
@@ -95,10 +89,6 @@ func (c *CronJob) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			ResourceUuid: c.Uuid,
 			Name:         annotationName,
 			Value:        annotationValue,
-		})
-		c.ResourceAnnotations = append(c.ResourceAnnotations, ResourceAnnotation{
-			ResourceUuid:   c.Uuid,
-			AnnotationUuid: annotationUuid,
 		})
 	}
 
@@ -145,9 +135,7 @@ func (c *CronJob) getIcingaState() (IcingaState, string) {
 
 func (c *CronJob) Relations() []kdatabase.Relation {
 	return []kdatabase.Relation{
-		kdatabase.HasMany(c.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(c.Labels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(c.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(c.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(c.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}

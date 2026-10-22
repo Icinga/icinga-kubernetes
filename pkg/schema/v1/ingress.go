@@ -22,9 +22,7 @@ type Ingress struct {
 	IngressBackendResource []IngressBackendResource `db:"-"`
 	IngressRule            []IngressRule            `db:"-"`
 	Labels                 []Label                  `db:"-"`
-	ResourceLabels         []ResourceLabel          `db:"-"`
 	Annotations            []Annotation             `db:"-"`
-	ResourceAnnotations    []ResourceAnnotation     `db:"-"`
 	Favorites              []Favorite               `db:"-"`
 }
 
@@ -192,10 +190,6 @@ func (i *Ingress) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			Name:         labelName,
 			Value:        labelValue,
 		})
-		i.ResourceLabels = append(i.ResourceLabels, ResourceLabel{
-			ResourceUuid: i.Uuid,
-			LabelUuid:    labelUuid,
-		})
 	}
 
 	for annotationName, annotationValue := range ingress.Annotations {
@@ -205,10 +199,6 @@ func (i *Ingress) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			ResourceUuid: i.Uuid,
 			Name:         annotationName,
 			Value:        annotationValue,
-		})
-		i.ResourceAnnotations = append(i.ResourceAnnotations, ResourceAnnotation{
-			ResourceUuid:   i.Uuid,
-			AnnotationUuid: annotationUuid,
 		})
 	}
 
@@ -227,9 +217,7 @@ func (i *Ingress) Relations() []kdatabase.Relation {
 		kdatabase.HasMany(i.IngressBackendService, fk),
 		kdatabase.HasMany(i.IngressBackendResource, fk),
 		kdatabase.HasMany(i.IngressRule, fk),
-		kdatabase.HasMany(i.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(i.Labels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(i.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(i.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(i.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}

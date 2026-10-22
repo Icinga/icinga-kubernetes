@@ -37,15 +37,13 @@ type Service struct {
 	LoadBalancerClass             sql.NullString
 	InternalTrafficPolicy         string
 	Yaml                          string
-	Selectors                     []ServiceSelector    `db:"-"`
-	Ports                         []ServicePort        `db:"-"`
-	Conditions                    []ServiceCondition   `db:"-"`
-	Labels                        []Label              `db:"-"`
-	ResourceLabels                []ResourceLabel      `db:"-"`
-	Annotations                   []Annotation         `db:"-"`
-	ResourceAnnotations           []ResourceAnnotation `db:"-"`
-	ServicePods                   []ServicePod         `db:"-"`
-	Favorites                     []Favorite           `db:"-"`
+	Selectors                     []ServiceSelector  `db:"-"`
+	Ports                         []ServicePort      `db:"-"`
+	Conditions                    []ServiceCondition `db:"-"`
+	Labels                        []Label            `db:"-"`
+	Annotations                   []Annotation       `db:"-"`
+	ServicePods                   []ServicePod       `db:"-"`
+	Favorites                     []Favorite         `db:"-"`
 	factory                       *ServiceFactory
 }
 
@@ -136,10 +134,6 @@ func (s *Service) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			Name:         labelName,
 			Value:        labelValue,
 		})
-		s.ResourceLabels = append(s.ResourceLabels, ResourceLabel{
-			ResourceUuid: s.Uuid,
-			LabelUuid:    labelUuid,
-		})
 	}
 
 	for annotationName, annotationValue := range service.Annotations {
@@ -149,10 +143,6 @@ func (s *Service) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			ResourceUuid: s.Uuid,
 			Name:         annotationName,
 			Value:        annotationValue,
-		})
-		s.ResourceAnnotations = append(s.ResourceAnnotations, ResourceAnnotation{
-			ResourceUuid:   s.Uuid,
-			AnnotationUuid: annotationUuid,
 		})
 	}
 
@@ -251,9 +241,7 @@ func (s *Service) Relations() []kdatabase.Relation {
 		kdatabase.HasMany(s.Conditions, fk),
 		kdatabase.HasMany(s.Ports, fk),
 		kdatabase.HasMany(s.Selectors, fk),
-		kdatabase.HasMany(s.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(s.Labels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(s.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(s.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(s.ServicePods, fk),
 		kdatabase.HasMany(s.Favorites, kdatabase.WithForeignKey("resource_uuid")),

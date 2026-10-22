@@ -35,13 +35,11 @@ type Job struct {
 	Yaml                    string
 	IcingaState             IcingaState
 	IcingaStateReason       string
-	Conditions              []JobCondition       `db:"-"`
-	Labels                  []Label              `db:"-"`
-	ResourceLabels          []ResourceLabel      `db:"-"`
-	Annotations             []Annotation         `db:"-"`
-	ResourceAnnotations     []ResourceAnnotation `db:"-"`
-	Owners                  []JobOwner           `db:"-"`
-	Favorites               []Favorite           `db:"-"`
+	Conditions              []JobCondition `db:"-"`
+	Labels                  []Label        `db:"-"`
+	Annotations             []Annotation   `db:"-"`
+	Owners                  []JobOwner     `db:"-"`
+	Favorites               []Favorite     `db:"-"`
 }
 
 type JobCondition struct {
@@ -161,10 +159,6 @@ func (j *Job) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			Name:         labelName,
 			Value:        labelValue,
 		})
-		j.ResourceLabels = append(j.ResourceLabels, ResourceLabel{
-			ResourceUuid: j.Uuid,
-			LabelUuid:    labelUuid,
-		})
 	}
 
 	for annotationName, annotationValue := range job.Annotations {
@@ -174,10 +168,6 @@ func (j *Job) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			ResourceUuid: j.Uuid,
 			Name:         annotationName,
 			Value:        annotationValue,
-		})
-		j.ResourceAnnotations = append(j.ResourceAnnotations, ResourceAnnotation{
-			ResourceUuid:   j.Uuid,
-			AnnotationUuid: annotationUuid,
 		})
 	}
 
@@ -275,9 +265,7 @@ func (j *Job) Relations() []kdatabase.Relation {
 
 	return []kdatabase.Relation{
 		kdatabase.HasMany(j.Conditions, fk),
-		kdatabase.HasMany(j.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(j.Labels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(j.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(j.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(j.Owners, fk),
 		kdatabase.HasMany(j.Favorites, kdatabase.WithForeignKey("resource_uuid")),
