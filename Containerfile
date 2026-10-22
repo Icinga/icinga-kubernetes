@@ -1,4 +1,6 @@
-FROM golang:1 AS base
+# Run the Go toolchain on the build host's platform and cross-compile for the target platform,
+# so that multi-platform builds don't run the compiler under emulation.
+FROM --platform=$BUILDPLATFORM golang:1 AS base
 
 # Cache dependencies:
 # The go mod download command uses a cache mount,
@@ -11,13 +13,15 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 FROM base AS build
 
+ARG TARGETOS TARGETARCH
+
 # Mount source code and build:
 # The --mount=target=. option mounts the source code without adding an extra image layer, unlike `COPY . .`.
 # The go build command uses the dependency cache and a dedicated mount to cache build artifacts for future builds.
 RUN --mount=target=. \
     --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 go build -trimpath -ldflags '-s -w' -o /icinga-kubernetes ./cmd/icinga-kubernetes/main.go
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags '-s -w' -o /icinga-kubernetes ./cmd/icinga-kubernetes/main.go
 
 FROM scratch
 
