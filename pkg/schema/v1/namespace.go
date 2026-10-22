@@ -16,7 +16,6 @@ type Namespace struct {
 	Yaml                string
 	Conditions          []NamespaceCondition `db:"-"`
 	Labels              []Label              `db:"-"`
-	NamespaceLabels     []NamespaceLabel     `db:"-"`
 	ResourceLabels      []ResourceLabel      `db:"-"`
 	Annotations         []Annotation         `db:"-"`
 	ResourceAnnotations []ResourceAnnotation `db:"-"`
@@ -35,16 +34,6 @@ type NamespaceCondition struct {
 
 func (n NamespaceCondition) ID() database.ID {
 	return compoundId{id: n.NamespaceUuid.String() + n.Type}
-}
-
-type NamespaceLabel struct {
-	kdatabase.EntityStub
-	NamespaceUuid types.UUID
-	LabelUuid     types.UUID
-}
-
-func (n NamespaceLabel) ID() database.ID {
-	return compoundId{id: n.NamespaceUuid.String() + n.LabelUuid.String()}
 }
 
 func NewNamespace() Resource {
@@ -72,13 +61,10 @@ func (n *Namespace) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	for labelName, labelValue := range namespace.Labels {
 		labelUuid := NewUUID(n.Uuid, strings.ToLower(labelName+":"+labelValue))
 		n.Labels = append(n.Labels, Label{
-			Uuid:  labelUuid,
-			Name:  labelName,
-			Value: labelValue,
-		})
-		n.NamespaceLabels = append(n.NamespaceLabels, NamespaceLabel{
-			NamespaceUuid: n.Uuid,
-			LabelUuid:     labelUuid,
+			Uuid:         labelUuid,
+			ResourceUuid: n.Uuid,
+			Name:         labelName,
+			Value:        labelValue,
 		})
 		n.ResourceLabels = append(n.ResourceLabels, ResourceLabel{
 			ResourceUuid: n.Uuid,
@@ -109,8 +95,7 @@ func (n *Namespace) Relations() []kdatabase.Relation {
 	return []kdatabase.Relation{
 		kdatabase.HasMany(n.Conditions, fk),
 		kdatabase.HasMany(n.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(n.Labels, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(n.NamespaceLabels, fk),
+		kdatabase.HasMany(n.Labels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(n.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(n.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(n.Favorites, kdatabase.WithForeignKey("resource_uuid")),

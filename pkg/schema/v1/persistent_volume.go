@@ -14,24 +14,23 @@ import (
 
 type PersistentVolume struct {
 	Meta
-	AccessModes            Bitmask[kpersistentVolumeAccessModesSize]
-	Capacity               int64
-	ReclaimPolicy          string
-	StorageClass           sql.NullString
-	VolumeMode             string
-	VolumeSourceType       string
-	VolumeSource           string
-	Phase                  string
-	Reason                 sql.NullString
-	Message                sql.NullString
-	Yaml                   string
-	Claim                  *PersistentVolumeClaimRef `db:"-"`
-	Labels                 []Label                   `db:"-"`
-	PersistentVolumeLabels []PersistentVolumeLabel   `db:"-"`
-	ResourceLabels         []ResourceLabel           `db:"-"`
-	Annotations            []Annotation              `db:"-"`
-	ResourceAnnotations    []ResourceAnnotation      `db:"-"`
-	Favorites              []Favorite                `db:"-"`
+	AccessModes         Bitmask[kpersistentVolumeAccessModesSize]
+	Capacity            int64
+	ReclaimPolicy       string
+	StorageClass        sql.NullString
+	VolumeMode          string
+	VolumeSourceType    string
+	VolumeSource        string
+	Phase               string
+	Reason              sql.NullString
+	Message             sql.NullString
+	Yaml                string
+	Claim               *PersistentVolumeClaimRef `db:"-"`
+	Labels              []Label                   `db:"-"`
+	ResourceLabels      []ResourceLabel           `db:"-"`
+	Annotations         []Annotation              `db:"-"`
+	ResourceAnnotations []ResourceAnnotation      `db:"-"`
+	Favorites           []Favorite                `db:"-"`
 }
 
 type PersistentVolumeClaimRef struct {
@@ -44,16 +43,6 @@ type PersistentVolumeClaimRef struct {
 
 func (p PersistentVolumeClaimRef) ID() database.ID {
 	return compoundId{id: p.PersistentVolumeUuid.String() + string(p.Uid)}
-}
-
-type PersistentVolumeLabel struct {
-	kdatabase.EntityStub
-	PersistentVolumeUuid types.UUID
-	LabelUuid            types.UUID
-}
-
-func (p PersistentVolumeLabel) ID() database.ID {
-	return compoundId{id: p.PersistentVolumeUuid.String() + p.LabelUuid.String()}
 }
 
 func NewPersistentVolume() Resource {
@@ -98,13 +87,10 @@ func (p *PersistentVolume) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	for labelName, labelValue := range persistentVolume.Labels {
 		labelUuid := NewUUID(p.Uuid, strings.ToLower(labelName+":"+labelValue))
 		p.Labels = append(p.Labels, Label{
-			Uuid:  labelUuid,
-			Name:  labelName,
-			Value: labelValue,
-		})
-		p.PersistentVolumeLabels = append(p.PersistentVolumeLabels, PersistentVolumeLabel{
-			PersistentVolumeUuid: p.Uuid,
-			LabelUuid:            labelUuid,
+			Uuid:         labelUuid,
+			ResourceUuid: p.Uuid,
+			Name:         labelName,
+			Value:        labelValue,
 		})
 		p.ResourceLabels = append(p.ResourceLabels, ResourceLabel{
 			ResourceUuid: p.Uuid,
@@ -135,8 +121,7 @@ func (p *PersistentVolume) Relations() []kdatabase.Relation {
 	return []kdatabase.Relation{
 		kdatabase.HasOne(p.Claim, fk),
 		kdatabase.HasMany(p.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(p.Labels, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(p.PersistentVolumeLabels, fk),
+		kdatabase.HasMany(p.Labels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(p.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(p.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(p.Favorites, kdatabase.WithForeignKey("resource_uuid")),

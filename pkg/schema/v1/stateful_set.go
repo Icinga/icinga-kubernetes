@@ -36,7 +36,6 @@ type StatefulSet struct {
 	Conditions                                      []StatefulSetCondition `db:"-"`
 	Owners                                          []StatefulSetOwner     `db:"-"`
 	Labels                                          []Label                `db:"-"`
-	StatefulSetLabels                               []StatefulSetLabel     `db:"-"`
 	ResourceLabels                                  []ResourceLabel        `db:"-"`
 	Annotations                                     []Annotation           `db:"-"`
 	ResourceAnnotations                             []ResourceAnnotation   `db:"-"`
@@ -70,16 +69,6 @@ type StatefulSetOwner struct {
 
 func (s StatefulSetOwner) ID() database.ID {
 	return compoundId{id: s.StatefulSetUuid.String() + s.OwnerUuid.String()}
-}
-
-type StatefulSetLabel struct {
-	kdatabase.EntityStub
-	StatefulSetUuid types.UUID
-	LabelUuid       types.UUID
-}
-
-func (s StatefulSetLabel) ID() database.ID {
-	return compoundId{id: s.StatefulSetUuid.String() + s.LabelUuid.String()}
 }
 
 func NewStatefulSet() Resource {
@@ -161,13 +150,10 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	for labelName, labelValue := range statefulSet.Labels {
 		labelUuid := NewUUID(s.Uuid, strings.ToLower(labelName+":"+labelValue))
 		s.Labels = append(s.Labels, Label{
-			Uuid:  labelUuid,
-			Name:  labelName,
-			Value: labelValue,
-		})
-		s.StatefulSetLabels = append(s.StatefulSetLabels, StatefulSetLabel{
-			StatefulSetUuid: s.Uuid,
-			LabelUuid:       labelUuid,
+			Uuid:         labelUuid,
+			ResourceUuid: s.Uuid,
+			Name:         labelName,
+			Value:        labelValue,
 		})
 		s.ResourceLabels = append(s.ResourceLabels, ResourceLabel{
 			ResourceUuid: s.Uuid,
@@ -235,8 +221,7 @@ func (s *StatefulSet) Relations() []kdatabase.Relation {
 		kdatabase.HasMany(s.Conditions, fk),
 		kdatabase.HasMany(s.Owners, fk),
 		kdatabase.HasMany(s.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(s.Labels, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(s.StatefulSetLabels, fk),
+		kdatabase.HasMany(s.Labels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(s.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(s.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(s.Favorites, kdatabase.WithForeignKey("resource_uuid")),
