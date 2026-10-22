@@ -4,6 +4,7 @@ import (
 	"reflect"
 
 	"github.com/icinga/icinga-go-library/types"
+	"github.com/pkg/errors"
 	"golang.org/x/exp/constraints"
 	kappsv1 "k8s.io/api/apps/v1"
 	kbatchv1 "k8s.io/api/batch/v1"
@@ -34,8 +35,8 @@ func MarshalFirstNonNilStructFieldToJSON(i any) (string, string, error) {
 }
 
 // yamlEncoder is built once so that MarshalYaml doesn't set up a scheme and
-// codec on every call. Encoders are safe for concurrent use. A schema type from
-// a group not registered here gets empty YAML, since MarshalYaml ignores errors.
+// codec on every call. Encoders are safe for concurrent use. New schema types
+// from other API groups must register their group here, or MarshalYaml panics.
 var yamlEncoder = func() kruntime.Encoder {
 	scheme := kruntime.NewScheme()
 
@@ -58,9 +59,14 @@ var yamlEncoder = func() kruntime.Encoder {
 }()
 
 // MarshalYaml encodes obj as YAML, including its apiVersion and kind.
-// Encoding errors are ignored and yield empty YAML.
+// It panics if yamlEncoder doesn't register the API group of obj.
 func MarshalYaml(obj kruntime.Object) string {
-	output, _ := kruntime.Encode(yamlEncoder, obj)
+	output, err := kruntime.Encode(yamlEncoder, obj)
+	if err != nil {
+		// Encoding fails for types whose API group yamlEncoder doesn't
+		// register, which is a bug rather than a runtime condition.
+		panic(errors.Wrapf(err, "cannot encode %T as YAML", obj))
+	}
 
 	return string(output)
 }
