@@ -47,7 +47,6 @@ type Node struct {
 	NodeLabels              []NodeLabel          `db:"-"`
 	ResourceLabels          []ResourceLabel      `db:"-"`
 	Annotations             []Annotation         `db:"-"`
-	NodeAnnotations         []NodeAnnotation     `db:"-"`
 	ResourceAnnotations     []ResourceAnnotation `db:"-"`
 	Favorites               []Favorite           `db:"-"`
 }
@@ -87,16 +86,6 @@ type NodeLabel struct {
 
 func (n NodeLabel) ID() database.ID {
 	return compoundId{id: n.NodeUuid.String() + n.LabelUuid.String()}
-}
-
-type NodeAnnotation struct {
-	kdatabase.EntityStub
-	NodeUuid       types.UUID
-	AnnotationUuid types.UUID
-}
-
-func (n NodeAnnotation) ID() database.ID {
-	return compoundId{id: n.NodeUuid.String() + n.AnnotationUuid.String()}
 }
 
 func NewNode() Resource {
@@ -206,13 +195,10 @@ func (n *Node) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	for annotationName, annotationValue := range node.Annotations {
 		annotationUuid := NewUUID(n.Uuid, strings.ToLower(annotationName+":"+annotationValue))
 		n.Annotations = append(n.Annotations, Annotation{
-			Uuid:  annotationUuid,
-			Name:  annotationName,
-			Value: annotationValue,
-		})
-		n.NodeAnnotations = append(n.NodeAnnotations, NodeAnnotation{
-			NodeUuid:       n.Uuid,
-			AnnotationUuid: annotationUuid,
+			Uuid:         annotationUuid,
+			ResourceUuid: n.Uuid,
+			Name:         annotationName,
+			Value:        annotationValue,
 		})
 		n.ResourceAnnotations = append(n.ResourceAnnotations, ResourceAnnotation{
 			ResourceUuid:   n.Uuid,
@@ -303,8 +289,7 @@ func (n *Node) Relations() []kdatabase.Relation {
 		kdatabase.HasMany(n.Labels, kdatabase.WithoutCascadeDelete()),
 		kdatabase.HasMany(n.NodeLabels, fk),
 		kdatabase.HasMany(n.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(n.Annotations, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(n.NodeAnnotations, fk),
+		kdatabase.HasMany(n.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(n.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 
 		// Delete-only relations.

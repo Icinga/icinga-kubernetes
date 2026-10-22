@@ -32,7 +32,6 @@ type CronJob struct {
 	CronJobLabels              []CronJobLabel       `db:"-"`
 	ResourceLabels             []ResourceLabel      `db:"-"`
 	Annotations                []Annotation         `db:"-"`
-	CronJobAnnotations         []CronJobAnnotation  `db:"-"`
 	ResourceAnnotations        []ResourceAnnotation `db:"-"`
 	Favorites                  []Favorite           `db:"-"`
 }
@@ -45,16 +44,6 @@ type CronJobLabel struct {
 
 func (c CronJobLabel) ID() database.ID {
 	return compoundId{id: c.CronJobUuid.String() + c.LabelUuid.String()}
-}
-
-type CronJobAnnotation struct {
-	kdatabase.EntityStub
-	CronJobUuid    types.UUID
-	AnnotationUuid types.UUID
-}
-
-func (c CronJobAnnotation) ID() database.ID {
-	return compoundId{id: c.CronJobUuid.String() + c.AnnotationUuid.String()}
 }
 
 func NewCronJob() Resource {
@@ -114,13 +103,10 @@ func (c *CronJob) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	for annotationName, annotationValue := range cronJob.Annotations {
 		annotationUuid := NewUUID(c.Uuid, strings.ToLower(annotationName+":"+annotationValue))
 		c.Annotations = append(c.Annotations, Annotation{
-			Uuid:  annotationUuid,
-			Name:  annotationName,
-			Value: annotationValue,
-		})
-		c.CronJobAnnotations = append(c.CronJobAnnotations, CronJobAnnotation{
-			CronJobUuid:    c.Uuid,
-			AnnotationUuid: annotationUuid,
+			Uuid:         annotationUuid,
+			ResourceUuid: c.Uuid,
+			Name:         annotationName,
+			Value:        annotationValue,
 		})
 		c.ResourceAnnotations = append(c.ResourceAnnotations, ResourceAnnotation{
 			ResourceUuid:   c.Uuid,
@@ -173,8 +159,7 @@ func (c *CronJob) Relations() []kdatabase.Relation {
 		kdatabase.HasMany(c.Labels, kdatabase.WithoutCascadeDelete()),
 		kdatabase.HasMany(c.CronJobLabels, fk),
 		kdatabase.HasMany(c.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(c.Annotations, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(c.CronJobAnnotations, fk),
+		kdatabase.HasMany(c.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(c.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

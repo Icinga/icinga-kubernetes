@@ -22,7 +22,6 @@ type Ingress struct {
 	IngressLabels          []IngressLabel           `db:"-"`
 	ResourceLabels         []ResourceLabel          `db:"-"`
 	Annotations            []Annotation             `db:"-"`
-	IngressAnnotations     []IngressAnnotation      `db:"-"`
 	ResourceAnnotations    []ResourceAnnotation     `db:"-"`
 	Favorites              []Favorite               `db:"-"`
 }
@@ -88,16 +87,6 @@ type IngressLabel struct {
 
 func (i IngressLabel) ID() database.ID {
 	return compoundId{id: i.IngressUuid.String() + i.LabelUuid.String()}
-}
-
-type IngressAnnotation struct {
-	kdatabase.EntityStub
-	IngressUuid    types.UUID
-	AnnotationUuid types.UUID
-}
-
-func (i IngressAnnotation) ID() database.ID {
-	return compoundId{id: i.IngressUuid.String() + i.AnnotationUuid.String()}
 }
 
 func NewIngress() Resource {
@@ -223,13 +212,10 @@ func (i *Ingress) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	for annotationName, annotationValue := range ingress.Annotations {
 		annotationUuid := NewUUID(i.Uuid, strings.ToLower(annotationName+":"+annotationValue))
 		i.Annotations = append(i.Annotations, Annotation{
-			Uuid:  annotationUuid,
-			Name:  annotationName,
-			Value: annotationValue,
-		})
-		i.IngressAnnotations = append(i.IngressAnnotations, IngressAnnotation{
-			IngressUuid:    i.Uuid,
-			AnnotationUuid: annotationUuid,
+			Uuid:         annotationUuid,
+			ResourceUuid: i.Uuid,
+			Name:         annotationName,
+			Value:        annotationValue,
 		})
 		i.ResourceAnnotations = append(i.ResourceAnnotations, ResourceAnnotation{
 			ResourceUuid:   i.Uuid,
@@ -252,8 +238,7 @@ func (i *Ingress) Relations() []kdatabase.Relation {
 		kdatabase.HasMany(i.Labels, kdatabase.WithoutCascadeDelete()),
 		kdatabase.HasMany(i.IngressLabels, fk),
 		kdatabase.HasMany(i.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(i.Annotations, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(i.IngressAnnotations, fk),
+		kdatabase.HasMany(i.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(i.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

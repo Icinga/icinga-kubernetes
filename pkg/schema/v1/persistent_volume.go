@@ -14,25 +14,24 @@ import (
 
 type PersistentVolume struct {
 	Meta
-	AccessModes                 Bitmask[kpersistentVolumeAccessModesSize]
-	Capacity                    int64
-	ReclaimPolicy               string
-	StorageClass                sql.NullString
-	VolumeMode                  string
-	VolumeSourceType            string
-	VolumeSource                string
-	Phase                       string
-	Reason                      sql.NullString
-	Message                     sql.NullString
-	Yaml                        string
-	Claim                       *PersistentVolumeClaimRef    `db:"-"`
-	Labels                      []Label                      `db:"-"`
-	PersistentVolumeLabels      []PersistentVolumeLabel      `db:"-"`
-	ResourceLabels              []ResourceLabel              `db:"-"`
-	Annotations                 []Annotation                 `db:"-"`
-	PersistentVolumeAnnotations []PersistentVolumeAnnotation `db:"-"`
-	ResourceAnnotations         []ResourceAnnotation         `db:"-"`
-	Favorites                   []Favorite                   `db:"-"`
+	AccessModes            Bitmask[kpersistentVolumeAccessModesSize]
+	Capacity               int64
+	ReclaimPolicy          string
+	StorageClass           sql.NullString
+	VolumeMode             string
+	VolumeSourceType       string
+	VolumeSource           string
+	Phase                  string
+	Reason                 sql.NullString
+	Message                sql.NullString
+	Yaml                   string
+	Claim                  *PersistentVolumeClaimRef `db:"-"`
+	Labels                 []Label                   `db:"-"`
+	PersistentVolumeLabels []PersistentVolumeLabel   `db:"-"`
+	ResourceLabels         []ResourceLabel           `db:"-"`
+	Annotations            []Annotation              `db:"-"`
+	ResourceAnnotations    []ResourceAnnotation      `db:"-"`
+	Favorites              []Favorite                `db:"-"`
 }
 
 type PersistentVolumeClaimRef struct {
@@ -55,16 +54,6 @@ type PersistentVolumeLabel struct {
 
 func (p PersistentVolumeLabel) ID() database.ID {
 	return compoundId{id: p.PersistentVolumeUuid.String() + p.LabelUuid.String()}
-}
-
-type PersistentVolumeAnnotation struct {
-	kdatabase.EntityStub
-	PersistentVolumeUuid types.UUID
-	AnnotationUuid       types.UUID
-}
-
-func (p PersistentVolumeAnnotation) ID() database.ID {
-	return compoundId{id: p.PersistentVolumeUuid.String() + p.AnnotationUuid.String()}
 }
 
 func NewPersistentVolume() Resource {
@@ -126,13 +115,10 @@ func (p *PersistentVolume) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	for annotationName, annotationValue := range persistentVolume.Annotations {
 		annotationUuid := NewUUID(p.Uuid, strings.ToLower(annotationName+":"+annotationValue))
 		p.Annotations = append(p.Annotations, Annotation{
-			Uuid:  annotationUuid,
-			Name:  annotationName,
-			Value: annotationValue,
-		})
-		p.PersistentVolumeAnnotations = append(p.PersistentVolumeAnnotations, PersistentVolumeAnnotation{
-			PersistentVolumeUuid: p.Uuid,
-			AnnotationUuid:       annotationUuid,
+			Uuid:         annotationUuid,
+			ResourceUuid: p.Uuid,
+			Name:         annotationName,
+			Value:        annotationValue,
 		})
 		p.ResourceAnnotations = append(p.ResourceAnnotations, ResourceAnnotation{
 			ResourceUuid:   p.Uuid,
@@ -152,8 +138,7 @@ func (p *PersistentVolume) Relations() []kdatabase.Relation {
 		kdatabase.HasMany(p.Labels, kdatabase.WithoutCascadeDelete()),
 		kdatabase.HasMany(p.PersistentVolumeLabels, fk),
 		kdatabase.HasMany(p.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(p.Annotations, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(p.PersistentVolumeAnnotations, fk),
+		kdatabase.HasMany(p.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(p.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

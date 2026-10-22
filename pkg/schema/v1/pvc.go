@@ -49,7 +49,6 @@ type Pvc struct {
 	PvcLabels           []PvcLabel           `db:"-"`
 	ResourceLabels      []ResourceLabel      `db:"-"`
 	Annotations         []Annotation         `db:"-"`
-	PvcAnnotations      []PvcAnnotation      `db:"-"`
 	ResourceAnnotations []ResourceAnnotation `db:"-"`
 	Favorites           []Favorite           `db:"-"`
 }
@@ -77,16 +76,6 @@ type PvcLabel struct {
 
 func (p PvcLabel) ID() database.ID {
 	return compoundId{id: p.PvcUuid.String() + p.LabelUuid.String()}
-}
-
-type PvcAnnotation struct {
-	kdatabase.EntityStub
-	PvcUuid        types.UUID
-	AnnotationUuid types.UUID
-}
-
-func (p PvcAnnotation) ID() database.ID {
-	return compoundId{id: p.PvcUuid.String() + p.AnnotationUuid.String()}
 }
 
 func NewPvc() Resource {
@@ -155,13 +144,10 @@ func (p *Pvc) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	for annotationName, annotationValue := range pvc.Annotations {
 		annotationUuid := NewUUID(p.Uuid, strings.ToLower(annotationName+":"+annotationValue))
 		p.Annotations = append(p.Annotations, Annotation{
-			Uuid:  annotationUuid,
-			Name:  annotationName,
-			Value: annotationValue,
-		})
-		p.PvcAnnotations = append(p.PvcAnnotations, PvcAnnotation{
-			PvcUuid:        p.Uuid,
-			AnnotationUuid: annotationUuid,
+			Uuid:         annotationUuid,
+			ResourceUuid: p.Uuid,
+			Name:         annotationName,
+			Value:        annotationValue,
 		})
 		p.ResourceAnnotations = append(p.ResourceAnnotations, ResourceAnnotation{
 			ResourceUuid:   p.Uuid,
@@ -181,8 +167,7 @@ func (p *Pvc) Relations() []kdatabase.Relation {
 		kdatabase.HasMany(p.Labels, kdatabase.WithoutCascadeDelete()),
 		kdatabase.HasMany(p.PvcLabels, fk),
 		kdatabase.HasMany(p.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(p.Annotations, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(p.PvcAnnotations, fk),
+		kdatabase.HasMany(p.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(p.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

@@ -18,24 +18,23 @@ import (
 
 type ReplicaSet struct {
 	Meta
-	DesiredReplicas       int32
-	MinReadySeconds       int32
-	ActualReplicas        int32
-	FullyLabeledReplicas  int32
-	ReadyReplicas         int32
-	AvailableReplicas     int32
-	Yaml                  string
-	IcingaState           IcingaState
-	IcingaStateReason     string
-	Conditions            []ReplicaSetCondition  `db:"-"`
-	Owners                []ReplicaSetOwner      `db:"-"`
-	Labels                []Label                `db:"-"`
-	ReplicaSetLabels      []ReplicaSetLabel      `db:"-"`
-	ResourceLabels        []ResourceLabel        `db:"-"`
-	Annotations           []Annotation           `db:"-"`
-	ReplicaSetAnnotations []ReplicaSetAnnotation `db:"-"`
-	ResourceAnnotations   []ResourceAnnotation   `db:"-"`
-	Favorites             []Favorite             `db:"-"`
+	DesiredReplicas      int32
+	MinReadySeconds      int32
+	ActualReplicas       int32
+	FullyLabeledReplicas int32
+	ReadyReplicas        int32
+	AvailableReplicas    int32
+	Yaml                 string
+	IcingaState          IcingaState
+	IcingaStateReason    string
+	Conditions           []ReplicaSetCondition `db:"-"`
+	Owners               []ReplicaSetOwner     `db:"-"`
+	Labels               []Label               `db:"-"`
+	ReplicaSetLabels     []ReplicaSetLabel     `db:"-"`
+	ResourceLabels       []ResourceLabel       `db:"-"`
+	Annotations          []Annotation          `db:"-"`
+	ResourceAnnotations  []ResourceAnnotation  `db:"-"`
+	Favorites            []Favorite            `db:"-"`
 }
 
 type ReplicaSetCondition struct {
@@ -75,16 +74,6 @@ type ReplicaSetLabel struct {
 
 func (r ReplicaSetLabel) ID() database.ID {
 	return compoundId{id: r.ReplicaSetUuid.String() + r.LabelUuid.String()}
-}
-
-type ReplicaSetAnnotation struct {
-	kdatabase.EntityStub
-	ReplicaSetUuid types.UUID
-	AnnotationUuid types.UUID
-}
-
-func (r ReplicaSetAnnotation) ID() database.ID {
-	return compoundId{id: r.ReplicaSetUuid.String() + r.AnnotationUuid.String()}
 }
 
 func NewReplicaSet() Resource {
@@ -164,13 +153,10 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	for annotationName, annotationValue := range replicaSet.Annotations {
 		annotationUuid := NewUUID(r.Uuid, strings.ToLower(annotationName+":"+annotationValue))
 		r.Annotations = append(r.Annotations, Annotation{
-			Uuid:  annotationUuid,
-			Name:  annotationName,
-			Value: annotationValue,
-		})
-		r.ReplicaSetAnnotations = append(r.ReplicaSetAnnotations, ReplicaSetAnnotation{
-			ReplicaSetUuid: r.Uuid,
-			AnnotationUuid: annotationUuid,
+			Uuid:         annotationUuid,
+			ResourceUuid: r.Uuid,
+			Name:         annotationName,
+			Value:        annotationValue,
 		})
 		r.ResourceAnnotations = append(r.ResourceAnnotations, ResourceAnnotation{
 			ResourceUuid:   r.Uuid,
@@ -235,8 +221,7 @@ func (r *ReplicaSet) Relations() []kdatabase.Relation {
 		kdatabase.HasMany(r.Labels, kdatabase.WithoutCascadeDelete()),
 		kdatabase.HasMany(r.ReplicaSetLabels, fk),
 		kdatabase.HasMany(r.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(r.Annotations, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(r.ReplicaSetAnnotations, fk),
+		kdatabase.HasMany(r.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(r.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

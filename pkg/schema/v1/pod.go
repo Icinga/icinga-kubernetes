@@ -48,7 +48,6 @@ type Pod struct {
 	PodLabels           []PodLabel           `db:"-"`
 	ResourceLabels      []ResourceLabel      `db:"-"`
 	Annotations         []Annotation         `db:"-"`
-	PodAnnotations      []PodAnnotation      `db:"-"`
 	ResourceAnnotations []ResourceAnnotation `db:"-"`
 	Pvcs                []PodPvc             `db:"-"`
 	Volumes             []PodVolume          `db:"-"`
@@ -86,16 +85,6 @@ type PodLabel struct {
 
 func (p PodLabel) ID() database.ID {
 	return compoundId{id: p.PodUuid.String() + p.LabelUuid.String()}
-}
-
-type PodAnnotation struct {
-	kdatabase.EntityStub
-	PodUuid        types.UUID
-	AnnotationUuid types.UUID
-}
-
-func (p PodAnnotation) ID() database.ID {
-	return compoundId{id: p.PodUuid.String() + p.AnnotationUuid.String()}
 }
 
 type PodOwner struct {
@@ -246,13 +235,10 @@ func (p *Pod) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	for annotationName, annotationValue := range pod.Annotations {
 		annotationUuid := NewUUID(p.Uuid, strings.ToLower(annotationName+":"+annotationValue))
 		p.Annotations = append(p.Annotations, Annotation{
-			Uuid:  annotationUuid,
-			Name:  annotationName,
-			Value: annotationValue,
-		})
-		p.PodAnnotations = append(p.PodAnnotations, PodAnnotation{
-			PodUuid:        p.Uuid,
-			AnnotationUuid: annotationUuid,
+			Uuid:         annotationUuid,
+			ResourceUuid: p.Uuid,
+			Name:         annotationName,
+			Value:        annotationValue,
 		})
 		p.ResourceAnnotations = append(p.ResourceAnnotations, ResourceAnnotation{
 			ResourceUuid:   p.Uuid,
@@ -447,8 +433,7 @@ func (p *Pod) Relations() []kdatabase.Relation {
 		kdatabase.HasMany(p.Labels, kdatabase.WithoutCascadeDelete()),
 		kdatabase.HasMany(p.PodLabels, fk),
 		kdatabase.HasMany(p.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(p.Annotations, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(p.PodAnnotations, fk),
+		kdatabase.HasMany(p.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(p.Pvcs, fk),
 		kdatabase.HasMany(p.Volumes, fk),
 		kdatabase.HasMany(p.Favorites, kdatabase.WithForeignKey("resource_uuid")),

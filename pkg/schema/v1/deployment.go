@@ -31,15 +31,14 @@ type Deployment struct {
 	Yaml                    string
 	IcingaState             IcingaState
 	IcingaStateReason       string
-	Conditions              []DeploymentCondition  `db:"-"`
-	Owners                  []DeploymentOwner      `db:"-"`
-	Labels                  []Label                `db:"-"`
-	DeploymentLabels        []DeploymentLabel      `db:"-"`
-	ResourceLabels          []ResourceLabel        `db:"-"`
-	Annotations             []Annotation           `db:"-"`
-	DeploymentAnnotations   []DeploymentAnnotation `db:"-"`
-	ResourceAnnotations     []ResourceAnnotation   `db:"-"`
-	Favorites               []Favorite             `db:"-"`
+	Conditions              []DeploymentCondition `db:"-"`
+	Owners                  []DeploymentOwner     `db:"-"`
+	Labels                  []Label               `db:"-"`
+	DeploymentLabels        []DeploymentLabel     `db:"-"`
+	ResourceLabels          []ResourceLabel       `db:"-"`
+	Annotations             []Annotation          `db:"-"`
+	ResourceAnnotations     []ResourceAnnotation  `db:"-"`
+	Favorites               []Favorite            `db:"-"`
 }
 
 type DeploymentCondition struct {
@@ -80,16 +79,6 @@ type DeploymentLabel struct {
 
 func (d DeploymentLabel) ID() database.ID {
 	return compoundId{id: d.DeploymentUuid.String() + d.LabelUuid.String()}
-}
-
-type DeploymentAnnotation struct {
-	kdatabase.EntityStub
-	DeploymentUuid types.UUID
-	AnnotationUuid types.UUID
-}
-
-func (d DeploymentAnnotation) ID() database.ID {
-	return compoundId{id: d.DeploymentUuid.String() + d.AnnotationUuid.String()}
 }
 
 func NewDeployment() Resource {
@@ -177,13 +166,10 @@ func (d *Deployment) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	for annotationName, annotationValue := range deployment.Annotations {
 		annotationUuid := NewUUID(d.Uuid, strings.ToLower(annotationName+":"+annotationValue))
 		d.Annotations = append(d.Annotations, Annotation{
-			Uuid:  annotationUuid,
-			Name:  annotationName,
-			Value: annotationValue,
-		})
-		d.DeploymentAnnotations = append(d.DeploymentAnnotations, DeploymentAnnotation{
-			DeploymentUuid: d.Uuid,
-			AnnotationUuid: annotationUuid,
+			Uuid:         annotationUuid,
+			ResourceUuid: d.Uuid,
+			Name:         annotationName,
+			Value:        annotationValue,
 		})
 		d.ResourceAnnotations = append(d.ResourceAnnotations, ResourceAnnotation{
 			ResourceUuid:   d.Uuid,
@@ -253,8 +239,7 @@ func (d *Deployment) Relations() []kdatabase.Relation {
 		kdatabase.HasMany(d.Labels, kdatabase.WithoutCascadeDelete()),
 		kdatabase.HasMany(d.DeploymentLabels, fk),
 		kdatabase.HasMany(d.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(d.Annotations, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(d.DeploymentAnnotations, fk),
+		kdatabase.HasMany(d.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(d.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }
