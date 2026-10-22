@@ -201,7 +201,7 @@ func (n *Node) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		})
 	}
 
-	n.Yaml = MarshalYaml(node, kcorev1.SchemeGroupVersion, kcorev1.AddToScheme)
+	n.Yaml = MarshalYaml(node)
 
 	for annotationName, annotationValue := range node.Annotations {
 		annotationUuid := NewUUID(n.Uuid, strings.ToLower(annotationName+":"+annotationValue))

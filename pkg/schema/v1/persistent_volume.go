@@ -140,7 +140,7 @@ func (p *PersistentVolume) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		})
 	}
 
-	p.Yaml = MarshalYaml(persistentVolume, kcorev1.SchemeGroupVersion, kcorev1.AddToScheme)
+	p.Yaml = MarshalYaml(persistentVolume)
 }
 
 func (p *PersistentVolume) Relations() []kdatabase.Relation {

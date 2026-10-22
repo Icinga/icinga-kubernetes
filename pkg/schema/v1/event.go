@@ -78,5 +78,5 @@ func (e *Event) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	e.LastSeen = lastSeen
 	e.Count = count
 
-	e.Yaml = MarshalYaml(event, keventsv1.SchemeGroupVersion, keventsv1.AddToScheme)
+	e.Yaml = MarshalYaml(event)
 }

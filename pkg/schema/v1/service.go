@@ -264,7 +264,7 @@ func (s *Service) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		internalTrafficPolicy = string(*service.Spec.InternalTrafficPolicy)
 	}
 	s.InternalTrafficPolicy = internalTrafficPolicy
-	s.Yaml = MarshalYaml(service, kcorev1.SchemeGroupVersion, kcorev1.AddToScheme)
+	s.Yaml = MarshalYaml(service)
 }
 
 func (s *Service) Relations() []kdatabase.Relation {

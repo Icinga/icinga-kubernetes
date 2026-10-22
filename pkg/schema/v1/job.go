@@ -231,7 +231,7 @@ func (j *Job) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		})
 	}
 
-	j.Yaml = MarshalYaml(job, kbatchv1.SchemeGroupVersion, kbatchv1.AddToScheme)
+	j.Yaml = MarshalYaml(job)
 }
 
 func (j *Job) getIcingaState(job *kbatchv1.Job) (IcingaState, string) {

@@ -311,7 +311,7 @@ func (p *Pod) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		}
 	}
 
-	p.Yaml = MarshalYaml(pod, kcorev1.SchemeGroupVersion, kcorev1.AddToScheme)
+	p.Yaml = MarshalYaml(pod)
 }
 
 func (p *Pod) MarshalEvent() (notifications.Event, error) {

@@ -179,7 +179,7 @@ func (d *DaemonSet) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		})
 	}
 
-	d.Yaml = MarshalYaml(daemonSet, kappsv1.SchemeGroupVersion, kappsv1.AddToScheme)
+	d.Yaml = MarshalYaml(daemonSet)
 }
 
 func (d *DaemonSet) MarshalEvent() (notifications.Event, error) {

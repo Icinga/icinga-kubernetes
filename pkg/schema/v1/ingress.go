@@ -237,7 +237,7 @@ func (i *Ingress) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		})
 	}
 
-	i.Yaml = MarshalYaml(ingress, networkingv1.SchemeGroupVersion, networkingv1.AddToScheme)
+	i.Yaml = MarshalYaml(ingress)
 }
 
 func (i *Ingress) Relations() []kdatabase.Relation {

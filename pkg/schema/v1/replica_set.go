@@ -178,7 +178,7 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		})
 	}
 
-	r.Yaml = MarshalYaml(replicaSet, kappsv1.SchemeGroupVersion, kappsv1.AddToScheme)
+	r.Yaml = MarshalYaml(replicaSet)
 }
 
 func (r *ReplicaSet) MarshalEvent() (notifications.Event, error) {

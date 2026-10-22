@@ -114,7 +114,7 @@ func (n *Namespace) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		})
 	}
 
-	n.Yaml = MarshalYaml(namespace, kcorev1.SchemeGroupVersion, kcorev1.AddToScheme)
+	n.Yaml = MarshalYaml(namespace)
 }
 
 func (n *Namespace) Relations() []kdatabase.Relation {

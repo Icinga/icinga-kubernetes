@@ -169,7 +169,7 @@ func (p *Pvc) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		})
 	}
 
-	p.Yaml = MarshalYaml(pvc, kcorev1.SchemeGroupVersion, kcorev1.AddToScheme)
+	p.Yaml = MarshalYaml(pvc)
 }
 
 func (p *Pvc) Relations() []kdatabase.Relation {

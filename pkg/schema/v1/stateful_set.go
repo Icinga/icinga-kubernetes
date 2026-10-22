@@ -203,7 +203,7 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		})
 	}
 
-	s.Yaml = MarshalYaml(statefulSet, kappsv1.SchemeGroupVersion, kappsv1.AddToScheme)
+	s.Yaml = MarshalYaml(statefulSet)
 }
 
 func (s *StatefulSet) MarshalEvent() (notifications.Event, error) {

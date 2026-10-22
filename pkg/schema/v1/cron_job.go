@@ -128,7 +128,7 @@ func (c *CronJob) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		})
 	}
 
-	c.Yaml = MarshalYaml(cronJob, kbatchv1.SchemeGroupVersion, kbatchv1.AddToScheme)
+	c.Yaml = MarshalYaml(cronJob)
 }
 
 func (c *CronJob) getIcingaState() (IcingaState, string) {

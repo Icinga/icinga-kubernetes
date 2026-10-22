@@ -5,6 +5,11 @@ import (
 
 	"github.com/icinga/icinga-go-library/types"
 	"golang.org/x/exp/constraints"
+	kappsv1 "k8s.io/api/apps/v1"
+	kbatchv1 "k8s.io/api/batch/v1"
+	kcorev1 "k8s.io/api/core/v1"
+	keventsv1 "k8s.io/api/events/v1"
+	knetworkingv1 "k8s.io/api/networking/v1"
 	kruntime "k8s.io/apimachinery/pkg/runtime"
 	kschema "k8s.io/apimachinery/pkg/runtime/schema"
 	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
@@ -28,17 +33,34 @@ func MarshalFirstNonNilStructFieldToJSON(i any) (string, string, error) {
 	return "", "", nil
 }
 
-// MarshalYaml encodes obj as YAML in API version gv, including its apiVersion
-// and kind. addToScheme must register the API group of gv. Encoding errors are
-// ignored and yield empty YAML.
-func MarshalYaml(obj kruntime.Object, gv kschema.GroupVersion, addToScheme func(*kruntime.Scheme) error) string {
+// yamlEncoder is built once so that MarshalYaml doesn't set up a scheme and
+// codec on every call. Encoders are safe for concurrent use. A schema type from
+// a group not registered here gets empty YAML, since MarshalYaml ignores errors.
+var yamlEncoder = func() kruntime.Encoder {
 	scheme := kruntime.NewScheme()
-	_ = addToScheme(scheme)
-	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(
+
+	_ = kcorev1.AddToScheme(scheme)
+	_ = kappsv1.AddToScheme(scheme)
+	_ = kbatchv1.AddToScheme(scheme)
+	_ = keventsv1.AddToScheme(scheme)
+	_ = knetworkingv1.AddToScheme(scheme)
+
+	return kserializer.NewCodecFactory(scheme).EncoderForVersion(
 		kjson.NewSerializerWithOptions(kjson.DefaultMetaFactory, scheme, scheme, kjson.SerializerOptions{Yaml: true}),
-		gv,
+		kschema.GroupVersions{
+			kcorev1.SchemeGroupVersion,
+			kappsv1.SchemeGroupVersion,
+			kbatchv1.SchemeGroupVersion,
+			keventsv1.SchemeGroupVersion,
+			knetworkingv1.SchemeGroupVersion,
+		},
 	)
-	output, _ := kruntime.Encode(codec, obj)
+}()
+
+// MarshalYaml encodes obj as YAML, including its apiVersion and kind.
+// Encoding errors are ignored and yield empty YAML.
+func MarshalYaml(obj kruntime.Object) string {
+	output, _ := kruntime.Encode(yamlEncoder, obj)
 
 	return string(output)
 }

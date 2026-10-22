@@ -191,7 +191,7 @@ func (d *Deployment) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		})
 	}
 
-	d.Yaml = MarshalYaml(deployment, kappsv1.SchemeGroupVersion, kappsv1.AddToScheme)
+	d.Yaml = MarshalYaml(deployment)
 }
 
 func (d *Deployment) MarshalEvent() (notifications.Event, error) {
