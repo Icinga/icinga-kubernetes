@@ -122,12 +122,9 @@ func main() {
 	}
 	defer func() { _ = db.Close() }()
 
-	if !db.Connect() {
-		if len(removeClusterUuids.Value()) != 0 {
-			logger.Fatal("Cannot remove cluster without database connection")
-		}
-
-		return
+	logger.Infow("Connecting to database", zap.String("address", db.GetAddr()))
+	if err := db.Ping(); err != nil {
+		logger.Fatalw("Cannot connect to database", logging.Error(err))
 	}
 
 	if len(removeClusterUuids.Value()) != 0 {
