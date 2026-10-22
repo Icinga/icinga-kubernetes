@@ -242,7 +242,10 @@ func (i *Ingress) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 
 	scheme := kruntime.NewScheme()
 	_ = networkingv1.AddToScheme(scheme)
-	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), networkingv1.SchemeGroupVersion)
+	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(
+		kjson.NewSerializerWithOptions(kjson.DefaultMetaFactory, scheme, scheme, kjson.SerializerOptions{Yaml: true}),
+		networkingv1.SchemeGroupVersion,
+	)
 	output, _ := kruntime.Encode(codec, ingress)
 	i.Yaml = string(output)
 }

@@ -316,7 +316,10 @@ func (p *Pod) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 
 	scheme := kruntime.NewScheme()
 	_ = kcorev1.AddToScheme(scheme)
-	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kcorev1.SchemeGroupVersion)
+	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(
+		kjson.NewSerializerWithOptions(kjson.DefaultMetaFactory, scheme, scheme, kjson.SerializerOptions{Yaml: true}),
+		kcorev1.SchemeGroupVersion,
+	)
 	output, _ := kruntime.Encode(codec, pod)
 	p.Yaml = string(output)
 }

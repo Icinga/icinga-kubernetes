@@ -183,7 +183,10 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 
 	scheme := kruntime.NewScheme()
 	_ = kappsv1.AddToScheme(scheme)
-	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kappsv1.SchemeGroupVersion)
+	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(
+		kjson.NewSerializerWithOptions(kjson.DefaultMetaFactory, scheme, scheme, kjson.SerializerOptions{Yaml: true}),
+		kappsv1.SchemeGroupVersion,
+	)
 	output, _ := kruntime.Encode(codec, replicaSet)
 	r.Yaml = string(output)
 }
