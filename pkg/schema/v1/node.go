@@ -47,7 +47,6 @@ type Node struct {
 	Conditions              []NodeCondition      `db:"-"`
 	Volumes                 []NodeVolume         `db:"-"`
 	Labels                  []Label              `db:"-"`
-	NodeLabels              []NodeLabel          `db:"-"`
 	ResourceLabels          []ResourceLabel      `db:"-"`
 	Annotations             []Annotation         `db:"-"`
 	ResourceAnnotations     []ResourceAnnotation `db:"-"`
@@ -79,16 +78,6 @@ type NodeVolume struct {
 
 func (n NodeVolume) ID() database.ID {
 	return compoundId{id: n.NodeUuid.String() + string(n.Name)}
-}
-
-type NodeLabel struct {
-	kdatabase.EntityStub
-	NodeUuid  types.UUID
-	LabelUuid types.UUID
-}
-
-func (n NodeLabel) ID() database.ID {
-	return compoundId{id: n.NodeUuid.String() + n.LabelUuid.String()}
 }
 
 func NewNode() Resource {
@@ -179,13 +168,10 @@ func (n *Node) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	for labelName, labelValue := range node.Labels {
 		labelUuid := NewUUID(n.Uuid, strings.ToLower(labelName+":"+labelValue))
 		n.Labels = append(n.Labels, Label{
-			Uuid:  labelUuid,
-			Name:  labelName,
-			Value: labelValue,
-		})
-		n.NodeLabels = append(n.NodeLabels, NodeLabel{
-			NodeUuid:  n.Uuid,
-			LabelUuid: labelUuid,
+			Uuid:         labelUuid,
+			ResourceUuid: n.Uuid,
+			Name:         labelName,
+			Value:        labelValue,
 		})
 		n.ResourceLabels = append(n.ResourceLabels, ResourceLabel{
 			ResourceUuid: n.Uuid,
@@ -293,8 +279,7 @@ func (n *Node) Relations() []kdatabase.Relation {
 		kdatabase.HasMany(n.Conditions, fk),
 		kdatabase.HasMany(n.Volumes, fk),
 		kdatabase.HasMany(n.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(n.Labels, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(n.NodeLabels, fk),
+		kdatabase.HasMany(n.Labels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(n.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(n.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(n.Favorites, kdatabase.WithForeignKey("resource_uuid")),

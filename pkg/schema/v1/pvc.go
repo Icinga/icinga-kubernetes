@@ -49,7 +49,6 @@ type Pvc struct {
 	Yaml                string
 	Conditions          []PvcCondition       `db:"-"`
 	Labels              []Label              `db:"-"`
-	PvcLabels           []PvcLabel           `db:"-"`
 	ResourceLabels      []ResourceLabel      `db:"-"`
 	Annotations         []Annotation         `db:"-"`
 	ResourceAnnotations []ResourceAnnotation `db:"-"`
@@ -69,16 +68,6 @@ type PvcCondition struct {
 
 func (p PvcCondition) ID() database.ID {
 	return compoundId{id: p.PvcUuid.String() + p.Type}
-}
-
-type PvcLabel struct {
-	kdatabase.EntityStub
-	PvcUuid   types.UUID
-	LabelUuid types.UUID
-}
-
-func (p PvcLabel) ID() database.ID {
-	return compoundId{id: p.PvcUuid.String() + p.LabelUuid.String()}
 }
 
 func NewPvc() Resource {
@@ -130,13 +119,10 @@ func (p *Pvc) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	for labelName, labelValue := range pvc.Labels {
 		labelUuid := NewUUID(p.Uuid, strings.ToLower(labelName+":"+labelValue))
 		p.Labels = append(p.Labels, Label{
-			Uuid:  labelUuid,
-			Name:  labelName,
-			Value: labelValue,
-		})
-		p.PvcLabels = append(p.PvcLabels, PvcLabel{
-			PvcUuid:   p.Uuid,
-			LabelUuid: labelUuid,
+			Uuid:         labelUuid,
+			ResourceUuid: p.Uuid,
+			Name:         labelName,
+			Value:        labelValue,
 		})
 		p.ResourceLabels = append(p.ResourceLabels, ResourceLabel{
 			ResourceUuid: p.Uuid,
@@ -171,8 +157,7 @@ func (p *Pvc) Relations() []kdatabase.Relation {
 	return []kdatabase.Relation{
 		kdatabase.HasMany(p.Conditions, fk),
 		kdatabase.HasMany(p.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(p.Labels, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(p.PvcLabels, fk),
+		kdatabase.HasMany(p.Labels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(p.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(p.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(p.Favorites, kdatabase.WithForeignKey("resource_uuid")),

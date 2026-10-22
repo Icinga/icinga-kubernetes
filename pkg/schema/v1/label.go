@@ -8,9 +8,10 @@ import (
 
 type Label struct {
 	kdatabase.EntityStub
-	Uuid  types.UUID
-	Name  string
-	Value string
+	Uuid         types.UUID
+	ResourceUuid types.UUID
+	Name         string
+	Value        string
 }
 
 func (l Label) ID() database.ID {

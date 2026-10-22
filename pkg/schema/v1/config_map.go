@@ -3,7 +3,6 @@ package v1
 import (
 	"strings"
 
-	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/kdatabase"
 	kcorev1 "k8s.io/api/core/v1"
@@ -14,20 +13,9 @@ type ConfigMap struct {
 	Meta
 	Immutable           types.Bool
 	Labels              []Label              `db:"-"`
-	ConfigMapLabels     []ConfigMapLabel     `db:"-"`
 	ResourceLabels      []ResourceLabel      `db:"-"`
 	Annotations         []Annotation         `db:"-"`
 	ResourceAnnotations []ResourceAnnotation `db:"-"`
-}
-
-type ConfigMapLabel struct {
-	kdatabase.EntityStub
-	ConfigMapUuid types.UUID
-	LabelUuid     types.UUID
-}
-
-func (c ConfigMapLabel) ID() database.ID {
-	return compoundId{id: c.ConfigMapUuid.String() + c.LabelUuid.String()}
 }
 
 func NewConfigMap() Resource {
@@ -51,13 +39,10 @@ func (c *ConfigMap) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	for labelName, labelValue := range configMap.Labels {
 		labelUuid := NewUUID(c.Uuid, strings.ToLower(labelName+":"+labelValue))
 		c.Labels = append(c.Labels, Label{
-			Uuid:  labelUuid,
-			Name:  labelName,
-			Value: labelValue,
-		})
-		c.ConfigMapLabels = append(c.ConfigMapLabels, ConfigMapLabel{
-			ConfigMapUuid: c.Uuid,
-			LabelUuid:     labelUuid,
+			Uuid:         labelUuid,
+			ResourceUuid: c.Uuid,
+			Name:         labelName,
+			Value:        labelValue,
 		})
 		c.ResourceLabels = append(c.ResourceLabels, ResourceLabel{
 			ResourceUuid: c.Uuid,
@@ -81,12 +66,9 @@ func (c *ConfigMap) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 }
 
 func (c *ConfigMap) Relations() []kdatabase.Relation {
-	fk := kdatabase.WithForeignKey("config_map_uuid")
-
 	return []kdatabase.Relation{
 		kdatabase.HasMany(c.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(c.Labels, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(c.ConfigMapLabels, fk),
+		kdatabase.HasMany(c.Labels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(c.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(c.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 	}

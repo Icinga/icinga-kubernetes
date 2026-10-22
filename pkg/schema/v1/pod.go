@@ -48,7 +48,6 @@ type Pod struct {
 	SidecarContainers   []*SidecarContainer  `db:"-"`
 	Owners              []PodOwner           `db:"-"`
 	Labels              []Label              `db:"-"`
-	PodLabels           []PodLabel           `db:"-"`
 	ResourceLabels      []ResourceLabel      `db:"-"`
 	Annotations         []Annotation         `db:"-"`
 	ResourceAnnotations []ResourceAnnotation `db:"-"`
@@ -78,16 +77,6 @@ type PodCondition struct {
 
 func (p PodCondition) ID() database.ID {
 	return compoundId{id: p.PodUuid.String() + p.Type}
-}
-
-type PodLabel struct {
-	kdatabase.EntityStub
-	PodUuid   types.UUID
-	LabelUuid types.UUID
-}
-
-func (p PodLabel) ID() database.ID {
-	return compoundId{id: p.PodUuid.String() + p.LabelUuid.String()}
 }
 
 type PodOwner struct {
@@ -221,13 +210,10 @@ func (p *Pod) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	for labelName, labelValue := range pod.Labels {
 		labelUuid := NewUUID(p.Uuid, strings.ToLower(labelName+":"+labelValue))
 		p.Labels = append(p.Labels, Label{
-			Uuid:  labelUuid,
-			Name:  labelName,
-			Value: labelValue,
-		})
-		p.PodLabels = append(p.PodLabels, PodLabel{
-			PodUuid:   p.Uuid,
-			LabelUuid: labelUuid,
+			Uuid:         labelUuid,
+			ResourceUuid: p.Uuid,
+			Name:         labelName,
+			Value:        labelValue,
 		})
 		p.ResourceLabels = append(p.ResourceLabels, ResourceLabel{
 			ResourceUuid: p.Uuid,
@@ -437,8 +423,7 @@ func (p *Pod) Relations() []kdatabase.Relation {
 		kdatabase.HasMany(p.SidecarContainers, kdatabase.WithoutCascadeDelete()),
 		kdatabase.HasMany(p.Owners, fk),
 		kdatabase.HasMany(p.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(p.Labels, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(p.PodLabels, fk),
+		kdatabase.HasMany(p.Labels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(p.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(p.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(p.Pvcs, fk),
