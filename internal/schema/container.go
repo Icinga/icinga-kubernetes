@@ -487,7 +487,7 @@ func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStat
 // concurrently and schedules a job for each of the containers (drawn from
 // `upsertPods`) that periodically syncs the container logs with the database.
 // When pods are deleted, matching log jobs are stopped and cached logs are
-// evicted. Database container rows are retained here for later physical cleanup.
+// evicted. Their container rows stay until the soft-deleted pod is purged.
 func SyncContainers(
 	ctx context.Context, db *kdatabase.DB, g *errgroup.Group, upsertPods <-chan database.Entity, deletePods <-chan any,
 ) {
