@@ -34,8 +34,7 @@ type Service struct {
 	LoadBalancerClass             sql.NullString
 	InternalTrafficPolicy         string
 	Yaml                          string
-	Selectors                     []Selector           `db:"-"`
-	ServiceSelectors              []ServiceSelector    `db:"-"`
+	Selectors                     []ServiceSelector    `db:"-"`
 	Ports                         []ServicePort        `db:"-"`
 	Conditions                    []ServiceCondition   `db:"-"`
 	Labels                        []Label              `db:"-"`
@@ -49,12 +48,14 @@ type Service struct {
 
 type ServiceSelector struct {
 	kdatabase.EntityStub
-	ServiceUuid  types.UUID
-	SelectorUuid types.UUID
+	Uuid        types.UUID
+	ServiceUuid types.UUID
+	Name        string
+	Value       string
 }
 
 func (s ServiceSelector) ID() database.ID {
-	return compoundId{id: s.ServiceUuid.String() + s.SelectorUuid.String()}
+	return s.Uuid
 }
 
 type ServicePort struct {
@@ -170,14 +171,11 @@ func (s *Service) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 
 	for selectorName, selectorValue := range service.Spec.Selector {
 		selectorUuid := NewUUID(s.Uuid, strings.ToLower(selectorName+":"+selectorValue))
-		s.Selectors = append(s.Selectors, Selector{
-			Uuid:  selectorUuid,
-			Name:  selectorName,
-			Value: selectorValue,
-		})
-		s.ServiceSelectors = append(s.ServiceSelectors, ServiceSelector{
-			ServiceUuid:  s.Uuid,
-			SelectorUuid: selectorUuid,
+		s.Selectors = append(s.Selectors, ServiceSelector{
+			Uuid:        selectorUuid,
+			ServiceUuid: s.Uuid,
+			Name:        selectorName,
+			Value:       selectorValue,
 		})
 	}
 
@@ -245,8 +243,7 @@ func (s *Service) Relations() []kdatabase.Relation {
 	return []kdatabase.Relation{
 		kdatabase.HasMany(s.Conditions, fk),
 		kdatabase.HasMany(s.Ports, fk),
-		kdatabase.HasMany(s.Selectors, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(s.ServiceSelectors, fk),
+		kdatabase.HasMany(s.Selectors, fk),
 		kdatabase.HasMany(s.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(s.Labels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(s.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),

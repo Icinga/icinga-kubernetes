@@ -714,13 +714,6 @@ CREATE TABLE secret (
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
-CREATE TABLE selector (
-  uuid binary(16) NOT NULL,
-  name varchar(317) COLLATE utf8mb4_unicode_ci NOT NULL,
-  value varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  PRIMARY KEY (uuid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
 CREATE TABLE service (
   uuid binary(16) NOT NULL,
   cluster_uuid binary(16) NOT NULL,
@@ -776,9 +769,12 @@ CREATE TABLE service_port (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE service_selector (
+  uuid binary(16) NOT NULL,
   service_uuid binary(16) NOT NULL,
-  selector_uuid binary(16) NOT NULL,
-  PRIMARY KEY (service_uuid, selector_uuid)
+  name varchar(317) COLLATE utf8mb4_unicode_ci NOT NULL,
+  value varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (uuid),
+  INDEX idx_service_selector_service_uuid (service_uuid) COMMENT 'Filter for selectors of a service'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE stateful_set (
