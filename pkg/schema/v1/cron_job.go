@@ -11,9 +11,6 @@ import (
 	"github.com/icinga/icinga-kubernetes/pkg/kdatabase"
 	kbatchv1 "k8s.io/api/batch/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	kruntime "k8s.io/apimachinery/pkg/runtime"
-	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
-	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 )
 
 type CronJob struct {
@@ -131,14 +128,7 @@ func (c *CronJob) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		})
 	}
 
-	scheme := kruntime.NewScheme()
-	_ = kbatchv1.AddToScheme(scheme)
-	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(
-		kjson.NewSerializerWithOptions(kjson.DefaultMetaFactory, scheme, scheme, kjson.SerializerOptions{Yaml: true}),
-		kbatchv1.SchemeGroupVersion,
-	)
-	output, _ := kruntime.Encode(codec, cronJob)
-	c.Yaml = string(output)
+	c.Yaml = MarshalYaml(cronJob, kbatchv1.SchemeGroupVersion, kbatchv1.AddToScheme)
 }
 
 func (c *CronJob) getIcingaState() (IcingaState, string) {

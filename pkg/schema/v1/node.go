@@ -13,9 +13,6 @@ import (
 	"github.com/pkg/errors"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	kruntime "k8s.io/apimachinery/pkg/runtime"
-	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
-	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	knet "k8s.io/utils/net"
 )
 
@@ -204,14 +201,7 @@ func (n *Node) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		})
 	}
 
-	scheme := kruntime.NewScheme()
-	_ = kcorev1.AddToScheme(scheme)
-	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(
-		kjson.NewSerializerWithOptions(kjson.DefaultMetaFactory, scheme, scheme, kjson.SerializerOptions{Yaml: true}),
-		kcorev1.SchemeGroupVersion,
-	)
-	output, _ := kruntime.Encode(codec, node)
-	n.Yaml = string(output)
+	n.Yaml = MarshalYaml(node, kcorev1.SchemeGroupVersion, kcorev1.AddToScheme)
 
 	for annotationName, annotationValue := range node.Annotations {
 		annotationUuid := NewUUID(n.Uuid, strings.ToLower(annotationName+":"+annotationValue))

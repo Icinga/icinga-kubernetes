@@ -9,9 +9,6 @@ import (
 	"github.com/icinga/icinga-kubernetes/pkg/kdatabase"
 	networkingv1 "k8s.io/api/networking/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	kruntime "k8s.io/apimachinery/pkg/runtime"
-	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
-	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 )
 
 type Ingress struct {
@@ -240,14 +237,7 @@ func (i *Ingress) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		})
 	}
 
-	scheme := kruntime.NewScheme()
-	_ = networkingv1.AddToScheme(scheme)
-	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(
-		kjson.NewSerializerWithOptions(kjson.DefaultMetaFactory, scheme, scheme, kjson.SerializerOptions{Yaml: true}),
-		networkingv1.SchemeGroupVersion,
-	)
-	output, _ := kruntime.Encode(codec, ingress)
-	i.Yaml = string(output)
+	i.Yaml = MarshalYaml(ingress, networkingv1.SchemeGroupVersion, networkingv1.AddToScheme)
 }
 
 func (i *Ingress) Relations() []kdatabase.Relation {

@@ -8,9 +8,6 @@ import (
 	"github.com/icinga/icinga-kubernetes/pkg/kdatabase"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	kruntime "k8s.io/apimachinery/pkg/runtime"
-	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
-	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 )
 
 type Namespace struct {
@@ -117,14 +114,7 @@ func (n *Namespace) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		})
 	}
 
-	scheme := kruntime.NewScheme()
-	_ = kcorev1.AddToScheme(scheme)
-	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(
-		kjson.NewSerializerWithOptions(kjson.DefaultMetaFactory, scheme, scheme, kjson.SerializerOptions{Yaml: true}),
-		kcorev1.SchemeGroupVersion,
-	)
-	output, _ := kruntime.Encode(codec, namespace)
-	n.Yaml = string(output)
+	n.Yaml = MarshalYaml(namespace, kcorev1.SchemeGroupVersion, kcorev1.AddToScheme)
 }
 
 func (n *Namespace) Relations() []kdatabase.Relation {

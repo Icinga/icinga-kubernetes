@@ -6,9 +6,6 @@ import (
 	"github.com/icinga/icinga-go-library/types"
 	keventsv1 "k8s.io/api/events/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	kruntime "k8s.io/apimachinery/pkg/runtime"
-	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
-	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 )
 
 type Event struct {
@@ -81,12 +78,5 @@ func (e *Event) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	e.LastSeen = lastSeen
 	e.Count = count
 
-	scheme := kruntime.NewScheme()
-	_ = keventsv1.AddToScheme(scheme)
-	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(
-		kjson.NewSerializerWithOptions(kjson.DefaultMetaFactory, scheme, scheme, kjson.SerializerOptions{Yaml: true}),
-		keventsv1.SchemeGroupVersion,
-	)
-	output, _ := kruntime.Encode(codec, event)
-	e.Yaml = string(output)
+	e.Yaml = MarshalYaml(event, keventsv1.SchemeGroupVersion, keventsv1.AddToScheme)
 }
