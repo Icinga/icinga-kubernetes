@@ -52,7 +52,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
-const expectedSchemaVersion = "0.4.0"
+const expectedSchemaVersion = "0.5.0"
 
 func main() {
 	var glue daemon.ConfigFlagGlue
@@ -369,7 +369,7 @@ func main() {
 
 			for kind, uuids := range uuidMap {
 				ng.Go(func() error {
-					q, args, err := sqlx.In(fmt.Sprintf("SELECT uuid FROM %s WHERE uuid IN (?)", kind), uuids)
+					q, args, err := sqlx.In(fmt.Sprintf("SELECT uuid FROM %s WHERE uuid IN (?) AND deleted IS NULL", kind), uuids)
 					if err != nil {
 						return err
 					}
@@ -690,7 +690,7 @@ func main() {
 	cleanup := kdatabase.NewCleanup(db)
 
 	g.Go(func() error {
-		return cleanup.PeriodicCleanup(ctx, kdatabase.CleanupStmt{
+		return cleanup.PeriodicCleanup(ctx, &kdatabase.DefaultCleaner{
 			Table:  "event",
 			PK:     "uuid",
 			Column: "created",
@@ -698,7 +698,7 @@ func main() {
 	})
 
 	g.Go(func() error {
-		return cleanup.PeriodicCleanup(ctx, kdatabase.CleanupStmt{
+		return cleanup.PeriodicCleanup(ctx, &kdatabase.DefaultCleaner{
 			Table:  "prometheus_cluster_metric",
 			PK:     "(cluster_uuid, timestamp, category, name)",
 			Column: "timestamp",
@@ -706,7 +706,7 @@ func main() {
 	})
 
 	g.Go(func() error {
-		return cleanup.PeriodicCleanup(ctx, kdatabase.CleanupStmt{
+		return cleanup.PeriodicCleanup(ctx, &kdatabase.DefaultCleaner{
 			Table:  "prometheus_node_metric",
 			PK:     "(node_uuid, timestamp, category, name)",
 			Column: "timestamp",
@@ -714,7 +714,7 @@ func main() {
 	})
 
 	g.Go(func() error {
-		return cleanup.PeriodicCleanup(ctx, kdatabase.CleanupStmt{
+		return cleanup.PeriodicCleanup(ctx, &kdatabase.DefaultCleaner{
 			Table:  "prometheus_pod_metric",
 			PK:     "(pod_uuid, timestamp, category, name)",
 			Column: "timestamp",
@@ -722,12 +722,47 @@ func main() {
 	})
 
 	g.Go(func() error {
-		return cleanup.PeriodicCleanup(ctx, kdatabase.CleanupStmt{
+		return cleanup.PeriodicCleanup(ctx, &kdatabase.DefaultCleaner{
 			Table:  "prometheus_container_metric",
 			PK:     "(container_uuid, timestamp, category, name)",
 			Column: "timestamp",
 		})
 	})
+
+	// Every kind synced without WithNoDelete() is soft-deleted, so it
+	// needs a deleted column in the schema and an entry in this list.
+	// Otherwise, its soft delete fails, or its rows are never purged.
+	for _, entity := range []database.Entity{
+		&schemav1.ConfigMap{},
+		&schemav1.CronJob{},
+		&schemav1.DaemonSet{},
+		&schemav1.Deployment{},
+		&schemav1.EndpointSlice{},
+		&schemav1.Ingress{},
+		&schemav1.Job{},
+		&schemav1.Namespace{},
+		&schemav1.Node{},
+		&schemav1.PersistentVolume{},
+		&schemav1.Pod{},
+		&schemav1.Pvc{},
+		&schemav1.ReplicaSet{},
+		&schemav1.Secret{},
+		&schemav1.Service{},
+		&schemav1.StatefulSet{},
+	} {
+		g.Go(func() error {
+			return cleanup.PeriodicCleanup(
+				ctx,
+				&kdatabase.CascadeCleaner{
+					Entity:      entity,
+					Column:      "deleted",
+					ClusterUuid: cluster.ClusterUuidFromContext(ctx),
+				},
+				kdatabase.WithInterval(time.Minute),
+				kdatabase.WithRetention(5*time.Minute),
+			)
+		})
+	}
 
 	if err := g.Wait(); err != nil {
 		logger.Fatalw("Cannot run Icinga for Kubernetes", logging.Error(err))
@@ -757,24 +792,6 @@ func removeCluster(ctx context.Context, db *kdatabase.DB, logger *logging.Logger
 			"No cluster entry exists for UUID, trying to remove any remaining data of that cluster anyway",
 			zap.String("uuid", clusterUuid.String()),
 		)
-	}
-
-	// Pods don't cascade deletes to their containers, so remove the containers first.
-	for _, container := range []database.Entity{&schemav1.Container{}, &schemav1.InitContainer{}, &schemav1.SidecarContainer{}} {
-		query := db.Rebind(db.BuildSelectStmt(container, uuidColumn{}) + fmt.Sprintf(
-			` WHERE "pod_uuid" IN (SELECT "uuid" FROM %q WHERE "cluster_uuid"=?)`,
-			database.TableName(&schemav1.Pod{}),
-		))
-
-		// Scanned into []any so that the UUIDs can feed DeleteStreamed's <-chan any.
-		var uuids []any
-		if err := db.SelectContext(ctx, &uuids, query, clusterUuid); err != nil {
-			return database.CantPerformQuery(err, query)
-		}
-
-		if err := db.DeleteStreamedCascading(ctx, container, utils.ChanFromSlice(uuids)); err != nil {
-			return errors.Wrapf(err, "cannot remove rows from %q", database.TableName(container))
-		}
 	}
 
 	if err := db.DeleteStreamedCascading(ctx, &schemav1.Cluster{}, utils.ChanFromSlice([]any{clusterUuid})); err != nil {

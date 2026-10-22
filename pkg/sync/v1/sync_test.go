@@ -8,6 +8,7 @@ import (
 	"github.com/icinga/icinga-go-library/types"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
 	kcorev1 "k8s.io/api/core/v1"
+	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
@@ -72,4 +73,46 @@ func TestSyncDeleteVanished(t *testing.T) {
 			t.Fatalf("expected %v to be deleted, got %v", vanished, deleted)
 		}
 	})
+}
+
+func TestSyncVanished(t *testing.T) {
+	existing := &kcorev1.Pod{
+		Namespace: "default",
+		Name:      "existing",
+		UID:       "9f1c6a4e-0e0a-4e2b-9a5f-000000000001",
+	}
+
+	informer := informers.NewSharedInformerFactory(fake.NewClientset(existing), 0).Core().V1().Pods().Informer()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+
+	go informer.Run(ctx.Done())
+
+	if !cache.WaitForCacheSync(ctx.Done(), informer.HasSynced) {
+		t.Fatal("timed out waiting for cache sync")
+	}
+
+	sync := &Sync{informer: informer}
+
+	vanished := &kcorev1.Pod{
+		Namespace: "default",
+		Name:      "vanished",
+		UID:       "9f1c6a4e-0e0a-4e2b-9a5f-000000000002",
+	}
+	replaced := &kcorev1.Pod{
+		Namespace: "default",
+		Name:      "existing",
+		UID:       "9f1c6a4e-0e0a-4e2b-9a5f-000000000003",
+	}
+
+	ids, err := sync.vanished([]kmetav1.Object{existing, vanished, replaced})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected := []types.UUID{schemav1.EnsureUUID(vanished.UID), schemav1.EnsureUUID(replaced.UID)}
+	if len(ids) != len(expected) || ids[0].(types.UUID) != expected[0] || ids[1].(types.UUID) != expected[1] {
+		t.Fatalf("expected %v to have vanished, got %v", expected, ids)
+	}
 }

@@ -38,6 +38,10 @@ type Meta struct {
 	Name            string
 	ResourceVersion string
 	Created         types.UnixMilli
+
+	// Deleting reports whether Kubernetes is deleting the object. It is not
+	// synchronized to the database, which records the deletion separately.
+	Deleting bool `db:"-"`
 }
 
 func (m *Meta) ObtainMeta(k8s kmetav1.Object, clusterUuid types.UUID) {
@@ -48,6 +52,12 @@ func (m *Meta) ObtainMeta(k8s kmetav1.Object, clusterUuid types.UUID) {
 	m.Name = k8s.GetName()
 	m.ResourceVersion = k8s.GetResourceVersion()
 	m.Created = types.UnixMilli(k8s.GetCreationTimestamp().Time)
+	m.Deleting = k8s.GetDeletionTimestamp() != nil
+}
+
+// IsDeleting implements notifications.Deleter.
+func (m *Meta) IsDeleting() bool {
+	return m.Deleting
 }
 
 func (m Meta) ID() database.ID {
