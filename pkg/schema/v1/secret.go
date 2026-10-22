@@ -11,12 +11,10 @@ import (
 
 type Secret struct {
 	Meta
-	Type                string
-	Immutable           types.Bool
-	Labels              []Label              `db:"-"`
-	ResourceLabels      []ResourceLabel      `db:"-"`
-	Annotations         []Annotation         `db:"-"`
-	ResourceAnnotations []ResourceAnnotation `db:"-"`
+	Type        string
+	Immutable   types.Bool
+	Labels      []Label      `db:"-"`
+	Annotations []Annotation `db:"-"`
 }
 
 func NewSecret() Resource {
@@ -47,10 +45,6 @@ func (s *Secret) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			Name:         labelName,
 			Value:        labelValue,
 		})
-		s.ResourceLabels = append(s.ResourceLabels, ResourceLabel{
-			ResourceUuid: s.Uuid,
-			LabelUuid:    labelUuid,
-		})
 	}
 
 	for annotationName, annotationValue := range secret.Annotations {
@@ -61,18 +55,12 @@ func (s *Secret) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			Name:         annotationName,
 			Value:        annotationValue,
 		})
-		s.ResourceAnnotations = append(s.ResourceAnnotations, ResourceAnnotation{
-			ResourceUuid:   s.Uuid,
-			AnnotationUuid: annotationUuid,
-		})
 	}
 }
 
 func (s *Secret) Relations() []kdatabase.Relation {
 	return []kdatabase.Relation{
-		kdatabase.HasMany(s.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(s.Labels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(s.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(s.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

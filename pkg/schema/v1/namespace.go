@@ -12,14 +12,12 @@ import (
 
 type Namespace struct {
 	Meta
-	Phase               string
-	Yaml                string
-	Conditions          []NamespaceCondition `db:"-"`
-	Labels              []Label              `db:"-"`
-	ResourceLabels      []ResourceLabel      `db:"-"`
-	Annotations         []Annotation         `db:"-"`
-	ResourceAnnotations []ResourceAnnotation `db:"-"`
-	Favorites           []Favorite           `db:"-"`
+	Phase       string
+	Yaml        string
+	Conditions  []NamespaceCondition `db:"-"`
+	Labels      []Label              `db:"-"`
+	Annotations []Annotation         `db:"-"`
+	Favorites   []Favorite           `db:"-"`
 }
 
 type NamespaceCondition struct {
@@ -66,10 +64,6 @@ func (n *Namespace) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			Name:         labelName,
 			Value:        labelValue,
 		})
-		n.ResourceLabels = append(n.ResourceLabels, ResourceLabel{
-			ResourceUuid: n.Uuid,
-			LabelUuid:    labelUuid,
-		})
 	}
 
 	for annotationName, annotationValue := range namespace.Annotations {
@@ -79,10 +73,6 @@ func (n *Namespace) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			ResourceUuid: n.Uuid,
 			Name:         annotationName,
 			Value:        annotationValue,
-		})
-		n.ResourceAnnotations = append(n.ResourceAnnotations, ResourceAnnotation{
-			ResourceUuid:   n.Uuid,
-			AnnotationUuid: annotationUuid,
 		})
 	}
 
@@ -94,9 +84,7 @@ func (n *Namespace) Relations() []kdatabase.Relation {
 
 	return []kdatabase.Relation{
 		kdatabase.HasMany(n.Conditions, fk),
-		kdatabase.HasMany(n.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(n.Labels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(n.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(n.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(n.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}

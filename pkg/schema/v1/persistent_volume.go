@@ -14,23 +14,21 @@ import (
 
 type PersistentVolume struct {
 	Meta
-	AccessModes         Bitmask[kpersistentVolumeAccessModesSize]
-	Capacity            int64
-	ReclaimPolicy       string
-	StorageClass        sql.NullString
-	VolumeMode          string
-	VolumeSourceType    string
-	VolumeSource        string
-	Phase               string
-	Reason              sql.NullString
-	Message             sql.NullString
-	Yaml                string
-	Claim               *PersistentVolumeClaimRef `db:"-"`
-	Labels              []Label                   `db:"-"`
-	ResourceLabels      []ResourceLabel           `db:"-"`
-	Annotations         []Annotation              `db:"-"`
-	ResourceAnnotations []ResourceAnnotation      `db:"-"`
-	Favorites           []Favorite                `db:"-"`
+	AccessModes      Bitmask[kpersistentVolumeAccessModesSize]
+	Capacity         int64
+	ReclaimPolicy    string
+	StorageClass     sql.NullString
+	VolumeMode       string
+	VolumeSourceType string
+	VolumeSource     string
+	Phase            string
+	Reason           sql.NullString
+	Message          sql.NullString
+	Yaml             string
+	Claim            *PersistentVolumeClaimRef `db:"-"`
+	Labels           []Label                   `db:"-"`
+	Annotations      []Annotation              `db:"-"`
+	Favorites        []Favorite                `db:"-"`
 }
 
 type PersistentVolumeClaimRef struct {
@@ -92,10 +90,6 @@ func (p *PersistentVolume) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			Name:         labelName,
 			Value:        labelValue,
 		})
-		p.ResourceLabels = append(p.ResourceLabels, ResourceLabel{
-			ResourceUuid: p.Uuid,
-			LabelUuid:    labelUuid,
-		})
 	}
 
 	for annotationName, annotationValue := range persistentVolume.Annotations {
@@ -105,10 +99,6 @@ func (p *PersistentVolume) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			ResourceUuid: p.Uuid,
 			Name:         annotationName,
 			Value:        annotationValue,
-		})
-		p.ResourceAnnotations = append(p.ResourceAnnotations, ResourceAnnotation{
-			ResourceUuid:   p.Uuid,
-			AnnotationUuid: annotationUuid,
 		})
 	}
 
@@ -120,9 +110,7 @@ func (p *PersistentVolume) Relations() []kdatabase.Relation {
 
 	return []kdatabase.Relation{
 		kdatabase.HasOne(p.Claim, fk),
-		kdatabase.HasMany(p.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(p.Labels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(p.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(p.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(p.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}

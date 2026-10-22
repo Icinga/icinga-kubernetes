@@ -13,12 +13,6 @@ CREATE TABLE annotation (
   INDEX idx_annotation_resource_uuid (resource_uuid) COMMENT 'Filter for annotations of a resource'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
-CREATE TABLE resource_annotation (
-  resource_uuid binary(16) NOT NULL,
-  annotation_uuid binary(16) NOT NULL,
-  PRIMARY KEY (resource_uuid, annotation_uuid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
 CREATE TABLE label (
   uuid binary(16) NOT NULL,
   resource_uuid binary(16) NOT NULL,
@@ -26,12 +20,6 @@ CREATE TABLE label (
   value varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (uuid),
   INDEX idx_label_resource_uuid (resource_uuid) COMMENT 'Filter for labels of a resource'
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
-CREATE TABLE resource_label (
-  resource_uuid binary(16) NOT NULL,
-  label_uuid binary(16) NOT NULL,
-  PRIMARY KEY (resource_uuid, label_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE config_map (

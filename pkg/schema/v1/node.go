@@ -41,13 +41,11 @@ type Node struct {
 	KubeProxyVersion        string
 	IcingaState             IcingaState
 	IcingaStateReason       string
-	Conditions              []NodeCondition      `db:"-"`
-	Volumes                 []NodeVolume         `db:"-"`
-	Labels                  []Label              `db:"-"`
-	ResourceLabels          []ResourceLabel      `db:"-"`
-	Annotations             []Annotation         `db:"-"`
-	ResourceAnnotations     []ResourceAnnotation `db:"-"`
-	Favorites               []Favorite           `db:"-"`
+	Conditions              []NodeCondition `db:"-"`
+	Volumes                 []NodeVolume    `db:"-"`
+	Labels                  []Label         `db:"-"`
+	Annotations             []Annotation    `db:"-"`
+	Favorites               []Favorite      `db:"-"`
 }
 
 type NodeCondition struct {
@@ -170,10 +168,6 @@ func (n *Node) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			Name:         labelName,
 			Value:        labelValue,
 		})
-		n.ResourceLabels = append(n.ResourceLabels, ResourceLabel{
-			ResourceUuid: n.Uuid,
-			LabelUuid:    labelUuid,
-		})
 	}
 
 	n.Yaml = MarshalYaml(node)
@@ -185,10 +179,6 @@ func (n *Node) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			ResourceUuid: n.Uuid,
 			Name:         annotationName,
 			Value:        annotationValue,
-		})
-		n.ResourceAnnotations = append(n.ResourceAnnotations, ResourceAnnotation{
-			ResourceUuid:   n.Uuid,
-			AnnotationUuid: annotationUuid,
 		})
 	}
 }
@@ -271,9 +261,7 @@ func (n *Node) Relations() []kdatabase.Relation {
 	return []kdatabase.Relation{
 		kdatabase.HasMany(n.Conditions, fk),
 		kdatabase.HasMany(n.Volumes, fk),
-		kdatabase.HasMany(n.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(n.Labels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(n.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(n.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(n.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 

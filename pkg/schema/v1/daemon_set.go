@@ -32,9 +32,7 @@ type DaemonSet struct {
 	Conditions             []DaemonSetCondition `db:"-"`
 	Owners                 []DaemonSetOwner     `db:"-"`
 	Labels                 []Label              `db:"-"`
-	ResourceLabels         []ResourceLabel      `db:"-"`
 	Annotations            []Annotation         `db:"-"`
-	ResourceAnnotations    []ResourceAnnotation `db:"-"`
 	Favorites              []Favorite           `db:"-"`
 }
 
@@ -131,10 +129,6 @@ func (d *DaemonSet) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			Name:         labelName,
 			Value:        labelValue,
 		})
-		d.ResourceLabels = append(d.ResourceLabels, ResourceLabel{
-			ResourceUuid: d.Uuid,
-			LabelUuid:    labelUuid,
-		})
 	}
 
 	for annotationName, annotationValue := range daemonSet.Annotations {
@@ -144,10 +138,6 @@ func (d *DaemonSet) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			ResourceUuid: d.Uuid,
 			Name:         annotationName,
 			Value:        annotationValue,
-		})
-		d.ResourceAnnotations = append(d.ResourceAnnotations, ResourceAnnotation{
-			ResourceUuid:   d.Uuid,
-			AnnotationUuid: annotationUuid,
 		})
 	}
 
@@ -202,9 +192,7 @@ func (d *DaemonSet) Relations() []kdatabase.Relation {
 	return []kdatabase.Relation{
 		kdatabase.HasMany(d.Conditions, fk),
 		kdatabase.HasMany(d.Owners, fk),
-		kdatabase.HasMany(d.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(d.Labels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(d.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(d.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(d.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}

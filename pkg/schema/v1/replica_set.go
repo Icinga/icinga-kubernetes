@@ -30,9 +30,7 @@ type ReplicaSet struct {
 	Conditions           []ReplicaSetCondition `db:"-"`
 	Owners               []ReplicaSetOwner     `db:"-"`
 	Labels               []Label               `db:"-"`
-	ResourceLabels       []ResourceLabel       `db:"-"`
 	Annotations          []Annotation          `db:"-"`
-	ResourceAnnotations  []ResourceAnnotation  `db:"-"`
 	Favorites            []Favorite            `db:"-"`
 }
 
@@ -130,10 +128,6 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			Name:         labelName,
 			Value:        labelValue,
 		})
-		r.ResourceLabels = append(r.ResourceLabels, ResourceLabel{
-			ResourceUuid: r.Uuid,
-			LabelUuid:    labelUuid,
-		})
 	}
 
 	for annotationName, annotationValue := range replicaSet.Annotations {
@@ -143,10 +137,6 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			ResourceUuid: r.Uuid,
 			Name:         annotationName,
 			Value:        annotationValue,
-		})
-		r.ResourceAnnotations = append(r.ResourceAnnotations, ResourceAnnotation{
-			ResourceUuid:   r.Uuid,
-			AnnotationUuid: annotationUuid,
 		})
 	}
 
@@ -203,9 +193,7 @@ func (r *ReplicaSet) Relations() []kdatabase.Relation {
 	return []kdatabase.Relation{
 		kdatabase.HasMany(r.Conditions, fk),
 		kdatabase.HasMany(r.Owners, fk),
-		kdatabase.HasMany(r.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(r.Labels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(r.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(r.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(r.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}

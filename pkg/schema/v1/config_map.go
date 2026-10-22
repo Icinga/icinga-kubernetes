@@ -11,11 +11,9 @@ import (
 
 type ConfigMap struct {
 	Meta
-	Immutable           types.Bool
-	Labels              []Label              `db:"-"`
-	ResourceLabels      []ResourceLabel      `db:"-"`
-	Annotations         []Annotation         `db:"-"`
-	ResourceAnnotations []ResourceAnnotation `db:"-"`
+	Immutable   types.Bool
+	Labels      []Label      `db:"-"`
+	Annotations []Annotation `db:"-"`
 }
 
 func NewConfigMap() Resource {
@@ -44,10 +42,6 @@ func (c *ConfigMap) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			Name:         labelName,
 			Value:        labelValue,
 		})
-		c.ResourceLabels = append(c.ResourceLabels, ResourceLabel{
-			ResourceUuid: c.Uuid,
-			LabelUuid:    labelUuid,
-		})
 	}
 
 	for annotationName, annotationValue := range configMap.Annotations {
@@ -58,18 +52,12 @@ func (c *ConfigMap) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			Name:         annotationName,
 			Value:        annotationValue,
 		})
-		c.ResourceAnnotations = append(c.ResourceAnnotations, ResourceAnnotation{
-			ResourceUuid:   c.Uuid,
-			AnnotationUuid: annotationUuid,
-		})
 	}
 }
 
 func (c *ConfigMap) Relations() []kdatabase.Relation {
 	return []kdatabase.Relation{
-		kdatabase.HasMany(c.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(c.Labels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(c.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(c.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

@@ -36,9 +36,7 @@ type StatefulSet struct {
 	Conditions                                      []StatefulSetCondition `db:"-"`
 	Owners                                          []StatefulSetOwner     `db:"-"`
 	Labels                                          []Label                `db:"-"`
-	ResourceLabels                                  []ResourceLabel        `db:"-"`
 	Annotations                                     []Annotation           `db:"-"`
-	ResourceAnnotations                             []ResourceAnnotation   `db:"-"`
 	Favorites                                       []Favorite             `db:"-"`
 }
 
@@ -155,10 +153,6 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			Name:         labelName,
 			Value:        labelValue,
 		})
-		s.ResourceLabels = append(s.ResourceLabels, ResourceLabel{
-			ResourceUuid: s.Uuid,
-			LabelUuid:    labelUuid,
-		})
 	}
 
 	for annotationName, annotationValue := range statefulSet.Annotations {
@@ -168,10 +162,6 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			ResourceUuid: s.Uuid,
 			Name:         annotationName,
 			Value:        annotationValue,
-		})
-		s.ResourceAnnotations = append(s.ResourceAnnotations, ResourceAnnotation{
-			ResourceUuid:   s.Uuid,
-			AnnotationUuid: annotationUuid,
 		})
 	}
 
@@ -220,9 +210,7 @@ func (s *StatefulSet) Relations() []kdatabase.Relation {
 	return []kdatabase.Relation{
 		kdatabase.HasMany(s.Conditions, fk),
 		kdatabase.HasMany(s.Owners, fk),
-		kdatabase.HasMany(s.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(s.Labels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(s.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(s.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(s.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}
