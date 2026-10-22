@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	stdsync "sync"
@@ -58,7 +59,7 @@ func main() {
 	var glue daemon.ConfigFlagGlue
 	var showVersion bool
 	var clusterName string
-	var removeClusterUuids internal.UuidSliceValue
+	var removeClusterUuids uuidSliceValue
 
 	// The Kubernetes client libraries log through klog, so keep its flags on our command line
 	// to let -v and friends control their output. Our own code logs via icinga-go-library.
@@ -911,4 +912,54 @@ func SyncServicePods(ctx context.Context, db *kdatabase.DB, serviceList corev1.S
 	})
 
 	return g.Wait()
+}
+
+// uuidSliceValue is a pflag.Value that collects UUIDs from a flag that may be
+// repeated and may hold a comma-separated list. Invalid UUIDs are rejected
+// while the flags are parsed.
+type uuidSliceValue struct {
+	values []types.UUID
+}
+
+// Set implements pflag.Value. It parses val as a comma-separated list of UUIDs
+// and appends those not yet collected by this or previous calls.
+func (s *uuidSliceValue) Set(val string) error {
+	for uuidStr := range strings.SplitSeq(val, ",") {
+		u, err := uuid.Parse(strings.TrimSpace(uuidStr))
+		if err != nil {
+			return err
+		}
+
+		uu := types.UUID{UUID: u}
+
+		if !slices.Contains(s.values, uu) {
+			s.values = append(s.values, uu)
+		}
+	}
+
+	return nil
+}
+
+// Type implements pflag.Value.
+func (s *uuidSliceValue) Type() string {
+	return "uuidSlice"
+}
+
+// String implements pflag.Value.
+func (s *uuidSliceValue) String() string {
+	var uuidStrs []string
+	for _, u := range s.values {
+		uuidStrs = append(uuidStrs, u.String())
+	}
+
+	if len(uuidStrs) == 0 {
+		return ""
+	}
+
+	return "[" + strings.Join(uuidStrs, " ") + "]"
+}
+
+// Value returns a copy of the parsed UUIDs.
+func (s *uuidSliceValue) Value() []types.UUID {
+	return slices.Clone(s.values)
 }
