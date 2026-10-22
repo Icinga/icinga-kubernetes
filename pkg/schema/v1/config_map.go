@@ -12,13 +12,12 @@ import (
 
 type ConfigMap struct {
 	Meta
-	Immutable            types.Bool
-	Labels               []Label               `db:"-"`
-	ConfigMapLabels      []ConfigMapLabel      `db:"-"`
-	ResourceLabels       []ResourceLabel       `db:"-"`
-	Annotations          []Annotation          `db:"-"`
-	ConfigMapAnnotations []ConfigMapAnnotation `db:"-"`
-	ResourceAnnotations  []ResourceAnnotation  `db:"-"`
+	Immutable           types.Bool
+	Labels              []Label              `db:"-"`
+	ConfigMapLabels     []ConfigMapLabel     `db:"-"`
+	ResourceLabels      []ResourceLabel      `db:"-"`
+	Annotations         []Annotation         `db:"-"`
+	ResourceAnnotations []ResourceAnnotation `db:"-"`
 }
 
 type ConfigMapLabel struct {
@@ -29,16 +28,6 @@ type ConfigMapLabel struct {
 
 func (c ConfigMapLabel) ID() database.ID {
 	return compoundId{id: c.ConfigMapUuid.String() + c.LabelUuid.String()}
-}
-
-type ConfigMapAnnotation struct {
-	kdatabase.EntityStub
-	ConfigMapUuid  types.UUID
-	AnnotationUuid types.UUID
-}
-
-func (c ConfigMapAnnotation) ID() database.ID {
-	return compoundId{id: c.ConfigMapUuid.String() + c.AnnotationUuid.String()}
 }
 
 func NewConfigMap() Resource {
@@ -79,13 +68,10 @@ func (c *ConfigMap) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	for annotationName, annotationValue := range configMap.Annotations {
 		annotationUuid := NewUUID(c.Uuid, strings.ToLower(annotationName+":"+annotationValue))
 		c.Annotations = append(c.Annotations, Annotation{
-			Uuid:  annotationUuid,
-			Name:  annotationName,
-			Value: annotationValue,
-		})
-		c.ConfigMapAnnotations = append(c.ConfigMapAnnotations, ConfigMapAnnotation{
-			ConfigMapUuid:  c.Uuid,
-			AnnotationUuid: annotationUuid,
+			Uuid:         annotationUuid,
+			ResourceUuid: c.Uuid,
+			Name:         annotationName,
+			Value:        annotationValue,
 		})
 		c.ResourceAnnotations = append(c.ResourceAnnotations, ResourceAnnotation{
 			ResourceUuid:   c.Uuid,
@@ -102,7 +88,6 @@ func (c *ConfigMap) Relations() []kdatabase.Relation {
 		kdatabase.HasMany(c.Labels, kdatabase.WithoutCascadeDelete()),
 		kdatabase.HasMany(c.ConfigMapLabels, fk),
 		kdatabase.HasMany(c.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(c.Annotations, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(c.ConfigMapAnnotations, fk),
+		kdatabase.HasMany(c.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

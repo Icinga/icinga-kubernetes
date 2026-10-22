@@ -52,7 +52,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
-const expectedSchemaVersion = "0.4.0"
+const expectedSchemaVersion = "0.5.0"
 
 func main() {
 	var glue daemon.ConfigFlagGlue

@@ -18,7 +18,6 @@ type Secret struct {
 	SecretLabels        []SecretLabel        `db:"-"`
 	ResourceLabels      []ResourceLabel      `db:"-"`
 	Annotations         []Annotation         `db:"-"`
-	SecretAnnotations   []SecretAnnotation   `db:"-"`
 	ResourceAnnotations []ResourceAnnotation `db:"-"`
 }
 
@@ -30,16 +29,6 @@ type SecretLabel struct {
 
 func (s SecretLabel) ID() database.ID {
 	return compoundId{id: s.SecretUuid.String() + s.LabelUuid.String()}
-}
-
-type SecretAnnotation struct {
-	kdatabase.EntityStub
-	SecretUuid     types.UUID
-	AnnotationUuid types.UUID
-}
-
-func (s SecretAnnotation) ID() database.ID {
-	return compoundId{id: s.SecretUuid.String() + s.AnnotationUuid.String()}
 }
 
 func NewSecret() Resource {
@@ -82,13 +71,10 @@ func (s *Secret) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	for annotationName, annotationValue := range secret.Annotations {
 		annotationUuid := NewUUID(s.Uuid, strings.ToLower(annotationName+":"+annotationValue))
 		s.Annotations = append(s.Annotations, Annotation{
-			Uuid:  annotationUuid,
-			Name:  annotationName,
-			Value: annotationValue,
-		})
-		s.SecretAnnotations = append(s.SecretAnnotations, SecretAnnotation{
-			SecretUuid:     s.Uuid,
-			AnnotationUuid: annotationUuid,
+			Uuid:         annotationUuid,
+			ResourceUuid: s.Uuid,
+			Name:         annotationName,
+			Value:        annotationValue,
 		})
 		s.ResourceAnnotations = append(s.ResourceAnnotations, ResourceAnnotation{
 			ResourceUuid:   s.Uuid,
@@ -105,7 +91,6 @@ func (s *Secret) Relations() []kdatabase.Relation {
 		kdatabase.HasMany(s.Labels, kdatabase.WithoutCascadeDelete()),
 		kdatabase.HasMany(s.SecretLabels, fk),
 		kdatabase.HasMany(s.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(s.Annotations, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(s.SecretAnnotations, fk),
+		kdatabase.HasMany(s.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

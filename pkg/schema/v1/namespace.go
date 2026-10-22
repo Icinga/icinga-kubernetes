@@ -15,16 +15,15 @@ import (
 
 type Namespace struct {
 	Meta
-	Phase                string
-	Yaml                 string
-	Conditions           []NamespaceCondition  `db:"-"`
-	Labels               []Label               `db:"-"`
-	NamespaceLabels      []NamespaceLabel      `db:"-"`
-	ResourceLabels       []ResourceLabel       `db:"-"`
-	Annotations          []Annotation          `db:"-"`
-	NamespaceAnnotations []NamespaceAnnotation `db:"-"`
-	ResourceAnnotations  []ResourceAnnotation  `db:"-"`
-	Favorites            []Favorite            `db:"-"`
+	Phase               string
+	Yaml                string
+	Conditions          []NamespaceCondition `db:"-"`
+	Labels              []Label              `db:"-"`
+	NamespaceLabels     []NamespaceLabel     `db:"-"`
+	ResourceLabels      []ResourceLabel      `db:"-"`
+	Annotations         []Annotation         `db:"-"`
+	ResourceAnnotations []ResourceAnnotation `db:"-"`
+	Favorites           []Favorite           `db:"-"`
 }
 
 type NamespaceCondition struct {
@@ -49,16 +48,6 @@ type NamespaceLabel struct {
 
 func (n NamespaceLabel) ID() database.ID {
 	return compoundId{id: n.NamespaceUuid.String() + n.LabelUuid.String()}
-}
-
-type NamespaceAnnotation struct {
-	kdatabase.EntityStub
-	NamespaceUuid  types.UUID
-	AnnotationUuid types.UUID
-}
-
-func (n NamespaceAnnotation) ID() database.ID {
-	return compoundId{id: n.NamespaceUuid.String() + n.AnnotationUuid.String()}
 }
 
 func NewNamespace() Resource {
@@ -103,13 +92,10 @@ func (n *Namespace) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	for annotationName, annotationValue := range namespace.Annotations {
 		annotationUuid := NewUUID(n.Uuid, strings.ToLower(annotationName+":"+annotationValue))
 		n.Annotations = append(n.Annotations, Annotation{
-			Uuid:  annotationUuid,
-			Name:  annotationName,
-			Value: annotationValue,
-		})
-		n.NamespaceAnnotations = append(n.NamespaceAnnotations, NamespaceAnnotation{
-			NamespaceUuid:  n.Uuid,
-			AnnotationUuid: annotationUuid,
+			Uuid:         annotationUuid,
+			ResourceUuid: n.Uuid,
+			Name:         annotationName,
+			Value:        annotationValue,
 		})
 		n.ResourceAnnotations = append(n.ResourceAnnotations, ResourceAnnotation{
 			ResourceUuid:   n.Uuid,
@@ -133,8 +119,7 @@ func (n *Namespace) Relations() []kdatabase.Relation {
 		kdatabase.HasMany(n.Labels, kdatabase.WithoutCascadeDelete()),
 		kdatabase.HasMany(n.NamespaceLabels, fk),
 		kdatabase.HasMany(n.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(n.Annotations, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(n.NamespaceAnnotations, fk),
+		kdatabase.HasMany(n.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(n.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }
