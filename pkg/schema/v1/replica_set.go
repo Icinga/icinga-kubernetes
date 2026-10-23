@@ -181,7 +181,7 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	r.Yaml = MarshalYaml(replicaSet)
 }
 
-func (r *ReplicaSet) MarshalEvent() (notifications.Event, error) {
+func (r *ReplicaSet) MarshalEvent() notifications.Event {
 	return notifications.Event{
 		Uuid:        r.Uuid,
 		ClusterUuid: r.ClusterUuid,
@@ -197,7 +197,7 @@ func (r *ReplicaSet) MarshalEvent() (notifications.Event, error) {
 			"namespace":    r.Namespace,
 			"resource":     "replica_set",
 		},
-	}, nil
+	}
 }
 
 func (r *ReplicaSet) getIcingaState() (IcingaState, string) {

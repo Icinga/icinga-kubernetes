@@ -194,7 +194,7 @@ func (d *Deployment) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	d.Yaml = MarshalYaml(deployment)
 }
 
-func (d *Deployment) MarshalEvent() (notifications.Event, error) {
+func (d *Deployment) MarshalEvent() notifications.Event {
 	return notifications.Event{
 		Uuid:        d.Uuid,
 		ClusterUuid: d.ClusterUuid,
@@ -210,7 +210,7 @@ func (d *Deployment) MarshalEvent() (notifications.Event, error) {
 			"namespace":    d.Namespace,
 			"resource":     "deployment",
 		},
-	}, nil
+	}
 }
 
 func (d *Deployment) getIcingaState() (IcingaState, string) {
