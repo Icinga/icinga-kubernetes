@@ -16,28 +16,28 @@ import (
 )
 
 type Sync struct {
-	db       *kdatabase.DB
-	informer cache.SharedIndexInformer
-	log      *logging.Logger
-	factory  func() schemav1.Resource
+	db        *kdatabase.DB
+	informers Informers
+	log       *logging.Logger
+	factory   func() schemav1.Resource
 }
 
 func NewSync(
 	db *kdatabase.DB,
-	informer cache.SharedIndexInformer,
+	informers Informers,
 	log *logging.Logger,
 	factory func() schemav1.Resource,
 ) *Sync {
 	return &Sync{
-		db:       db,
-		informer: informer,
-		log:      log,
-		factory:  factory,
+		db:        db,
+		informers: informers,
+		log:       log,
+		factory:   factory,
 	}
 }
 
 func (s *Sync) Run(ctx context.Context, features ...Feature) error {
-	controller := NewController(s.informer, s.log)
+	controller := NewController(s.informers, s.log)
 
 	with := NewFeatures(features...)
 
@@ -108,17 +108,17 @@ func (s *Sync) deleteVanished(ctx context.Context, sink *Sink, synced map[string
 		return nil
 	}
 
-	if !cache.WaitForCacheSync(ctx.Done(), s.informer.HasSynced) {
+	if !cache.WaitForCacheSync(ctx.Done(), s.informers.HasSynced) {
 		return ctx.Err()
 	}
 
 	for key, id := range synced {
-		obj, exists, err := s.informer.GetStore().GetByKey(key)
+		obj, exists, err := s.informers.Object(key)
 		if err != nil {
 			return err
 		}
 
-		if exists && schemav1.EnsureUUID(obj.(kmetav1.Object).GetUID()) == id {
+		if exists && schemav1.EnsureUUID(obj.GetUID()) == id {
 			continue
 		}
 

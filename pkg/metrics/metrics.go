@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -15,12 +17,14 @@ import (
 	"github.com/icinga/icinga-go-library/retry"
 	"github.com/icinga/icinga-go-library/types"
 	schemav1 "github.com/icinga/icinga-kubernetes/pkg/schema/v1"
+	syncv1 "github.com/icinga/icinga-kubernetes/pkg/sync/v1"
 	"github.com/pkg/errors"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	kcorev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	kcache "k8s.io/client-go/tools/cache"
 )
 
@@ -168,62 +172,62 @@ var (
 	promQueriesPod = []PromQuery{
 		{
 			"cpu.usage",
-			`sum by (instance, namespace, pod) (rate(container_cpu_usage_seconds_total[2m]))`,
+			`sum by (instance, namespace, pod) (rate(container_cpu_usage_seconds_total{NAMESPACE_MATCHER}[2m]))`,
 			"",
 		},
 		{
 			"memory.usage",
-			`sum by (instance, namespace, pod) (container_memory_usage_bytes) / on (instance) group_left () label_replace(sum by (node) (node_memory_MemTotal_bytes), "instance", "$1", "node", "(.*)")`,
+			`sum by (instance, namespace, pod) (container_memory_usage_bytes{NAMESPACE_MATCHER}) / on (instance) group_left () label_replace(sum by (node) (node_memory_MemTotal_bytes), "instance", "$1", "node", "(.*)")`,
 			"",
 		},
 		{
 			"cpu.usage.cores",
-			`sum by (namespace, pod) (rate(container_cpu_usage_seconds_total[2m]))`,
+			`sum by (namespace, pod) (rate(container_cpu_usage_seconds_total{NAMESPACE_MATCHER}[2m]))`,
 			"",
 		},
 		{
 			"memory.usage.bytes",
-			`sum by (namespace, pod) (container_memory_usage_bytes)`,
+			`sum by (namespace, pod) (container_memory_usage_bytes{NAMESPACE_MATCHER})`,
 			"",
 		},
 		{
 			"cpu.request",
-			`sum by (node, namespace, pod) (kube_pod_container_resource_requests{resource="cpu"})`,
+			`sum by (node, namespace, pod) (kube_pod_container_resource_requests{resource="cpu",NAMESPACE_MATCHER})`,
 			"",
 		},
 		{
 			"cpu.request.percentage",
-			`sum by (node, namespace, pod) (kube_pod_container_resource_requests{resource="cpu"}) / on(node) group_left() (sum by (node) (machine_cpu_cores))`,
+			`sum by (node, namespace, pod) (kube_pod_container_resource_requests{resource="cpu",NAMESPACE_MATCHER}) / on(node) group_left() (sum by (node) (machine_cpu_cores))`,
 			"",
 		},
 		{
 			"cpu.limit",
-			`sum by (node, namespace, pod) (kube_pod_container_resource_limits{resource="cpu"})`,
+			`sum by (node, namespace, pod) (kube_pod_container_resource_limits{resource="cpu",NAMESPACE_MATCHER})`,
 			"",
 		},
 		{
 			"cpu.limit.percentage",
-			`sum by (node, namespace, pod) (kube_pod_container_resource_limits{resource="cpu"}) / on(node) group_left() (sum by (node) (machine_cpu_cores))`,
+			`sum by (node, namespace, pod) (kube_pod_container_resource_limits{resource="cpu",NAMESPACE_MATCHER}) / on(node) group_left() (sum by (node) (machine_cpu_cores))`,
 			"",
 		},
 		{
 			"memory.request",
-			`sum by (node, namespace, pod) (kube_pod_container_resource_requests{resource="memory"})`,
+			`sum by (node, namespace, pod) (kube_pod_container_resource_requests{resource="memory",NAMESPACE_MATCHER})`,
 			"",
 		},
 		{
 			"memory.request.percentage",
-			`sum by (node, namespace, pod) (kube_pod_container_resource_requests{resource="memory"}) / on(node) group_left() (sum by (node) (machine_memory_bytes))`,
+			`sum by (node, namespace, pod) (kube_pod_container_resource_requests{resource="memory",NAMESPACE_MATCHER}) / on(node) group_left() (sum by (node) (machine_memory_bytes))`,
 			"",
 		},
 		{
 			"memory.limit",
-			`sum by (node, namespace, pod) (kube_pod_container_resource_limits{resource="memory"})`,
+			`sum by (node, namespace, pod) (kube_pod_container_resource_limits{resource="memory",NAMESPACE_MATCHER})`,
 			"",
 		},
 		{
 			"memory.limit.percentage",
-			`sum by (node, namespace, pod) (kube_pod_container_resource_limits{resource="memory"}) / on(node) group_left() (sum by (node) (machine_memory_bytes))`,
+			`sum by (node, namespace, pod) (kube_pod_container_resource_limits{resource="memory",NAMESPACE_MATCHER}) / on(node) group_left() (sum by (node) (machine_memory_bytes))`,
 			"",
 		},
 	}
@@ -272,20 +276,57 @@ var (
 	}
 )
 
-// PromMetricSync synchronizes prometheus metrics from the prometheus API to the database
-type PromMetricSync struct {
-	promApiClient v1.API
-	db            *database.DB
-	logger        *logging.Logger
+// namespaceMatcherPlaceholder marks where pod queries select series by namespace.
+const namespaceMatcherPlaceholder = "NAMESPACE_MATCHER"
+
+// NamespaceMatcher returns a PromQL label matcher that selects series of the include namespaces,
+// or of all namespaces but the exclude ones. It returns an empty string if both are empty.
+func NamespaceMatcher(include, exclude []string) string {
+	op, namespaces := "=~", include
+	if len(exclude) > 0 {
+		op, namespaces = "!~", exclude
+	}
+
+	if len(namespaces) == 0 {
+		return ""
+	}
+
+	quoted := make([]string, 0, len(namespaces))
+	for _, ns := range namespaces {
+		quoted = append(quoted, regexp.QuoteMeta(ns))
+	}
+
+	return "namespace" + op + strconv.Quote(strings.Join(quoted, "|"))
 }
 
-// NewPromMetricSync creates a new PromMetricSync
-func NewPromMetricSync(promApiClient v1.API, db *database.DB, logger *logging.Logger) *PromMetricSync {
+// PromMetricSync synchronizes prometheus metrics from the prometheus API to the database
+type PromMetricSync struct {
+	promApiClient    v1.API
+	db               *database.DB
+	logger           *logging.Logger
+	namespaceMatcher string
+}
+
+// NewPromMetricSync creates a new PromMetricSync.
+// namespaceMatcher restricts pod metrics to certain namespaces, see NamespaceMatcher.
+func NewPromMetricSync(promApiClient v1.API, db *database.DB, logger *logging.Logger, namespaceMatcher string) *PromMetricSync {
 	return &PromMetricSync{
-		promApiClient: promApiClient,
-		db:            db,
-		logger:        logger,
+		promApiClient:    promApiClient,
+		db:               db,
+		logger:           logger,
+		namespaceMatcher: namespaceMatcher,
 	}
+}
+
+// podQueries returns promQueriesPod restricted to the namespaces selected by pms.namespaceMatcher.
+func (pms *PromMetricSync) podQueries() []PromQuery {
+	queries := make([]PromQuery, 0, len(promQueriesPod))
+	for _, q := range promQueriesPod {
+		q.query = strings.ReplaceAll(q.query, namespaceMatcherPlaceholder, pms.namespaceMatcher)
+		queries = append(queries, q)
+	}
+
+	return queries
 }
 
 // promMetricClusterUpsertStmt returns database upsert statement to upsert cluster metrics
@@ -416,15 +457,14 @@ func (pms *PromMetricSync) run(
 	return g.Wait()
 }
 
-func (pms *PromMetricSync) Nodes(ctx context.Context, informer kcache.SharedIndexInformer) error {
-	if !kcache.WaitForCacheSync(ctx.Done(), informer.HasSynced) {
+func (pms *PromMetricSync) Nodes(ctx context.Context, informers syncv1.TypedInformers[*kcorev1.Node]) error {
+	if !kcache.WaitForCacheSync(ctx.Done(), informers.HasSynced) {
 		return errors.New("timed out waiting for caches to sync")
 	}
 
 	nodes := sync.Map{}
 	defer periodic.Start(ctx, 1*time.Hour, func(tick periodic.Tick) {
-		for _, item := range informer.GetStore().List() {
-			node := item.(*kcorev1.Node)
+		for _, node := range informers.List(labels.Everything()) {
 			uuid := schemav1.EnsureUUID(node.UID)
 			nodes.Store(node.Name, uuid)
 			for _, address := range node.Status.Addresses {
@@ -491,8 +531,8 @@ func (pms *PromMetricSync) Nodes(ctx context.Context, informer kcache.SharedInde
 	return g.Wait()
 }
 
-func (pms *PromMetricSync) Pods(ctx context.Context, informer kcache.SharedIndexInformer) error {
-	if !kcache.WaitForCacheSync(ctx.Done(), informer.HasSynced) {
+func (pms *PromMetricSync) Pods(ctx context.Context, informers syncv1.TypedInformers[*kcorev1.Pod]) error {
+	if !kcache.WaitForCacheSync(ctx.Done(), informers.HasSynced) {
 		return errors.New("timed out waiting for caches to sync")
 	}
 
@@ -503,14 +543,14 @@ func (pms *PromMetricSync) Pods(ctx context.Context, informer kcache.SharedIndex
 	g.Go(func() error {
 		return pms.run(
 			ctx,
-			promQueriesPod,
+			pms.podQueries(),
 			upsertMetrics,
 			func(query PromQuery, res *model.Sample) database.Entity {
 				if res.Metric["pod"] == "" {
 					return nil
 				}
 
-				obj, exists, err := informer.GetStore().GetByKey(
+				pod, exists, err := informers.GetByKey(
 					kcache.NewObjectName(string(res.Metric["namespace"]), string(res.Metric["pod"])).String())
 				if err != nil {
 					//return errors.Wrap(err, "cannot get pod from store")
@@ -519,7 +559,6 @@ func (pms *PromMetricSync) Pods(ctx context.Context, informer kcache.SharedIndex
 				if !exists {
 					return nil
 				}
-				pod := obj.(*kcorev1.Pod)
 
 				name := ""
 				if query.nameLabel != "" {
@@ -546,8 +585,10 @@ func (pms *PromMetricSync) Pods(ctx context.Context, informer kcache.SharedIndex
 	return g.Wait()
 }
 
-func (pms *PromMetricSync) Containers(ctx context.Context, informer kcache.SharedIndexInformer) error {
-	if !kcache.WaitForCacheSync(ctx.Done(), informer.HasSynced) {
+// TODO: Containers is currently not in use and does not read the informers' objects,
+// so their type *kcorev1.Pod is only a guess.
+func (pms *PromMetricSync) Containers(ctx context.Context, informers syncv1.TypedInformers[*kcorev1.Pod]) error {
+	if !kcache.WaitForCacheSync(ctx.Done(), informers.HasSynced) {
 		pms.logger.Fatal("Timed out waiting for caches to sync")
 	}
 
@@ -593,8 +634,10 @@ func (pms *PromMetricSync) Containers(ctx context.Context, informer kcache.Share
 	return g.Wait()
 }
 
-func (pms *PromMetricSync) Clusters(ctx context.Context, informer kcache.SharedIndexInformer) error {
-	if !kcache.WaitForCacheSync(ctx.Done(), informer.HasSynced) {
+// TODO: Clusters is currently not in use and does not read the informers' objects,
+// so their type *kcorev1.Node is only a guess.
+func (pms *PromMetricSync) Clusters(ctx context.Context, informers syncv1.TypedInformers[*kcorev1.Node]) error {
+	if !kcache.WaitForCacheSync(ctx.Done(), informers.HasSynced) {
 		pms.logger.Fatal("Timed out waiting for caches to sync")
 	}
 

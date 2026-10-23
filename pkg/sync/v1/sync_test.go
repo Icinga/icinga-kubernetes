@@ -34,7 +34,7 @@ func TestSyncDeleteVanished(t *testing.T) {
 		t.Fatal("timed out waiting for cache sync")
 	}
 
-	sync := &Sync{informer: informer}
+	sync := &Sync{informers: TypedInformers[*kcorev1.Pod]{informer}}
 
 	t.Run("NothingSynced", func(t *testing.T) {
 		if err := sync.deleteVanished(ctx, NewSink(nil, nil), nil); err != nil {
