@@ -28,8 +28,7 @@ func NewController(informer cache.SharedIndexInformer, log *logging.Logger) *Con
 }
 
 func (c *Controller) Stream(ctx context.Context, sink *Sink) error {
-	_, err := c.informer.AddEventHandler(NewEventHandler(c.queue, c.log))
-	if err != nil {
+	if _, err := c.informer.AddEventHandler(NewEventHandler(c.queue, c.log)); err != nil {
 		return err
 	}
 
@@ -82,11 +81,7 @@ func (c *Controller) stream(ctx context.Context, sink *Sink) error {
 			}
 		} else {
 			obj := item.(kmetav1.Object)
-			err := sink.Upsert(ctx, &Item{
-				Key:  key,
-				Item: &obj,
-			})
-			if err != nil {
+			if err := sink.Upsert(ctx, &Item{Key: key, Item: &obj}); err != nil {
 				return err
 			}
 		}

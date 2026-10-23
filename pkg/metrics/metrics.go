@@ -347,7 +347,7 @@ func (pms *PromMetricSync) run(
 			var err error
 
 			for {
-				err := retry.WithBackoff(
+				if err := retry.WithBackoff(
 					ctx,
 					func(ctx context.Context) error {
 						result, warnings, err = pms.promApiClient.Query(
@@ -378,8 +378,7 @@ func (pms *PromMetricSync) run(
 							}
 						},
 					},
-				)
-				if err != nil {
+				); err != nil {
 					return errors.Wrap(err, "error querying Prometheus")
 				}
 

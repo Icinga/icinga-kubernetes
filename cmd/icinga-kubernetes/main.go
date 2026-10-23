@@ -175,7 +175,7 @@ func main() {
 	if hasSchema {
 		var version string
 
-		err = retry.WithBackoff(
+		if err := retry.WithBackoff(
 			ctx,
 			func(ctx context.Context) (err error) {
 				query := "SELECT version FROM kubernetes_schema ORDER BY id DESC LIMIT 1"
@@ -187,21 +187,19 @@ func main() {
 			},
 			retry.Retryable,
 			backoff.NewExponentialWithJitter(128*time.Millisecond, 1*time.Minute),
-			retry.Settings{})
-		if err != nil {
+			retry.Settings{},
+		); err != nil {
 			logger.Fatalw("Cannot query schema version", logging.Error(err))
 		}
 
 		if version != expectedSchemaVersion {
-			err = retry.WithBackoff(
+			if err := retry.WithBackoff(
 				ctx,
-				func(ctx context.Context) (err error) {
-					rows, err := db.Query(
-						db.Rebind("SELECT table_name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=?"),
-						cfg.Database.Database,
-					)
+				func(ctx context.Context) error {
+					query := db.Rebind("SELECT table_name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=?")
+					rows, err := db.QueryContext(ctx, query, cfg.Database.Database)
 					if err != nil {
-						logger.Fatalw("Cannot query database tables", logging.Error(err))
+						return database.CantPerformQuery(err, query)
 					}
 					defer func() {
 						_ = rows.Close()
@@ -212,20 +210,25 @@ func main() {
 					for rows.Next() {
 						var tableName string
 						if err := rows.Scan(&tableName); err != nil {
-							logger.Fatalw("Cannot scan table name", logging.Error(err))
+							return errors.Wrap(err, "cannot scan table name")
 						}
 
-						_, err := db.Exec(fmt.Sprintf(`DROP TABLE %s`, tableName))
-						if err != nil {
-							logger.Fatalw("Cannot drop table", zap.String("table", tableName), logging.Error(err))
+						stmt := fmt.Sprintf(`DROP TABLE %s`, tableName)
+						if _, err := db.ExecContext(ctx, stmt); err != nil {
+							return database.CantPerformQuery(err, stmt)
 						}
 					}
-					return
+
+					if err := rows.Err(); err != nil {
+						return database.CantPerformQuery(err, query)
+					}
+
+					return nil
 				},
 				retry.Retryable,
 				backoff.NewExponentialWithJitter(128*time.Millisecond, 1*time.Minute),
-				retry.Settings{})
-			if err != nil {
+				retry.Settings{},
+			); err != nil {
 				logger.Fatalw("Cannot wipe outdated database tables", logging.Error(err))
 			}
 
@@ -451,14 +454,12 @@ func main() {
 		return SyncServicePods(ctx, db, factory.Core().V1().Services(), factory.Core().V1().Pods())
 	})
 
-	err = internal.SyncPrometheusConfig(ctx, db.DB, &cfg.Prometheus, clusterInstance.Uuid)
-	if err != nil {
+	if err := internal.SyncPrometheusConfig(ctx, db.DB, &cfg.Prometheus, clusterInstance.Uuid); err != nil {
 		logger.Errorw("Cannot sync prometheus config", logging.Error(err))
 	}
 
 	if cfg.Prometheus.Url == "" {
-		err = internal.AutoDetectPrometheus(ctx, clientset, &cfg.Prometheus)
-		if err != nil {
+		if err := internal.AutoDetectPrometheus(ctx, clientset, &cfg.Prometheus); err != nil {
 			logger.Errorw("Cannot auto-detect prometheus", logging.Error(err))
 		}
 	}
