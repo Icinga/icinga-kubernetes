@@ -183,8 +183,8 @@ func main() {
 				return
 			},
 			retry.Retryable,
-			backoff.NewExponentialWithJitter(128*time.Millisecond, 1*time.Minute),
-			retry.Settings{},
+			backoff.DefaultBackoff,
+			db.GetDefaultRetrySettings(),
 		); err != nil {
 			logger.Fatalw("Cannot query schema version", logging.Error(err))
 		}
@@ -192,13 +192,11 @@ func main() {
 		if version != expectedSchemaVersion {
 			if err := retry.WithBackoff(
 				ctx,
-				func(ctx context.Context) (err error) {
-					rows, err := db.Query(
-						db.Rebind("SELECT table_name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=?"),
-						cfg.Database.Database,
-					)
+				func(ctx context.Context) error {
+					query := db.Rebind("SELECT table_name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=?")
+					rows, err := db.QueryContext(ctx, query, cfg.Database.Database)
 					if err != nil {
-						logger.Fatalw("Cannot query database tables", logging.Error(err))
+						return database.CantPerformQuery(err, query)
 					}
 					defer func() {
 						_ = rows.Close()
@@ -209,18 +207,24 @@ func main() {
 					for rows.Next() {
 						var tableName string
 						if err := rows.Scan(&tableName); err != nil {
-							logger.Fatalw("Cannot scan table name", logging.Error(err))
+							return errors.Wrap(err, "cannot scan table name")
 						}
 
-						if _, err := db.Exec(fmt.Sprintf(`DROP TABLE %s`, tableName)); err != nil {
-							logger.Fatalw("Cannot drop table", zap.String("table", tableName), logging.Error(err))
+						stmt := fmt.Sprintf(`DROP TABLE %s`, tableName)
+						if _, err := db.ExecContext(ctx, stmt); err != nil {
+							return database.CantPerformQuery(err, stmt)
 						}
 					}
-					return
+
+					if err := rows.Err(); err != nil {
+						return database.CantPerformQuery(err, query)
+					}
+
+					return nil
 				},
 				retry.Retryable,
-				backoff.NewExponentialWithJitter(128*time.Millisecond, 1*time.Minute),
-				retry.Settings{},
+				backoff.DefaultBackoff,
+				db.GetDefaultRetrySettings(),
 			); err != nil {
 				logger.Fatalw("Cannot wipe outdated database tables", logging.Error(err))
 			}
