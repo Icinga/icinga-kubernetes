@@ -3,6 +3,7 @@ package kdatabase
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/icinga/icinga-go-library/backoff"
@@ -15,8 +16,9 @@ import (
 
 // CleanupStmt defines information needed to compose cleanup statements.
 type CleanupStmt struct {
-	Table  string
-	PK     string
+	Table string
+	// PK lists the columns of the table's primary key.
+	PK     []string
 	Column string
 }
 
@@ -24,10 +26,15 @@ type CleanupStmt struct {
 func (stmt *CleanupStmt) Build(driverName string, limit uint64) string {
 	switch driverName {
 	case database.MySQL:
-		return fmt.Sprintf(`DELETE FROM %[1]s WHERE %[2]s < :time LIMIT %[3]d`, stmt.Table, stmt.Column, limit)
+		return fmt.Sprintf(`DELETE FROM %q WHERE %q < :time LIMIT %d`, stmt.Table, stmt.Column, limit)
 	case database.PostgreSQL:
-		return fmt.Sprintf(`WITH rows AS (SELECT %[1]s FROM %[2]s WHERE %[3]s < :time LIMIT %[4]d)
-DELETE FROM %[2]s WHERE %[1]s IN (SELECT %[1]s FROM rows)`, stmt.PK, stmt.Table, stmt.Column, limit)
+		return fmt.Sprintf(
+			`DELETE FROM %[2]q WHERE (%[1]s) IN (SELECT %[1]s FROM %[2]q WHERE %[3]q < :time LIMIT %[4]d)`,
+			fmt.Sprintf(`"%s"`, strings.Join(stmt.PK, `", "`)),
+			stmt.Table,
+			stmt.Column,
+			limit,
+		)
 	default:
 		panic(fmt.Sprintf("invalid database type %s", driverName))
 	}
