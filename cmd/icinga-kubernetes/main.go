@@ -122,12 +122,6 @@ func main() {
 	}
 	defer func() { _ = db.Close() }()
 
-	// When started by systemd, NOTIFY_SOCKET is set by systemd for Type=notify
-	// supervised services, which was the default setting for the Icinga for Kubernetes
-	// service before switching to Type=simple. For Type=notify, we need to tell
-	// systemd, that Icinga for Kubernetes finished starting up.
-	_ = sdnotify.Ready()
-
 	if !db.Connect() {
 		if len(removeClusterUuids.Value()) != 0 {
 			logger.Fatal("Cannot remove cluster without database connection")
@@ -728,6 +722,12 @@ func main() {
 			Column: "timestamp",
 		})
 	})
+
+	// When started by systemd, NOTIFY_SOCKET is set by systemd for Type=notify
+	// supervised services, which was the default setting for the Icinga for Kubernetes
+	// service before switching to Type=simple. For Type=notify, we need to tell
+	// systemd that Icinga for Kubernetes finished starting up.
+	_ = sdnotify.Ready()
 
 	if err := g.Wait(); err != nil {
 		logger.Fatalw("Cannot run Icinga for Kubernetes", logging.Error(err))
