@@ -175,7 +175,7 @@ func main() {
 		if err := retry.WithBackoff(
 			ctx,
 			func(ctx context.Context) (err error) {
-				query := "SELECT version FROM kubernetes_schema ORDER BY id DESC LIMIT 1"
+				query := `SELECT "version" FROM "kubernetes_schema" ORDER BY "id" DESC LIMIT 1`
 				err = db.QueryRowxContext(ctx, query).Scan(&version)
 				if err != nil {
 					err = database.CantPerformQuery(err, query)
@@ -193,7 +193,7 @@ func main() {
 			if err := retry.WithBackoff(
 				ctx,
 				func(ctx context.Context) error {
-					query := db.Rebind("SELECT table_name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=?")
+					query := db.Rebind(`SELECT "table_name" FROM "INFORMATION_SCHEMA"."TABLES" WHERE "TABLE_SCHEMA"=?`)
 					rows, err := db.QueryContext(ctx, query, cfg.Database.Database)
 					if err != nil {
 						return database.CantPerformQuery(err, query)
@@ -210,7 +210,7 @@ func main() {
 							return errors.Wrap(err, "cannot scan table name")
 						}
 
-						stmt := fmt.Sprintf(`DROP TABLE %s`, tableName)
+						stmt := fmt.Sprintf(`DROP TABLE %q`, tableName)
 						if _, err := db.ExecContext(ctx, stmt); err != nil {
 							return database.CantPerformQuery(err, stmt)
 						}
@@ -272,7 +272,7 @@ func main() {
 		logger.Errorw("Cannot update cluster", logging.Error(err))
 	}
 
-	if _, err := db.ExecContext(ctx, "DELETE FROM kubernetes_instance WHERE cluster_uuid = ?", clusterInstance.Uuid); err != nil {
+	if _, err := db.ExecContext(ctx, `DELETE FROM "kubernetes_instance" WHERE "cluster_uuid" = ?`, clusterInstance.Uuid); err != nil {
 		logger.Fatalw("Cannot delete instance", logging.Error(err))
 	}
 	// ,omitempty
@@ -363,7 +363,7 @@ func main() {
 
 			for kind, uuids := range uuidMap {
 				ng.Go(func() error {
-					q, args, err := sqlx.In(fmt.Sprintf("SELECT uuid FROM %s WHERE uuid IN (?)", kind), uuids)
+					q, args, err := sqlx.In(fmt.Sprintf(`SELECT "uuid" FROM %q WHERE "uuid" IN (?)`, kind), uuids)
 					if err != nil {
 						return err
 					}
@@ -787,7 +787,7 @@ func removeCluster(ctx context.Context, db *kdatabase.DB, logger *logging.Logger
 // dbHasSchema queries via db whether the database dbName has a table named "kubernetes_schema".
 func dbHasSchema(db *kdatabase.DB, dbName string) (bool, error) {
 	rows, err := db.Query(
-		db.Rebind("SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=? AND TABLE_NAME='kubernetes_schema'"),
+		db.Rebind(`SELECT 1 FROM "INFORMATION_SCHEMA"."TABLES" WHERE "TABLE_SCHEMA"=? AND "TABLE_NAME"='kubernetes_schema'`),
 		dbName,
 	)
 	if err != nil {

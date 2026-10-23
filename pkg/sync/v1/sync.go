@@ -59,7 +59,7 @@ func (s *Sync) warmup(ctx context.Context) (map[string]types.UUID, error) {
 	g, ctx := errgroup.WithContext(ctx)
 
 	meta := &schemav1.Meta{ClusterUuid: cluster.ClusterUuidFromContext(ctx)}
-	query := s.db.BuildSelectStmt(s.factory(), meta) + ` WHERE cluster_uuid=:cluster_uuid`
+	query := s.db.BuildSelectStmt(s.factory(), meta) + ` WHERE "cluster_uuid"=:cluster_uuid`
 
 	entities, errs := s.db.YieldAll(ctx, func() database.Entity { return s.factory() }, query, meta)
 
