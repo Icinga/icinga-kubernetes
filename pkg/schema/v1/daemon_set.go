@@ -32,15 +32,11 @@ type DaemonSet struct {
 	Yaml                   string
 	IcingaState            IcingaState
 	IcingaStateReason      string
-	Conditions             []DaemonSetCondition  `db:"-"`
-	Owners                 []DaemonSetOwner      `db:"-"`
-	Labels                 []Label               `db:"-"`
-	DaemonSetLabels        []DaemonSetLabel      `db:"-"`
-	ResourceLabels         []ResourceLabel       `db:"-"`
-	Annotations            []Annotation          `db:"-"`
-	DaemonSetAnnotations   []DaemonSetAnnotation `db:"-"`
-	ResourceAnnotations    []ResourceAnnotation  `db:"-"`
-	Favorites              []Favorite            `db:"-"`
+	Conditions             []DaemonSetCondition `db:"-"`
+	Owners                 []DaemonSetOwner     `db:"-"`
+	Labels                 []Label              `db:"-"`
+	Annotations            []Annotation         `db:"-"`
+	Favorites              []Favorite           `db:"-"`
 }
 
 type DaemonSetCondition struct {
@@ -70,26 +66,6 @@ type DaemonSetOwner struct {
 
 func (d DaemonSetOwner) ID() database.ID {
 	return compoundId{id: d.DaemonSetUuid.String() + d.OwnerUuid.String()}
-}
-
-type DaemonSetLabel struct {
-	kdatabase.EntityStub
-	DaemonSetUuid types.UUID
-	LabelUuid     types.UUID
-}
-
-func (d DaemonSetLabel) ID() database.ID {
-	return compoundId{id: d.DaemonSetUuid.String() + d.LabelUuid.String()}
-}
-
-type DaemonSetAnnotation struct {
-	kdatabase.EntityStub
-	DaemonSetUuid  types.UUID
-	AnnotationUuid types.UUID
-}
-
-func (d DaemonSetAnnotation) ID() database.ID {
-	return compoundId{id: d.DaemonSetUuid.String() + d.AnnotationUuid.String()}
 }
 
 func NewDaemonSet() Resource {
@@ -151,34 +127,20 @@ func (d *DaemonSet) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	for labelName, labelValue := range daemonSet.Labels {
 		labelUuid := NewUUID(d.Uuid, strings.ToLower(labelName+":"+labelValue))
 		d.Labels = append(d.Labels, Label{
-			Uuid:  labelUuid,
-			Name:  labelName,
-			Value: labelValue,
-		})
-		d.DaemonSetLabels = append(d.DaemonSetLabels, DaemonSetLabel{
-			DaemonSetUuid: d.Uuid,
-			LabelUuid:     labelUuid,
-		})
-		d.ResourceLabels = append(d.ResourceLabels, ResourceLabel{
+			Uuid:         labelUuid,
 			ResourceUuid: d.Uuid,
-			LabelUuid:    labelUuid,
+			Name:         labelName,
+			Value:        labelValue,
 		})
 	}
 
 	for annotationName, annotationValue := range daemonSet.Annotations {
 		annotationUuid := NewUUID(d.Uuid, strings.ToLower(annotationName+":"+annotationValue))
 		d.Annotations = append(d.Annotations, Annotation{
-			Uuid:  annotationUuid,
-			Name:  annotationName,
-			Value: annotationValue,
-		})
-		d.DaemonSetAnnotations = append(d.DaemonSetAnnotations, DaemonSetAnnotation{
-			DaemonSetUuid:  d.Uuid,
-			AnnotationUuid: annotationUuid,
-		})
-		d.ResourceAnnotations = append(d.ResourceAnnotations, ResourceAnnotation{
-			ResourceUuid:   d.Uuid,
-			AnnotationUuid: annotationUuid,
+			Uuid:         annotationUuid,
+			ResourceUuid: d.Uuid,
+			Name:         annotationName,
+			Value:        annotationValue,
 		})
 	}
 
@@ -237,12 +199,8 @@ func (d *DaemonSet) Relations() []kdatabase.Relation {
 	return []kdatabase.Relation{
 		kdatabase.HasMany(d.Conditions, fk),
 		kdatabase.HasMany(d.Owners, fk),
-		kdatabase.HasMany(d.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(d.Labels, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(d.DaemonSetLabels, fk),
-		kdatabase.HasMany(d.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(d.Annotations, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(d.DaemonSetAnnotations, fk),
+		kdatabase.HasMany(d.Labels, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(d.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(d.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

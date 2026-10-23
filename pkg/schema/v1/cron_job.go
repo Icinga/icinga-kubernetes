@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/kdatabase"
 	kbatchv1 "k8s.io/api/batch/v1"
@@ -31,33 +30,9 @@ type CronJob struct {
 	Yaml                       string
 	IcingaState                IcingaState
 	IcingaStateReason          string
-	Labels                     []Label              `db:"-"`
-	CronJobLabels              []CronJobLabel       `db:"-"`
-	ResourceLabels             []ResourceLabel      `db:"-"`
-	Annotations                []Annotation         `db:"-"`
-	CronJobAnnotations         []CronJobAnnotation  `db:"-"`
-	ResourceAnnotations        []ResourceAnnotation `db:"-"`
-	Favorites                  []Favorite           `db:"-"`
-}
-
-type CronJobLabel struct {
-	kdatabase.EntityStub
-	CronJobUuid types.UUID
-	LabelUuid   types.UUID
-}
-
-func (c CronJobLabel) ID() database.ID {
-	return compoundId{id: c.CronJobUuid.String() + c.LabelUuid.String()}
-}
-
-type CronJobAnnotation struct {
-	kdatabase.EntityStub
-	CronJobUuid    types.UUID
-	AnnotationUuid types.UUID
-}
-
-func (c CronJobAnnotation) ID() database.ID {
-	return compoundId{id: c.CronJobUuid.String() + c.AnnotationUuid.String()}
+	Labels                     []Label      `db:"-"`
+	Annotations                []Annotation `db:"-"`
+	Favorites                  []Favorite   `db:"-"`
 }
 
 func NewCronJob() Resource {
@@ -100,34 +75,20 @@ func (c *CronJob) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	for labelName, labelValue := range cronJob.Labels {
 		labelUuid := NewUUID(c.Uuid, strings.ToLower(labelName+":"+labelValue))
 		c.Labels = append(c.Labels, Label{
-			Uuid:  labelUuid,
-			Name:  labelName,
-			Value: labelValue,
-		})
-		c.CronJobLabels = append(c.CronJobLabels, CronJobLabel{
-			CronJobUuid: c.Uuid,
-			LabelUuid:   labelUuid,
-		})
-		c.ResourceLabels = append(c.ResourceLabels, ResourceLabel{
+			Uuid:         labelUuid,
 			ResourceUuid: c.Uuid,
-			LabelUuid:    labelUuid,
+			Name:         labelName,
+			Value:        labelValue,
 		})
 	}
 
 	for annotationName, annotationValue := range cronJob.Annotations {
 		annotationUuid := NewUUID(c.Uuid, strings.ToLower(annotationName+":"+annotationValue))
 		c.Annotations = append(c.Annotations, Annotation{
-			Uuid:  annotationUuid,
-			Name:  annotationName,
-			Value: annotationValue,
-		})
-		c.CronJobAnnotations = append(c.CronJobAnnotations, CronJobAnnotation{
-			CronJobUuid:    c.Uuid,
-			AnnotationUuid: annotationUuid,
-		})
-		c.ResourceAnnotations = append(c.ResourceAnnotations, ResourceAnnotation{
-			ResourceUuid:   c.Uuid,
-			AnnotationUuid: annotationUuid,
+			Uuid:         annotationUuid,
+			ResourceUuid: c.Uuid,
+			Name:         annotationName,
+			Value:        annotationValue,
 		})
 	}
 
@@ -173,15 +134,9 @@ func (c *CronJob) getIcingaState() (IcingaState, string) {
 }
 
 func (c *CronJob) Relations() []kdatabase.Relation {
-	fk := kdatabase.WithForeignKey("cron_job_uuid")
-
 	return []kdatabase.Relation{
-		kdatabase.HasMany(c.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(c.Labels, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(c.CronJobLabels, fk),
-		kdatabase.HasMany(c.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(c.Annotations, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(c.CronJobAnnotations, fk),
+		kdatabase.HasMany(c.Labels, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(c.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(c.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

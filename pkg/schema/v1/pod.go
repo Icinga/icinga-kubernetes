@@ -27,36 +27,32 @@ type PodFactory struct {
 
 type Pod struct {
 	Meta
-	NodeName            sql.NullString
-	NominatedNodeName   sql.NullString
-	Ip                  sql.NullString
-	Phase               string
-	IcingaState         IcingaState
-	IcingaStateReason   string
-	CpuLimits           sql.NullInt64
-	CpuRequests         sql.NullInt64
-	MemoryLimits        sql.NullInt64
-	MemoryRequests      sql.NullInt64
-	Reason              sql.NullString
-	Message             sql.NullString
-	Qos                 sql.NullString
-	RestartPolicy       string
-	Yaml                string
-	Conditions          []PodCondition       `db:"-"`
-	Containers          []*Container         `db:"-"`
-	InitContainers      []*InitContainer     `db:"-"`
-	SidecarContainers   []*SidecarContainer  `db:"-"`
-	Owners              []PodOwner           `db:"-"`
-	Labels              []Label              `db:"-"`
-	PodLabels           []PodLabel           `db:"-"`
-	ResourceLabels      []ResourceLabel      `db:"-"`
-	Annotations         []Annotation         `db:"-"`
-	PodAnnotations      []PodAnnotation      `db:"-"`
-	ResourceAnnotations []ResourceAnnotation `db:"-"`
-	Pvcs                []PodPvc             `db:"-"`
-	Volumes             []PodVolume          `db:"-"`
-	Favorites           []Favorite           `db:"-"`
-	factory             *PodFactory
+	NodeName          sql.NullString
+	NominatedNodeName sql.NullString
+	Ip                sql.NullString
+	Phase             string
+	IcingaState       IcingaState
+	IcingaStateReason string
+	CpuLimits         sql.NullInt64
+	CpuRequests       sql.NullInt64
+	MemoryLimits      sql.NullInt64
+	MemoryRequests    sql.NullInt64
+	Reason            sql.NullString
+	Message           sql.NullString
+	Qos               sql.NullString
+	RestartPolicy     string
+	Yaml              string
+	Conditions        []PodCondition      `db:"-"`
+	Containers        []*Container        `db:"-"`
+	InitContainers    []*InitContainer    `db:"-"`
+	SidecarContainers []*SidecarContainer `db:"-"`
+	Owners            []PodOwner          `db:"-"`
+	Labels            []Label             `db:"-"`
+	Annotations       []Annotation        `db:"-"`
+	Pvcs              []PodPvc            `db:"-"`
+	Volumes           []PodVolume         `db:"-"`
+	Favorites         []Favorite          `db:"-"`
+	factory           *PodFactory
 }
 
 type PodYaml struct {
@@ -79,26 +75,6 @@ type PodCondition struct {
 
 func (p PodCondition) ID() database.ID {
 	return compoundId{id: p.PodUuid.String() + p.Type}
-}
-
-type PodLabel struct {
-	kdatabase.EntityStub
-	PodUuid   types.UUID
-	LabelUuid types.UUID
-}
-
-func (p PodLabel) ID() database.ID {
-	return compoundId{id: p.PodUuid.String() + p.LabelUuid.String()}
-}
-
-type PodAnnotation struct {
-	kdatabase.EntityStub
-	PodUuid        types.UUID
-	AnnotationUuid types.UUID
-}
-
-func (p PodAnnotation) ID() database.ID {
-	return compoundId{id: p.PodUuid.String() + p.AnnotationUuid.String()}
 }
 
 type PodOwner struct {
@@ -232,34 +208,20 @@ func (p *Pod) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	for labelName, labelValue := range pod.Labels {
 		labelUuid := NewUUID(p.Uuid, strings.ToLower(labelName+":"+labelValue))
 		p.Labels = append(p.Labels, Label{
-			Uuid:  labelUuid,
-			Name:  labelName,
-			Value: labelValue,
-		})
-		p.PodLabels = append(p.PodLabels, PodLabel{
-			PodUuid:   p.Uuid,
-			LabelUuid: labelUuid,
-		})
-		p.ResourceLabels = append(p.ResourceLabels, ResourceLabel{
+			Uuid:         labelUuid,
 			ResourceUuid: p.Uuid,
-			LabelUuid:    labelUuid,
+			Name:         labelName,
+			Value:        labelValue,
 		})
 	}
 
 	for annotationName, annotationValue := range pod.Annotations {
 		annotationUuid := NewUUID(p.Uuid, strings.ToLower(annotationName+":"+annotationValue))
 		p.Annotations = append(p.Annotations, Annotation{
-			Uuid:  annotationUuid,
-			Name:  annotationName,
-			Value: annotationValue,
-		})
-		p.PodAnnotations = append(p.PodAnnotations, PodAnnotation{
-			PodUuid:        p.Uuid,
-			AnnotationUuid: annotationUuid,
-		})
-		p.ResourceAnnotations = append(p.ResourceAnnotations, ResourceAnnotation{
-			ResourceUuid:   p.Uuid,
-			AnnotationUuid: annotationUuid,
+			Uuid:         annotationUuid,
+			ResourceUuid: p.Uuid,
+			Name:         annotationName,
+			Value:        annotationValue,
 		})
 	}
 
@@ -450,12 +412,8 @@ func (p *Pod) Relations() []kdatabase.Relation {
 		kdatabase.HasMany(p.InitContainers, kdatabase.WithoutCascadeDelete()),
 		kdatabase.HasMany(p.SidecarContainers, kdatabase.WithoutCascadeDelete()),
 		kdatabase.HasMany(p.Owners, fk),
-		kdatabase.HasMany(p.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(p.Labels, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(p.PodLabels, fk),
-		kdatabase.HasMany(p.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(p.Annotations, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(p.PodAnnotations, fk),
+		kdatabase.HasMany(p.Labels, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(p.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(p.Pvcs, fk),
 		kdatabase.HasMany(p.Volumes, fk),
 		kdatabase.HasMany(p.Favorites, kdatabase.WithForeignKey("resource_uuid")),

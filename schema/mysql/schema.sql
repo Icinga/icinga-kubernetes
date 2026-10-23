@@ -6,28 +6,20 @@ CREATE TABLE cluster (
 
 CREATE TABLE annotation (
   uuid binary(16) NOT NULL,
+  resource_uuid binary(16) NOT NULL,
   name varchar(317) COLLATE utf8mb4_unicode_ci NOT NULL,
   value mediumblob NOT NULL,
-  PRIMARY KEY (uuid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
-CREATE TABLE resource_annotation (
-  resource_uuid binary(16) NOT NULL,
-  annotation_uuid binary(16) NOT NULL,
-  PRIMARY KEY (resource_uuid, annotation_uuid)
+  PRIMARY KEY (uuid),
+  INDEX idx_annotation_resource_uuid (resource_uuid) COMMENT 'Filter for annotations of a resource'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE label (
   uuid binary(16) NOT NULL,
+  resource_uuid binary(16) NOT NULL,
   name varchar(317) COLLATE utf8mb4_unicode_ci NOT NULL,
   value varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  PRIMARY KEY (uuid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
-CREATE TABLE resource_label (
-  resource_uuid binary(16) NOT NULL,
-  label_uuid binary(16) NOT NULL,
-  PRIMARY KEY (resource_uuid, label_uuid)
+  PRIMARY KEY (uuid),
+  INDEX idx_label_resource_uuid (resource_uuid) COMMENT 'Filter for labels of a resource'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE config_map (
@@ -40,18 +32,6 @@ CREATE TABLE config_map (
   immutable enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (uuid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
-CREATE TABLE config_map_annotation (
-  config_map_uuid binary(16) NOT NULL,
-  annotation_uuid binary(16) NOT NULL,
-  PRIMARY KEY (config_map_uuid, annotation_uuid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
-CREATE TABLE config_map_label (
-  config_map_uuid binary(16) NOT NULL,
-  label_uuid binary(16) NOT NULL,
-  PRIMARY KEY (config_map_uuid, label_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE container (
@@ -161,18 +141,6 @@ CREATE TABLE cron_job (
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
-CREATE TABLE cron_job_annotation (
-  cron_job_uuid binary(16) NOT NULL,
-  annotation_uuid binary(16) NOT NULL,
-  PRIMARY KEY (cron_job_uuid, annotation_uuid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
-CREATE TABLE cron_job_label (
-  cron_job_uuid binary(16) NOT NULL,
-  label_uuid binary(16) NOT NULL,
-  PRIMARY KEY (cron_job_uuid, label_uuid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
 CREATE TABLE daemon_set (
   uuid binary(16) NOT NULL,
   cluster_uuid binary(16) NOT NULL,
@@ -196,12 +164,6 @@ CREATE TABLE daemon_set (
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
-CREATE TABLE daemon_set_annotation (
-  daemon_set_uuid binary(16) NOT NULL,
-  annotation_uuid binary(16) NOT NULL,
-  PRIMARY KEY (daemon_set_uuid, annotation_uuid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
 CREATE TABLE daemon_set_condition (
   daemon_set_uuid binary(16) NOT NULL,
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -210,12 +172,6 @@ CREATE TABLE daemon_set_condition (
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   message text,
   PRIMARY KEY (daemon_set_uuid, type)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
-CREATE TABLE daemon_set_label (
-  daemon_set_uuid binary(16) NOT NULL,
-  label_uuid binary(16) NOT NULL,
-  PRIMARY KEY (daemon_set_uuid, label_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE daemon_set_owner (
@@ -253,12 +209,6 @@ CREATE TABLE deployment (
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
-CREATE TABLE deployment_annotation (
-  deployment_uuid binary(16) NOT NULL,
-  annotation_uuid binary(16) NOT NULL,
-  PRIMARY KEY (deployment_uuid, annotation_uuid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
 CREATE TABLE deployment_condition (
   deployment_uuid binary(16) NOT NULL,
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -268,12 +218,6 @@ CREATE TABLE deployment_condition (
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   message text,
   PRIMARY KEY (deployment_uuid, type)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
-CREATE TABLE deployment_label (
-  deployment_uuid binary(16) NOT NULL,
-  label_uuid binary(16) NOT NULL,
-  PRIMARY KEY (deployment_uuid, label_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE deployment_owner (
@@ -313,12 +257,6 @@ CREATE TABLE endpoint_slice (
   address_type enum('IPv4', 'IPv6', 'FQDN') COLLATE utf8mb4_general_ci NOT NULL,
   created bigint unsigned NOT NULL,
   PRIMARY KEY (uuid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
-CREATE TABLE endpoint_slice_label (
-  endpoint_slice_uuid binary(16) NOT NULL,
-  label_uuid binary(16) NOT NULL,
-  PRIMARY KEY (endpoint_slice_uuid, label_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE endpoint_target_ref (
@@ -371,12 +309,6 @@ CREATE TABLE ingress (
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
-CREATE TABLE ingress_annotation (
-  ingress_uuid binary(16) NOT NULL,
-  annotation_uuid binary(16) NOT NULL,
-  PRIMARY KEY (ingress_uuid, annotation_uuid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
 CREATE TABLE ingress_backend_resource (
   resource_uuid binary(16) NOT NULL,
   ingress_uuid binary(16) NOT NULL,
@@ -395,12 +327,6 @@ CREATE TABLE ingress_backend_service (
   service_port_name varchar(255) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   service_port_number int unsigned NULL DEFAULT NULL,
   PRIMARY KEY (service_uuid, ingress_uuid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
-CREATE TABLE ingress_label (
-  ingress_uuid binary(16) NOT NULL,
-  label_uuid binary(16) NOT NULL,
-  PRIMARY KEY (ingress_uuid, label_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE ingress_rule (
@@ -446,12 +372,6 @@ CREATE TABLE job (
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
-CREATE TABLE job_annotation (
-  job_uuid binary(16) NOT NULL,
-  annotation_uuid binary(16) NOT NULL,
-  PRIMARY KEY (job_uuid, annotation_uuid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
 CREATE TABLE job_condition (
   job_uuid binary(16) NOT NULL,
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -461,12 +381,6 @@ CREATE TABLE job_condition (
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   message text,
   PRIMARY KEY (job_uuid, type)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
-CREATE TABLE job_label (
-  job_uuid binary(16) NOT NULL,
-  label_uuid binary(16) NOT NULL,
-  PRIMARY KEY (job_uuid, label_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE job_owner (
@@ -493,12 +407,6 @@ CREATE TABLE namespace (
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
-CREATE TABLE namespace_annotation (
-  namespace_uuid binary(16) NOT NULL,
-  annotation_uuid binary(16) NOT NULL,
-  PRIMARY KEY (namespace_uuid, annotation_uuid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
 CREATE TABLE namespace_condition (
   namespace_uuid binary(16) NOT NULL,
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -507,12 +415,6 @@ CREATE TABLE namespace_condition (
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   message text,
   PRIMARY KEY (namespace_uuid, type)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
-CREATE TABLE namespace_label (
-  namespace_uuid binary(16) NOT NULL,
-  label_uuid binary(16) NOT NULL,
-  PRIMARY KEY (namespace_uuid, label_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE node (
@@ -549,12 +451,6 @@ CREATE TABLE node (
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
-CREATE TABLE node_annotation (
-  node_uuid binary(16) NOT NULL,
-  annotation_uuid binary(16) NOT NULL,
-  PRIMARY KEY (node_uuid, annotation_uuid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
 CREATE TABLE node_condition (
   node_uuid binary(16) NOT NULL,
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -564,12 +460,6 @@ CREATE TABLE node_condition (
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   message text,
   PRIMARY KEY (node_uuid, type)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
-CREATE TABLE node_label (
-  node_uuid binary(16) NOT NULL,
-  label_uuid binary(16) NOT NULL,
-  PRIMARY KEY (node_uuid, label_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE node_volume (
@@ -602,24 +492,12 @@ CREATE TABLE persistent_volume (
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
-CREATE TABLE persistent_volume_annotation (
-  persistent_volume_uuid binary(16) NOT NULL,
-  annotation_uuid binary(16) NOT NULL,
-  PRIMARY KEY (persistent_volume_uuid, annotation_uuid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
 CREATE TABLE persistent_volume_claim_ref (
   persistent_volume_uuid binary(16) NOT NULL,
   kind varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   name varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
   uid varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (persistent_volume_uuid, uid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
-CREATE TABLE persistent_volume_label (
-  persistent_volume_uuid binary(16) NOT NULL,
-  label_uuid binary(16) NOT NULL,
-  PRIMARY KEY (persistent_volume_uuid, label_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE pod (
@@ -648,12 +526,6 @@ CREATE TABLE pod (
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
-CREATE TABLE pod_annotation (
-  pod_uuid binary(16) NOT NULL,
-  annotation_uuid binary(16) NOT NULL,
-  PRIMARY KEY (pod_uuid, annotation_uuid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
 CREATE TABLE pod_condition (
   pod_uuid binary(16) NOT NULL,
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -663,12 +535,6 @@ CREATE TABLE pod_condition (
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   message text,
   PRIMARY KEY (pod_uuid, type)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
-CREATE TABLE pod_label (
-  pod_uuid binary(16) NOT NULL,
-  label_uuid binary(16) NOT NULL,
-  PRIMARY KEY (pod_uuid, label_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE pod_metrics (
@@ -771,12 +637,6 @@ CREATE TABLE pvc (
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
-CREATE TABLE pvc_annotation (
-  pvc_uuid binary(16) NOT NULL,
-  annotation_uuid binary(16) NOT NULL,
-  PRIMARY KEY (pvc_uuid, annotation_uuid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
 CREATE TABLE pvc_condition (
   pvc_uuid binary(16) NOT NULL,
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -786,12 +646,6 @@ CREATE TABLE pvc_condition (
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   message text,
   PRIMARY KEY (pvc_uuid, type)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
-CREATE TABLE pvc_label (
-  pvc_uuid binary(16) NOT NULL,
-  label_uuid binary(16) NOT NULL,
-  PRIMARY KEY (pvc_uuid, label_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE replica_set (
@@ -814,12 +668,6 @@ CREATE TABLE replica_set (
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
-CREATE TABLE replica_set_annotation (
-  replica_set_uuid binary(16) NOT NULL,
-  annotation_uuid binary(16) NOT NULL,
-  PRIMARY KEY (replica_set_uuid, annotation_uuid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
 CREATE TABLE replica_set_condition (
   replica_set_uuid binary(16) NOT NULL,
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -828,12 +676,6 @@ CREATE TABLE replica_set_condition (
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   message text,
   PRIMARY KEY (replica_set_uuid, type)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
-CREATE TABLE replica_set_label (
-  replica_set_uuid binary(16) NOT NULL,
-  label_uuid binary(16) NOT NULL,
-  PRIMARY KEY (replica_set_uuid, label_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE replica_set_owner (
@@ -857,25 +699,6 @@ CREATE TABLE secret (
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   immutable enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
   created bigint unsigned NOT NULL,
-  PRIMARY KEY (uuid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
-CREATE TABLE secret_annotation (
-  secret_uuid binary(16) NOT NULL,
-  annotation_uuid binary(16) NOT NULL,
-  PRIMARY KEY (secret_uuid, annotation_uuid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
-CREATE TABLE secret_label (
-  secret_uuid binary(16) NOT NULL,
-  label_uuid binary(16) NOT NULL,
-  PRIMARY KEY (secret_uuid, label_uuid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
-CREATE TABLE selector (
-  uuid binary(16) NOT NULL,
-  name varchar(317) COLLATE utf8mb4_unicode_ci NOT NULL,
-  value varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
@@ -905,12 +728,6 @@ CREATE TABLE service (
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
-CREATE TABLE service_annotation (
-  service_uuid binary(16) NOT NULL,
-  annotation_uuid binary(16) NOT NULL,
-  PRIMARY KEY (service_uuid, annotation_uuid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
 CREATE TABLE service_condition (
   service_uuid binary(16) NOT NULL,
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -920,12 +737,6 @@ CREATE TABLE service_condition (
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   message text,
   PRIMARY KEY (service_uuid, type)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
-CREATE TABLE service_label (
-  service_uuid binary(16) NOT NULL,
-  label_uuid binary(16) NOT NULL,
-  PRIMARY KEY (service_uuid, label_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE service_pod (
@@ -946,9 +757,12 @@ CREATE TABLE service_port (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE service_selector (
+  uuid binary(16) NOT NULL,
   service_uuid binary(16) NOT NULL,
-  selector_uuid binary(16) NOT NULL,
-  PRIMARY KEY (service_uuid, selector_uuid)
+  name varchar(317) COLLATE utf8mb4_unicode_ci NOT NULL,
+  value varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (uuid),
+  INDEX idx_service_selector_service_uuid (service_uuid) COMMENT 'Filter for selectors of a service'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE stateful_set (
@@ -978,12 +792,6 @@ CREATE TABLE stateful_set (
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
-CREATE TABLE stateful_set_annotation (
-  stateful_set_uuid binary(16) NOT NULL,
-  annotation_uuid binary(16) NOT NULL,
-  PRIMARY KEY (stateful_set_uuid, annotation_uuid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
 CREATE TABLE stateful_set_condition (
   stateful_set_uuid binary(16) NOT NULL,
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -992,12 +800,6 @@ CREATE TABLE stateful_set_condition (
   reason varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   message text,
   PRIMARY KEY (stateful_set_uuid, type)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
-
-CREATE TABLE stateful_set_label (
-  stateful_set_uuid binary(16) NOT NULL,
-  label_uuid binary(16) NOT NULL,
-  PRIMARY KEY (stateful_set_uuid, label_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE stateful_set_owner (
@@ -1062,4 +864,4 @@ CREATE TABLE kubernetes_schema (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 INSERT INTO kubernetes_schema (version, timestamp, success, reason)
-VALUES ('0.4.0', UNIX_TIMESTAMP() * 1000, 'y', 'Initial import');
+VALUES ('0.5.0', UNIX_TIMESTAMP() * 1000, 'y', 'Initial import');

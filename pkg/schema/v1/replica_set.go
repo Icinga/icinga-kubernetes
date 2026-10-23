@@ -21,24 +21,20 @@ import (
 
 type ReplicaSet struct {
 	Meta
-	DesiredReplicas       int32
-	MinReadySeconds       int32
-	ActualReplicas        int32
-	FullyLabeledReplicas  int32
-	ReadyReplicas         int32
-	AvailableReplicas     int32
-	Yaml                  string
-	IcingaState           IcingaState
-	IcingaStateReason     string
-	Conditions            []ReplicaSetCondition  `db:"-"`
-	Owners                []ReplicaSetOwner      `db:"-"`
-	Labels                []Label                `db:"-"`
-	ReplicaSetLabels      []ReplicaSetLabel      `db:"-"`
-	ResourceLabels        []ResourceLabel        `db:"-"`
-	Annotations           []Annotation           `db:"-"`
-	ReplicaSetAnnotations []ReplicaSetAnnotation `db:"-"`
-	ResourceAnnotations   []ResourceAnnotation   `db:"-"`
-	Favorites             []Favorite             `db:"-"`
+	DesiredReplicas      int32
+	MinReadySeconds      int32
+	ActualReplicas       int32
+	FullyLabeledReplicas int32
+	ReadyReplicas        int32
+	AvailableReplicas    int32
+	Yaml                 string
+	IcingaState          IcingaState
+	IcingaStateReason    string
+	Conditions           []ReplicaSetCondition `db:"-"`
+	Owners               []ReplicaSetOwner     `db:"-"`
+	Labels               []Label               `db:"-"`
+	Annotations          []Annotation          `db:"-"`
+	Favorites            []Favorite            `db:"-"`
 }
 
 type ReplicaSetCondition struct {
@@ -68,26 +64,6 @@ type ReplicaSetOwner struct {
 
 func (r ReplicaSetOwner) ID() database.ID {
 	return compoundId{id: r.ReplicaSetUuid.String() + r.OwnerUuid.String()}
-}
-
-type ReplicaSetLabel struct {
-	kdatabase.EntityStub
-	ReplicaSetUuid types.UUID
-	LabelUuid      types.UUID
-}
-
-func (r ReplicaSetLabel) ID() database.ID {
-	return compoundId{id: r.ReplicaSetUuid.String() + r.LabelUuid.String()}
-}
-
-type ReplicaSetAnnotation struct {
-	kdatabase.EntityStub
-	ReplicaSetUuid types.UUID
-	AnnotationUuid types.UUID
-}
-
-func (r ReplicaSetAnnotation) ID() database.ID {
-	return compoundId{id: r.ReplicaSetUuid.String() + r.AnnotationUuid.String()}
 }
 
 func NewReplicaSet() Resource {
@@ -150,34 +126,20 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	for labelName, labelValue := range replicaSet.Labels {
 		labelUuid := NewUUID(r.Uuid, strings.ToLower(labelName+":"+labelValue))
 		r.Labels = append(r.Labels, Label{
-			Uuid:  labelUuid,
-			Name:  labelName,
-			Value: labelValue,
-		})
-		r.ReplicaSetLabels = append(r.ReplicaSetLabels, ReplicaSetLabel{
-			ReplicaSetUuid: r.Uuid,
-			LabelUuid:      labelUuid,
-		})
-		r.ResourceLabels = append(r.ResourceLabels, ResourceLabel{
+			Uuid:         labelUuid,
 			ResourceUuid: r.Uuid,
-			LabelUuid:    labelUuid,
+			Name:         labelName,
+			Value:        labelValue,
 		})
 	}
 
 	for annotationName, annotationValue := range replicaSet.Annotations {
 		annotationUuid := NewUUID(r.Uuid, strings.ToLower(annotationName+":"+annotationValue))
 		r.Annotations = append(r.Annotations, Annotation{
-			Uuid:  annotationUuid,
-			Name:  annotationName,
-			Value: annotationValue,
-		})
-		r.ReplicaSetAnnotations = append(r.ReplicaSetAnnotations, ReplicaSetAnnotation{
-			ReplicaSetUuid: r.Uuid,
-			AnnotationUuid: annotationUuid,
-		})
-		r.ResourceAnnotations = append(r.ResourceAnnotations, ResourceAnnotation{
-			ResourceUuid:   r.Uuid,
-			AnnotationUuid: annotationUuid,
+			Uuid:         annotationUuid,
+			ResourceUuid: r.Uuid,
+			Name:         annotationName,
+			Value:        annotationValue,
 		})
 	}
 
@@ -238,12 +200,8 @@ func (r *ReplicaSet) Relations() []kdatabase.Relation {
 	return []kdatabase.Relation{
 		kdatabase.HasMany(r.Conditions, fk),
 		kdatabase.HasMany(r.Owners, fk),
-		kdatabase.HasMany(r.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(r.Labels, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(r.ReplicaSetLabels, fk),
-		kdatabase.HasMany(r.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(r.Annotations, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(r.ReplicaSetAnnotations, fk),
+		kdatabase.HasMany(r.Labels, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(r.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(r.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

@@ -36,15 +36,11 @@ type StatefulSet struct {
 	Yaml                                            string
 	IcingaState                                     IcingaState
 	IcingaStateReason                               string
-	Conditions                                      []StatefulSetCondition  `db:"-"`
-	Owners                                          []StatefulSetOwner      `db:"-"`
-	Labels                                          []Label                 `db:"-"`
-	StatefulSetLabels                               []StatefulSetLabel      `db:"-"`
-	ResourceLabels                                  []ResourceLabel         `db:"-"`
-	Annotations                                     []Annotation            `db:"-"`
-	StatefulSetAnnotations                          []StatefulSetAnnotation `db:"-"`
-	ResourceAnnotations                             []ResourceAnnotation    `db:"-"`
-	Favorites                                       []Favorite              `db:"-"`
+	Conditions                                      []StatefulSetCondition `db:"-"`
+	Owners                                          []StatefulSetOwner     `db:"-"`
+	Labels                                          []Label                `db:"-"`
+	Annotations                                     []Annotation           `db:"-"`
+	Favorites                                       []Favorite             `db:"-"`
 }
 
 type StatefulSetCondition struct {
@@ -74,26 +70,6 @@ type StatefulSetOwner struct {
 
 func (s StatefulSetOwner) ID() database.ID {
 	return compoundId{id: s.StatefulSetUuid.String() + s.OwnerUuid.String()}
-}
-
-type StatefulSetLabel struct {
-	kdatabase.EntityStub
-	StatefulSetUuid types.UUID
-	LabelUuid       types.UUID
-}
-
-func (s StatefulSetLabel) ID() database.ID {
-	return compoundId{id: s.StatefulSetUuid.String() + s.LabelUuid.String()}
-}
-
-type StatefulSetAnnotation struct {
-	kdatabase.EntityStub
-	StatefulSetUuid types.UUID
-	AnnotationUuid  types.UUID
-}
-
-func (s StatefulSetAnnotation) ID() database.ID {
-	return compoundId{id: s.StatefulSetUuid.String() + s.AnnotationUuid.String()}
 }
 
 func NewStatefulSet() Resource {
@@ -175,34 +151,20 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	for labelName, labelValue := range statefulSet.Labels {
 		labelUuid := NewUUID(s.Uuid, strings.ToLower(labelName+":"+labelValue))
 		s.Labels = append(s.Labels, Label{
-			Uuid:  labelUuid,
-			Name:  labelName,
-			Value: labelValue,
-		})
-		s.StatefulSetLabels = append(s.StatefulSetLabels, StatefulSetLabel{
-			StatefulSetUuid: s.Uuid,
-			LabelUuid:       labelUuid,
-		})
-		s.ResourceLabels = append(s.ResourceLabels, ResourceLabel{
+			Uuid:         labelUuid,
 			ResourceUuid: s.Uuid,
-			LabelUuid:    labelUuid,
+			Name:         labelName,
+			Value:        labelValue,
 		})
 	}
 
 	for annotationName, annotationValue := range statefulSet.Annotations {
 		annotationUuid := NewUUID(s.Uuid, strings.ToLower(annotationName+":"+annotationValue))
 		s.Annotations = append(s.Annotations, Annotation{
-			Uuid:  annotationUuid,
-			Name:  annotationName,
-			Value: annotationValue,
-		})
-		s.StatefulSetAnnotations = append(s.StatefulSetAnnotations, StatefulSetAnnotation{
-			StatefulSetUuid: s.Uuid,
-			AnnotationUuid:  annotationUuid,
-		})
-		s.ResourceAnnotations = append(s.ResourceAnnotations, ResourceAnnotation{
-			ResourceUuid:   s.Uuid,
-			AnnotationUuid: annotationUuid,
+			Uuid:         annotationUuid,
+			ResourceUuid: s.Uuid,
+			Name:         annotationName,
+			Value:        annotationValue,
 		})
 	}
 
@@ -255,12 +217,8 @@ func (s *StatefulSet) Relations() []kdatabase.Relation {
 	return []kdatabase.Relation{
 		kdatabase.HasMany(s.Conditions, fk),
 		kdatabase.HasMany(s.Owners, fk),
-		kdatabase.HasMany(s.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(s.Labels, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(s.StatefulSetLabels, fk),
-		kdatabase.HasMany(s.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(s.Annotations, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(s.StatefulSetAnnotations, fk),
+		kdatabase.HasMany(s.Labels, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(s.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(s.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

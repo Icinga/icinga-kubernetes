@@ -38,23 +38,19 @@ var persistentVolumeAccessModes = kpersistentVolumeAccessModes{
 
 type Pvc struct {
 	Meta
-	DesiredAccessModes  Bitmask[kpersistentVolumeAccessModesSize]
-	ActualAccessModes   Bitmask[kpersistentVolumeAccessModesSize]
-	MinimumCapacity     sql.NullInt64
-	ActualCapacity      sql.NullInt64
-	Phase               string
-	VolumeName          sql.NullString
-	VolumeMode          string
-	StorageClass        sql.NullString
-	Yaml                string
-	Conditions          []PvcCondition       `db:"-"`
-	Labels              []Label              `db:"-"`
-	PvcLabels           []PvcLabel           `db:"-"`
-	ResourceLabels      []ResourceLabel      `db:"-"`
-	Annotations         []Annotation         `db:"-"`
-	PvcAnnotations      []PvcAnnotation      `db:"-"`
-	ResourceAnnotations []ResourceAnnotation `db:"-"`
-	Favorites           []Favorite           `db:"-"`
+	DesiredAccessModes Bitmask[kpersistentVolumeAccessModesSize]
+	ActualAccessModes  Bitmask[kpersistentVolumeAccessModesSize]
+	MinimumCapacity    sql.NullInt64
+	ActualCapacity     sql.NullInt64
+	Phase              string
+	VolumeName         sql.NullString
+	VolumeMode         string
+	StorageClass       sql.NullString
+	Yaml               string
+	Conditions         []PvcCondition `db:"-"`
+	Labels             []Label        `db:"-"`
+	Annotations        []Annotation   `db:"-"`
+	Favorites          []Favorite     `db:"-"`
 }
 
 type PvcCondition struct {
@@ -70,26 +66,6 @@ type PvcCondition struct {
 
 func (p PvcCondition) ID() database.ID {
 	return compoundId{id: p.PvcUuid.String() + p.Type}
-}
-
-type PvcLabel struct {
-	kdatabase.EntityStub
-	PvcUuid   types.UUID
-	LabelUuid types.UUID
-}
-
-func (p PvcLabel) ID() database.ID {
-	return compoundId{id: p.PvcUuid.String() + p.LabelUuid.String()}
-}
-
-type PvcAnnotation struct {
-	kdatabase.EntityStub
-	PvcUuid        types.UUID
-	AnnotationUuid types.UUID
-}
-
-func (p PvcAnnotation) ID() database.ID {
-	return compoundId{id: p.PvcUuid.String() + p.AnnotationUuid.String()}
 }
 
 func NewPvc() Resource {
@@ -141,34 +117,20 @@ func (p *Pvc) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	for labelName, labelValue := range pvc.Labels {
 		labelUuid := NewUUID(p.Uuid, strings.ToLower(labelName+":"+labelValue))
 		p.Labels = append(p.Labels, Label{
-			Uuid:  labelUuid,
-			Name:  labelName,
-			Value: labelValue,
-		})
-		p.PvcLabels = append(p.PvcLabels, PvcLabel{
-			PvcUuid:   p.Uuid,
-			LabelUuid: labelUuid,
-		})
-		p.ResourceLabels = append(p.ResourceLabels, ResourceLabel{
+			Uuid:         labelUuid,
 			ResourceUuid: p.Uuid,
-			LabelUuid:    labelUuid,
+			Name:         labelName,
+			Value:        labelValue,
 		})
 	}
 
 	for annotationName, annotationValue := range pvc.Annotations {
 		annotationUuid := NewUUID(p.Uuid, strings.ToLower(annotationName+":"+annotationValue))
 		p.Annotations = append(p.Annotations, Annotation{
-			Uuid:  annotationUuid,
-			Name:  annotationName,
-			Value: annotationValue,
-		})
-		p.PvcAnnotations = append(p.PvcAnnotations, PvcAnnotation{
-			PvcUuid:        p.Uuid,
-			AnnotationUuid: annotationUuid,
-		})
-		p.ResourceAnnotations = append(p.ResourceAnnotations, ResourceAnnotation{
-			ResourceUuid:   p.Uuid,
-			AnnotationUuid: annotationUuid,
+			Uuid:         annotationUuid,
+			ResourceUuid: p.Uuid,
+			Name:         annotationName,
+			Value:        annotationValue,
 		})
 	}
 
@@ -184,12 +146,8 @@ func (p *Pvc) Relations() []kdatabase.Relation {
 
 	return []kdatabase.Relation{
 		kdatabase.HasMany(p.Conditions, fk),
-		kdatabase.HasMany(p.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(p.Labels, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(p.PvcLabels, fk),
-		kdatabase.HasMany(p.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(p.Annotations, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(p.PvcAnnotations, fk),
+		kdatabase.HasMany(p.Labels, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(p.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(p.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

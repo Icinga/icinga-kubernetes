@@ -3,7 +3,6 @@ package v1
 import (
 	"strings"
 
-	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/kdatabase"
 	kcorev1 "k8s.io/api/core/v1"
@@ -12,34 +11,10 @@ import (
 
 type Secret struct {
 	Meta
-	Type                string
-	Immutable           types.Bool
-	Labels              []Label              `db:"-"`
-	SecretLabels        []SecretLabel        `db:"-"`
-	ResourceLabels      []ResourceLabel      `db:"-"`
-	Annotations         []Annotation         `db:"-"`
-	SecretAnnotations   []SecretAnnotation   `db:"-"`
-	ResourceAnnotations []ResourceAnnotation `db:"-"`
-}
-
-type SecretLabel struct {
-	kdatabase.EntityStub
-	SecretUuid types.UUID
-	LabelUuid  types.UUID
-}
-
-func (s SecretLabel) ID() database.ID {
-	return compoundId{id: s.SecretUuid.String() + s.LabelUuid.String()}
-}
-
-type SecretAnnotation struct {
-	kdatabase.EntityStub
-	SecretUuid     types.UUID
-	AnnotationUuid types.UUID
-}
-
-func (s SecretAnnotation) ID() database.ID {
-	return compoundId{id: s.SecretUuid.String() + s.AnnotationUuid.String()}
+	Type        string
+	Immutable   types.Bool
+	Labels      []Label      `db:"-"`
+	Annotations []Annotation `db:"-"`
 }
 
 func NewSecret() Resource {
@@ -65,47 +40,27 @@ func (s *Secret) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	for labelName, labelValue := range secret.Labels {
 		labelUuid := NewUUID(s.Uuid, strings.ToLower(labelName+":"+labelValue))
 		s.Labels = append(s.Labels, Label{
-			Uuid:  labelUuid,
-			Name:  labelName,
-			Value: labelValue,
-		})
-		s.SecretLabels = append(s.SecretLabels, SecretLabel{
-			SecretUuid: s.Uuid,
-			LabelUuid:  labelUuid,
-		})
-		s.ResourceLabels = append(s.ResourceLabels, ResourceLabel{
+			Uuid:         labelUuid,
 			ResourceUuid: s.Uuid,
-			LabelUuid:    labelUuid,
+			Name:         labelName,
+			Value:        labelValue,
 		})
 	}
 
 	for annotationName, annotationValue := range secret.Annotations {
 		annotationUuid := NewUUID(s.Uuid, strings.ToLower(annotationName+":"+annotationValue))
 		s.Annotations = append(s.Annotations, Annotation{
-			Uuid:  annotationUuid,
-			Name:  annotationName,
-			Value: annotationValue,
-		})
-		s.SecretAnnotations = append(s.SecretAnnotations, SecretAnnotation{
-			SecretUuid:     s.Uuid,
-			AnnotationUuid: annotationUuid,
-		})
-		s.ResourceAnnotations = append(s.ResourceAnnotations, ResourceAnnotation{
-			ResourceUuid:   s.Uuid,
-			AnnotationUuid: annotationUuid,
+			Uuid:         annotationUuid,
+			ResourceUuid: s.Uuid,
+			Name:         annotationName,
+			Value:        annotationValue,
 		})
 	}
 }
 
 func (s *Secret) Relations() []kdatabase.Relation {
-	fk := kdatabase.WithForeignKey("secret_uuid")
-
 	return []kdatabase.Relation{
-		kdatabase.HasMany(s.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(s.Labels, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(s.SecretLabels, fk),
-		kdatabase.HasMany(s.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(s.Annotations, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(s.SecretAnnotations, fk),
+		kdatabase.HasMany(s.Labels, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(s.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

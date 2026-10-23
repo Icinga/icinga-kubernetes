@@ -16,20 +16,9 @@ import (
 type EndpointSlice struct {
 	Meta
 	AddressType        string
-	Endpoints          []Endpoint           `db:"-"`
-	Labels             []Label              `db:"-"`
-	EndpointLabels     []EndpointSliceLabel `db:"-"`
-	EndpointTargetRefs []EndpointTargetRef  `db:"-"`
-}
-
-type EndpointSliceLabel struct {
-	kdatabase.EntityStub
-	EndpointSliceUuid types.UUID
-	LabelUuid         types.UUID
-}
-
-func (e EndpointSliceLabel) ID() database.ID {
-	return compoundId{id: e.EndpointSliceUuid.String() + e.LabelUuid.String()}
+	Endpoints          []Endpoint          `db:"-"`
+	Labels             []Label             `db:"-"`
+	EndpointTargetRefs []EndpointTargetRef `db:"-"`
 }
 
 type Endpoint struct {
@@ -81,13 +70,10 @@ func (e *EndpointSlice) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	for labelName, labelValue := range endpointSlice.Labels {
 		labelUuid := NewUUID(e.Uuid, strings.ToLower(labelName+":"+labelValue))
 		e.Labels = append(e.Labels, Label{
-			Uuid:  labelUuid,
-			Name:  labelName,
-			Value: labelValue,
-		})
-		e.EndpointLabels = append(e.EndpointLabels, EndpointSliceLabel{
-			EndpointSliceUuid: e.Uuid,
-			LabelUuid:         labelUuid,
+			Uuid:         labelUuid,
+			ResourceUuid: e.Uuid,
+			Name:         labelName,
+			Value:        labelValue,
 		})
 	}
 
@@ -171,8 +157,7 @@ func (e *EndpointSlice) Relations() []kdatabase.Relation {
 
 	return []kdatabase.Relation{
 		kdatabase.HasMany(e.Endpoints, fk),
-		kdatabase.HasMany(e.Labels, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(e.EndpointLabels, fk),
+		kdatabase.HasMany(e.Labels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(e.EndpointTargetRefs, fk),
 	}
 }
