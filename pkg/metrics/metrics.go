@@ -293,8 +293,8 @@ func (pms *PromMetricSync) promMetricClusterUpsertStmt() string {
 	return fmt.Sprintf(
 		`INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s`,
 		`prometheus_cluster_metric`,
-		"cluster_id, timestamp, category, name, value",
-		`:cluster_id, :timestamp, :category, :name, :value`,
+		"cluster_uuid, timestamp, category, name, value",
+		`:cluster_uuid, :timestamp, :category, :name, :value`,
 		`value=VALUES(value)`,
 	)
 }
@@ -326,8 +326,8 @@ func (pms *PromMetricSync) promMetricContainerUpsertStmt() string {
 	return fmt.Sprintf(
 		`INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s`,
 		`prometheus_container_metric`,
-		"container_id, timestamp, category, name, value",
-		`:container_id, :timestamp, :category, :name, :value`,
+		"container_uuid, timestamp, category, name, value",
+		`:container_uuid, :timestamp, :category, :name, :value`,
 		`value=VALUES(value)`,
 	)
 }
