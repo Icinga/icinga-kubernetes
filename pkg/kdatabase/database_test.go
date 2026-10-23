@@ -120,7 +120,7 @@ func TestDeleteStreamedCascadingWithoutRelations(t *testing.T) {
 
 	n1, n2 := uuid.New(), uuid.New()
 
-	mock.ExpectExec(`DELETE FROM "test_note" WHERE uuid IN (?, ?)`).WithArgs(n1, n2).WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectExec(`DELETE FROM "test_note" WHERE "uuid" IN (?, ?)`).WithArgs(n1, n2).WillReturnResult(sqlmock.NewResult(0, 2))
 
 	ctx, cancel := context.WithTimeout(t.Context(), testTimeout)
 	t.Cleanup(cancel)
@@ -145,19 +145,19 @@ func TestDeleteStreamedCascadingWithRelations(t *testing.T) {
 	p1, p2 := uuid.New(), uuid.New()
 	c1, c2, c3 := uuid.New(), uuid.New(), uuid.New()
 
-	mock.ExpectExec(`DELETE FROM "test_parent" WHERE uuid IN (?, ?)`).WithArgs(p1, p2).WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectExec(`DELETE FROM "test_parent" WHERE "uuid" IN (?, ?)`).WithArgs(p1, p2).WillReturnResult(sqlmock.NewResult(0, 2))
 	// Labels and PrimaryLabel are both deleted by their foreign key.
 	for range 2 {
-		mock.ExpectExec(`DELETE FROM "test_label" WHERE parent_uuid IN (?, ?)`).WithArgs(p1, p2).WillReturnResult(sqlmock.NewResult(0, 2))
+		mock.ExpectExec(`DELETE FROM "test_label" WHERE "parent_uuid" IN (?, ?)`).WithArgs(p1, p2).WillReturnResult(sqlmock.NewResult(0, 2))
 	}
 	// Children have relations of their own, so their ids are looked up to
 	// delete them and their toys by these ids. The ids are binary, as they are
 	// scanned into types.UUID.
-	mock.ExpectQuery(`SELECT uuid FROM "test_child" WHERE parent_uuid IN (?, ?)`).
+	mock.ExpectQuery(`SELECT "uuid" FROM "test_child" WHERE "parent_uuid" IN (?, ?)`).
 		WithArgs(p1, p2).
 		WillReturnRows(sqlmock.NewRows([]string{"uuid"}).AddRow(c1[:]).AddRow(c2[:]).AddRow(c3[:]))
-	mock.ExpectExec(`DELETE FROM "test_child" WHERE uuid IN (?, ?, ?)`).WithArgs(c1[:], c2[:], c3[:]).WillReturnResult(sqlmock.NewResult(0, 3))
-	mock.ExpectExec(`DELETE FROM "test_toy" WHERE child_uuid IN (?, ?, ?)`).WithArgs(c1[:], c2[:], c3[:]).WillReturnResult(sqlmock.NewResult(0, 3))
+	mock.ExpectExec(`DELETE FROM "test_child" WHERE "uuid" IN (?, ?, ?)`).WithArgs(c1[:], c2[:], c3[:]).WillReturnResult(sqlmock.NewResult(0, 3))
+	mock.ExpectExec(`DELETE FROM "test_toy" WHERE "child_uuid" IN (?, ?, ?)`).WithArgs(c1[:], c2[:], c3[:]).WillReturnResult(sqlmock.NewResult(0, 3))
 	// Notes are not deleted, as their relation is WithoutCascadeDelete.
 
 	ctx, cancel := context.WithTimeout(t.Context(), testTimeout)
@@ -181,7 +181,7 @@ func TestDeleteStreamedCascadingWithNilCallback(t *testing.T) {
 
 	n1 := uuid.New()
 
-	mock.ExpectExec(`DELETE FROM "test_note" WHERE uuid IN (?)`).WithArgs(n1).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`DELETE FROM "test_note" WHERE "uuid" IN (?)`).WithArgs(n1).WillReturnResult(sqlmock.NewResult(0, 1))
 
 	ctx, cancel := context.WithTimeout(t.Context(), testTimeout)
 	t.Cleanup(cancel)
@@ -197,12 +197,12 @@ func TestBuildDeleteStmt(t *testing.T) {
 
 	db := &DB{}
 
-	if got, want := db.BuildDeleteStmt(&testNote{}), `DELETE FROM "test_note" WHERE uuid IN (?)`; got != want {
+	if got, want := db.BuildDeleteStmt(&testNote{}), `DELETE FROM "test_note" WHERE "uuid" IN (?)`; got != want {
 		t.Errorf("entity: got %q, want %q", got, want)
 	}
 
 	rel := HasMany([]testLabel(nil), WithForeignKey("parent_uuid"))
-	if got, want := db.BuildDeleteStmt(rel), `DELETE FROM "test_label" WHERE parent_uuid IN (?)`; got != want {
+	if got, want := db.BuildDeleteStmt(rel), `DELETE FROM "test_label" WHERE "parent_uuid" IN (?)`; got != want {
 		t.Errorf("relation: got %q, want %q", got, want)
 	}
 }

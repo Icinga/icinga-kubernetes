@@ -512,7 +512,7 @@ func SyncContainers(
 		scheduler.StartAsync()
 		defer scheduler.Stop()
 
-		query := db.BuildSelectStmt(&Container{}, containerFingerprint{}) + ` WHERE pod_uuid=:pod_uuid`
+		query := db.BuildSelectStmt(&Container{}, containerFingerprint{}) + ` WHERE "pod_uuid"=:pod_uuid`
 
 		for {
 			select {
@@ -621,7 +621,7 @@ func warmup(ctx context.Context, db *kdatabase.DB) error {
 
 	meta := struct{ ClusterUuid types.UUID }{ClusterUuid: cluster.ClusterUuidFromContext(ctx)}
 	query := db.BuildSelectStmt(ContainerLog{}, ContainerLog{}) +
-		` WHERE pod_uuid IN (SELECT uuid FROM pod WHERE cluster_uuid = :cluster_uuid)`
+		` WHERE "pod_uuid" IN (SELECT "uuid" FROM "pod" WHERE "cluster_uuid" = :cluster_uuid)`
 
 	entities, errs := db.YieldAll(ctx, func() database.Entity { return &ContainerLog{} }, query, meta)
 	com.ErrgroupReceive(g, errs)
