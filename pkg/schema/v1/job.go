@@ -12,9 +12,6 @@ import (
 	kbatchv1 "k8s.io/api/batch/v1"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	kruntime "k8s.io/apimachinery/pkg/runtime"
-	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
-	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	ktypes "k8s.io/apimachinery/pkg/types"
 )
 
@@ -234,11 +231,7 @@ func (j *Job) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		})
 	}
 
-	scheme := kruntime.NewScheme()
-	_ = kbatchv1.AddToScheme(scheme)
-	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kbatchv1.SchemeGroupVersion)
-	output, _ := kruntime.Encode(codec, job)
-	j.Yaml = string(output)
+	j.Yaml = MarshalYaml(job)
 }
 
 func (j *Job) getIcingaState(job *kbatchv1.Job) (IcingaState, string) {
