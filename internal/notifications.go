@@ -22,7 +22,7 @@ func SyncNotificationsConfig(ctx context.Context, db *database.DB, config *notif
 			{ClusterUuid: clusterUuid, Key: schemav1.ConfigKeyNotificationsPassword, Value: config.Password, Locked: _true},
 		}
 
-		err := db.ExecTx(ctx, func(ctx context.Context, tx *sqlx.Tx) error {
+		if err := db.ExecTx(ctx, func(ctx context.Context, tx *sqlx.Tx) error {
 			if kwebUrl := config.KubernetesWebUrl; kwebUrl != "" {
 				toDb = append(toDb, schemav1.Config{
 					ClusterUuid: clusterUuid,
@@ -59,12 +59,11 @@ func SyncNotificationsConfig(ctx context.Context, db *database.DB, config *notif
 			}
 
 			return nil
-		})
-		if err != nil {
+		}); err != nil {
 			return errors.Wrap(err, "transaction failed")
 		}
 	} else {
-		err := db.ExecTx(ctx, func(ctx context.Context, tx *sqlx.Tx) error {
+		if err := db.ExecTx(ctx, func(ctx context.Context, tx *sqlx.Tx) error {
 			if _, err := tx.ExecContext(
 				ctx,
 				fmt.Sprintf(
@@ -102,8 +101,7 @@ func SyncNotificationsConfig(ctx context.Context, db *database.DB, config *notif
 			}
 
 			return nil
-		})
-		if err != nil {
+		}); err != nil {
 			return errors.Wrap(err, "cannot retrieve Icinga Notifications config")
 		}
 	}

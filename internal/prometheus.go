@@ -40,7 +40,7 @@ func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *metrics.
 			)
 		}
 
-		err := db.ExecTx(ctx, func(ctx context.Context, tx *sqlx.Tx) error {
+		if err := db.ExecTx(ctx, func(ctx context.Context, tx *sqlx.Tx) error {
 			if _, err := tx.ExecContext(
 				ctx,
 				fmt.Sprintf(
@@ -60,12 +60,11 @@ func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *metrics.
 			}
 
 			return nil
-		})
-		if err != nil {
+		}); err != nil {
 			return errors.Wrap(err, "transaction failed")
 		}
 	} else {
-		err := db.ExecTx(ctx, func(ctx context.Context, tx *sqlx.Tx) error {
+		if err := db.ExecTx(ctx, func(ctx context.Context, tx *sqlx.Tx) error {
 			if _, err := tx.ExecContext(
 				ctx,
 				fmt.Sprintf(
@@ -103,8 +102,7 @@ func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *metrics.
 			}
 
 			return nil
-		})
-		if err != nil {
+		}); err != nil {
 			return errors.Wrap(err, "cannot retrieve Prometheus config")
 		}
 	}
@@ -133,7 +131,7 @@ func AutoDetectPrometheus(ctx context.Context, clientset *kubernetes.Clientset, 
 
 	// Check if we are running in a Kubernetes cluster. If so, use the service's
 	// ClusterIP. Otherwise, use the API Server's IP and NodePort.
-	if _, err = rest.InClusterConfig(); err == nil {
+	if _, err := rest.InClusterConfig(); err == nil {
 		for _, service := range services.Items {
 			if service.Spec.Type == v1.ServiceTypeClusterIP {
 				ip = service.Spec.ClusterIP

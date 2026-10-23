@@ -172,7 +172,7 @@ func main() {
 	if hasSchema {
 		var version string
 
-		err = retry.WithBackoff(
+		if err := retry.WithBackoff(
 			ctx,
 			func(ctx context.Context) (err error) {
 				query := "SELECT version FROM kubernetes_schema ORDER BY id DESC LIMIT 1"
@@ -184,13 +184,13 @@ func main() {
 			},
 			retry.Retryable,
 			backoff.NewExponentialWithJitter(128*time.Millisecond, 1*time.Minute),
-			retry.Settings{})
-		if err != nil {
+			retry.Settings{},
+		); err != nil {
 			logger.Fatalw("Cannot query schema version", logging.Error(err))
 		}
 
 		if version != expectedSchemaVersion {
-			err = retry.WithBackoff(
+			if err := retry.WithBackoff(
 				ctx,
 				func(ctx context.Context) (err error) {
 					rows, err := db.Query(
@@ -212,8 +212,7 @@ func main() {
 							logger.Fatalw("Cannot scan table name", logging.Error(err))
 						}
 
-						_, err := db.Exec(fmt.Sprintf(`DROP TABLE %s`, tableName))
-						if err != nil {
+						if _, err := db.Exec(fmt.Sprintf(`DROP TABLE %s`, tableName)); err != nil {
 							logger.Fatalw("Cannot drop table", zap.String("table", tableName), logging.Error(err))
 						}
 					}
@@ -221,8 +220,8 @@ func main() {
 				},
 				retry.Retryable,
 				backoff.NewExponentialWithJitter(128*time.Millisecond, 1*time.Minute),
-				retry.Settings{})
-			if err != nil {
+				retry.Settings{},
+			); err != nil {
 				logger.Fatalw("Cannot wipe outdated database tables", logging.Error(err))
 			}
 
@@ -448,14 +447,12 @@ func main() {
 		return SyncServicePods(ctx, db, factory.Core().V1().Services(), factory.Core().V1().Pods())
 	})
 
-	err = internal.SyncPrometheusConfig(ctx, db.DB, &cfg.Prometheus, clusterInstance.Uuid)
-	if err != nil {
+	if err := internal.SyncPrometheusConfig(ctx, db.DB, &cfg.Prometheus, clusterInstance.Uuid); err != nil {
 		logger.Errorw("Cannot sync prometheus config", logging.Error(err))
 	}
 
 	if cfg.Prometheus.Url == "" {
-		err = internal.AutoDetectPrometheus(ctx, clientset, &cfg.Prometheus)
-		if err != nil {
+		if err := internal.AutoDetectPrometheus(ctx, clientset, &cfg.Prometheus); err != nil {
 			logger.Errorw("Cannot auto-detect prometheus", logging.Error(err))
 		}
 	}
