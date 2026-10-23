@@ -291,44 +291,40 @@ func NewPromMetricSync(promApiClient v1.API, db *database.DB, logger *logging.Lo
 // promMetricClusterUpsertStmt returns database upsert statement to upsert cluster metrics
 func (pms *PromMetricSync) promMetricClusterUpsertStmt() string {
 	return fmt.Sprintf(
-		`INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s`,
-		`prometheus_cluster_metric`,
-		"cluster_id, timestamp, category, name, value",
-		`:cluster_id, :timestamp, :category, :name, :value`,
-		`value=VALUES(value)`,
+		`INSERT INTO "prometheus_cluster_metric" (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s`,
+		`"cluster_uuid", "timestamp", "category", "name", "value"`,
+		`:cluster_uuid, :timestamp, :category, :name, :value`,
+		`"value"=VALUES("value")`,
 	)
 }
 
 // promMetricNodeUpsertStmt returns database upsert statement to upsert node metrics
 func (pms *PromMetricSync) promMetricNodeUpsertStmt() string {
 	return fmt.Sprintf(
-		`INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s`,
-		`prometheus_node_metric`,
-		"node_uuid, timestamp, category, name, value",
+		`INSERT INTO "prometheus_node_metric" (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s`,
+		`"node_uuid", "timestamp", "category", "name", "value"`,
 		`:node_uuid, :timestamp, :category, :name, :value`,
-		`value=VALUES(value)`,
+		`"value"=VALUES("value")`,
 	)
 }
 
 // promMetricPodUpsertStmt returns database upsert statement to upsert pod metrics
 func (pms *PromMetricSync) promMetricPodUpsertStmt() string {
 	return fmt.Sprintf(
-		`INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s`,
-		`prometheus_pod_metric`,
-		"pod_uuid, timestamp, category, name, value",
+		`INSERT INTO "prometheus_pod_metric" (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s`,
+		`"pod_uuid", "timestamp", "category", "name", "value"`,
 		`:pod_uuid, :timestamp, :category, :name, :value`,
-		`value=VALUES(value)`,
+		`"value"=VALUES("value")`,
 	)
 }
 
 // promMetricContainerUpsertStmt returns database upsert statement to upsert container metrics
 func (pms *PromMetricSync) promMetricContainerUpsertStmt() string {
 	return fmt.Sprintf(
-		`INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s`,
-		`prometheus_container_metric`,
-		"container_id, timestamp, category, name, value",
-		`:container_id, :timestamp, :category, :name, :value`,
-		`value=VALUES(value)`,
+		`INSERT INTO "prometheus_container_metric" (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s`,
+		`"container_uuid", "timestamp", "category", "name", "value"`,
+		`:container_uuid, :timestamp, :category, :name, :value`,
+		`"value"=VALUES("value")`,
 	)
 }
 
