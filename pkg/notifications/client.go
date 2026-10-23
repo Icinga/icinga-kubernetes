@@ -116,11 +116,7 @@ func (c *Client) Stream(ctx context.Context, entities <-chan database.Entity) er
 				return nil
 			}
 
-			event, err := entity.(Marshaler).MarshalEvent()
-			if err != nil {
-				c.logger.Errorw("Cannot marshal event", logging.Error(err))
-				continue
-			}
+			event := entity.(Marshaler).MarshalEvent()
 
 			if err := c.ProcessEvent(ctx, event); err != nil {
 				c.logger.Errorw("Cannot process event", logging.Error(err))

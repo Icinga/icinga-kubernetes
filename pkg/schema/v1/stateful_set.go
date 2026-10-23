@@ -213,7 +213,7 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	s.Yaml = string(output)
 }
 
-func (s *StatefulSet) MarshalEvent() (notifications.Event, error) {
+func (s *StatefulSet) MarshalEvent() notifications.Event {
 	return notifications.Event{
 		Uuid:        s.Uuid,
 		ClusterUuid: s.ClusterUuid,
@@ -229,7 +229,7 @@ func (s *StatefulSet) MarshalEvent() (notifications.Event, error) {
 			"namespace":    s.Namespace,
 			"resource":     "stateful_set",
 		},
-	}, nil
+	}
 }
 
 func (s *StatefulSet) getIcingaState() (IcingaState, string) {

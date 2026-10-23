@@ -321,7 +321,7 @@ func (p *Pod) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	p.Yaml = string(output)
 }
 
-func (p *Pod) MarshalEvent() (notifications.Event, error) {
+func (p *Pod) MarshalEvent() notifications.Event {
 	return notifications.Event{
 		Uuid:        p.Uuid,
 		ClusterUuid: p.ClusterUuid,
@@ -337,7 +337,7 @@ func (p *Pod) MarshalEvent() (notifications.Event, error) {
 			"namespace":    p.Namespace,
 			"resource":     "pod",
 		},
-	}, nil
+	}
 }
 
 func (p *Pod) getIcingaState(pod *kcorev1.Pod) (IcingaState, string) {
