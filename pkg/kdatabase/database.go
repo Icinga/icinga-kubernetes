@@ -20,14 +20,12 @@ import (
 // DB is a wrapper around database.DB with additional relation handling.
 type DB struct {
 	*database.DB
-
-	log *logging.Logger
 }
 
 // NewFromConfig returns a new DB for the database configured in cfg. It uses
 // NewDbFromConfig of icinga-go-library, which also sets the ANSI_QUOTES SQL
 // mode for MySQL that the built statements rely on. No connection is opened
-// yet, so use Connect to check that the database is reachable. All database
+// yet, so use Ping to check that the database is reachable. All database
 // logs go to log.
 func NewFromConfig(cfg *database.Config, log *logging.Logger) (*DB, error) {
 	db, err := database.NewDbFromConfig(cfg, log, database.RetryConnectorCallbacks{})
@@ -35,10 +33,7 @@ func NewFromConfig(cfg *database.Config, log *logging.Logger) (*DB, error) {
 		return nil, err
 	}
 
-	return &DB{
-		DB:  db,
-		log: log,
-	}, nil
+	return &DB{DB: db}, nil
 }
 
 // BuildDeleteStmt returns a DELETE statement for the given struct.
@@ -55,17 +50,6 @@ func (db *DB) BuildDeleteStmt(from any) string {
 		database.TableName(from),
 		column,
 	)
-}
-
-func (db *DB) Connect() bool {
-	db.log.Info("Connecting to database")
-	if err := db.Ping(); err != nil {
-		db.log.Errorw("Cannot connect to database", logging.Error(err))
-
-		return false
-	}
-
-	return true
 }
 
 // streamChildIds streams the ids of the related rows that reference one of the
