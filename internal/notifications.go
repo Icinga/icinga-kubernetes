@@ -32,7 +32,7 @@ func SyncNotificationsConfig(ctx context.Context, db *database.DB, config *notif
 				})
 			} else {
 				if err := tx.SelectContext(ctx, &config.KubernetesWebUrl, fmt.Sprintf(
-					`SELECT "%s" FROM "%s"`,
+					`SELECT %q FROM %q`,
 					schemav1.ConfigKeyNotificationsKubernetesWebUrl,
 					database.TableName(schemav1.Config{})),
 				); err != nil {
@@ -43,7 +43,7 @@ func SyncNotificationsConfig(ctx context.Context, db *database.DB, config *notif
 			if _, err := tx.ExecContext(
 				ctx,
 				fmt.Sprintf(
-					`DELETE FROM "%s" WHERE "cluster_uuid" = ? AND "key" LIKE ? AND "locked" = ?`,
+					`DELETE FROM %q WHERE "cluster_uuid" = ? AND "key" LIKE ? AND "locked" = ?`,
 					database.TableName(&schemav1.Config{}),
 				),
 				clusterUuid,
@@ -67,7 +67,7 @@ func SyncNotificationsConfig(ctx context.Context, db *database.DB, config *notif
 			if _, err := tx.ExecContext(
 				ctx,
 				fmt.Sprintf(
-					`DELETE FROM "%s" WHERE "cluster_uuid" = ? AND "key" LIKE ? AND "locked" = ?`,
+					`DELETE FROM %q WHERE "cluster_uuid" = ? AND "key" LIKE ? AND "locked" = ?`,
 					database.TableName(&schemav1.Config{}),
 				),
 				clusterUuid,

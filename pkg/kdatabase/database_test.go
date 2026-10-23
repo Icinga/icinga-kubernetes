@@ -306,7 +306,7 @@ func newTestDB(t *testing.T) (*DB, sqlmock.Sqlmock) {
 func upsert(table string, rows int) string {
 	values := strings.TrimSuffix(strings.Repeat("(?),", rows), ",")
 
-	return fmt.Sprintf(`INSERT INTO "%s" ("uuid") VALUES %s ON DUPLICATE KEY UPDATE "uuid" = VALUES("uuid")`, table, values)
+	return fmt.Sprintf(`INSERT INTO %q ("uuid") VALUES %s ON DUPLICATE KEY UPDATE "uuid" = VALUES("uuid")`, table, values)
 }
 
 // oneOf matches an argument that is one of the ids, for rows whose arguments
