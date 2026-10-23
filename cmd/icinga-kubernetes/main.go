@@ -215,8 +215,7 @@ func main() {
 							logger.Fatalw("Cannot scan table name", logging.Error(err))
 						}
 
-						_, err := db.Exec(fmt.Sprintf(`DROP TABLE %s`, tableName))
-						if err != nil {
+						if _, err := db.Exec(fmt.Sprintf(`DROP TABLE %s`, tableName)); err != nil {
 							logger.Fatalw("Cannot drop table", zap.String("table", tableName), logging.Error(err))
 						}
 					}

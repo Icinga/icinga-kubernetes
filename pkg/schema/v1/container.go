@@ -552,8 +552,7 @@ func SyncContainers(
 								return ctx.Err()
 							}
 
-							err := scheduler.RemoveByTag(container.Uuid.String())
-							if err != nil && !errors.Is(err, gocron.ErrJobNotFoundWithTag) {
+							if err := scheduler.RemoveByTag(container.Uuid.String()); err != nil && !errors.Is(err, gocron.ErrJobNotFoundWithTag) {
 								return err
 							}
 
@@ -594,13 +593,11 @@ func SyncContainers(
 						containerLogsMu.Unlock()
 
 						scheduler.Every(ScheduleInterval.String()).Tag(container.Uuid.String())
-						_, err = scheduler.Do(containerLog.syncContainerLogs, ctx, pod.factory.clientset, db)
-						if err != nil {
+						if _, err := scheduler.Do(containerLog.syncContainerLogs, ctx, pod.factory.clientset, db); err != nil {
 							return err
 						}
 					} else if err == nil {
-						err := scheduler.RemoveByTag(container.Uuid.String())
-						if err != nil {
+						if err := scheduler.RemoveByTag(container.Uuid.String()); err != nil {
 							return err
 						}
 
