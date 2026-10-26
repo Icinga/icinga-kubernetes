@@ -12,9 +12,6 @@ import (
 	"github.com/icinga/icinga-kubernetes/pkg/notifications"
 	kappsv1 "k8s.io/api/apps/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	kruntime "k8s.io/apimachinery/pkg/runtime"
-	kserializer "k8s.io/apimachinery/pkg/runtime/serializer"
-	kjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	ktypes "k8s.io/apimachinery/pkg/types"
 )
 
@@ -206,11 +203,7 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		})
 	}
 
-	scheme := kruntime.NewScheme()
-	_ = kappsv1.AddToScheme(scheme)
-	codec := kserializer.NewCodecFactory(scheme).EncoderForVersion(kjson.NewYAMLSerializer(kjson.DefaultMetaFactory, scheme, scheme), kappsv1.SchemeGroupVersion)
-	output, _ := kruntime.Encode(codec, statefulSet)
-	s.Yaml = string(output)
+	s.Yaml = MarshalYaml(statefulSet)
 }
 
 func (s *StatefulSet) MarshalEvent() (notifications.Event, error) {
