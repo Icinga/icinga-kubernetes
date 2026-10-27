@@ -1,6 +1,7 @@
 package v1
 
 import (
+	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/cache"
 )
@@ -42,11 +43,13 @@ func (i Informers) HasSynced() bool {
 
 // GetByKey returns the object stored under key in the first informer that has it.
 // The informers' stores are disjoint, so the first one is the only one.
-func (i Informers) GetByKey(key string) (any, bool, error) {
+func (i Informers) GetByKey(key string) (kmetav1.Object, bool, error) {
 	for _, informer := range i {
 		item, exists, err := informer.GetStore().GetByKey(key)
 		if err != nil || exists {
-			return item, exists, err
+			obj, _ := item.(kmetav1.Object)
+
+			return obj, exists, err
 		}
 	}
 

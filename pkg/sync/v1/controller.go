@@ -6,7 +6,6 @@ import (
 	"github.com/icinga/icinga-go-library/logging"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
-	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 )
@@ -60,7 +59,7 @@ func (c *Controller) stream(ctx context.Context, sink *Sink) error {
 
 		key = eventHandlerItem.KKey
 
-		item, exists, err := c.informers.GetByKey(key)
+		obj, exists, err := c.informers.GetByKey(key)
 		if err != nil {
 			if c.queue.NumRequeues(eventHandlerItem) < 5 {
 				c.log.Errorw("Cannot fetch key. Retrying", zap.String("key", key), logging.Error(err))
@@ -80,7 +79,6 @@ func (c *Controller) stream(ctx context.Context, sink *Sink) error {
 				return err
 			}
 		} else {
-			obj := item.(kmetav1.Object)
 			if err := sink.Upsert(ctx, &Item{Key: key, Item: &obj}); err != nil {
 				return err
 			}

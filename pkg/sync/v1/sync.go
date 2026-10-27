@@ -118,7 +118,7 @@ func (s *Sync) deleteVanished(ctx context.Context, sink *Sink, synced map[string
 			return err
 		}
 
-		if exists && schemav1.EnsureUUID(obj.(kmetav1.Object).GetUID()) == id {
+		if exists && schemav1.EnsureUUID(obj.GetUID()) == id {
 			continue
 		}
 
