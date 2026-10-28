@@ -221,7 +221,7 @@ func (n *Node) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	}
 }
 
-func (n *Node) MarshalEvent() (notifications.Event, error) {
+func (n *Node) MarshalEvent() notifications.Event {
 	return notifications.Event{
 		Uuid:        n.Uuid,
 		ClusterUuid: n.ClusterUuid,
@@ -237,7 +237,7 @@ func (n *Node) MarshalEvent() (notifications.Event, error) {
 			"namespace":    n.Namespace,
 			"resource":     "node",
 		},
-	}, nil
+	}
 }
 
 func (n *Node) getIcingaState(node *kcorev1.Node) (IcingaState, string) {

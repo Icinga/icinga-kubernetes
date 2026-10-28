@@ -182,7 +182,7 @@ func (d *DaemonSet) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	d.Yaml = MarshalYaml(daemonSet)
 }
 
-func (d *DaemonSet) MarshalEvent() (notifications.Event, error) {
+func (d *DaemonSet) MarshalEvent() notifications.Event {
 	return notifications.Event{
 		Uuid:        d.Uuid,
 		ClusterUuid: d.ClusterUuid,
@@ -198,7 +198,7 @@ func (d *DaemonSet) MarshalEvent() (notifications.Event, error) {
 			"namespace":    d.Namespace,
 			"resource":     "daemon_set",
 		},
-	}, nil
+	}
 }
 
 func (d *DaemonSet) getIcingaState() (IcingaState, string) {
