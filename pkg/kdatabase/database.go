@@ -46,7 +46,7 @@ func (db *DB) BuildDeleteStmt(from any) string {
 	}
 
 	return fmt.Sprintf(
-		`DELETE FROM "%s" WHERE %s IN (?)`,
+		`DELETE FROM %q WHERE %q IN (?)`,
 		database.TableName(from),
 		column,
 	)
@@ -56,7 +56,7 @@ func (db *DB) BuildDeleteStmt(from any) string {
 // parent ids through the foreign key of relation into childIds.
 func (db *DB) streamChildIds(ctx context.Context, relation Relation, parentIds <-chan any, childIds chan<- any) error {
 	query := fmt.Sprintf(
-		`SELECT uuid FROM "%s" WHERE %s IN (?)`,
+		`SELECT "uuid" FROM %q WHERE %q IN (?)`,
 		database.TableName(relation),
 		relation.ForeignKey(),
 	)
