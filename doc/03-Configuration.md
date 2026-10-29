@@ -204,6 +204,112 @@ are always synchronized completely. When the filter changes, the database is
 brought in line with it on the next start, except for events, which are kept
 until they expire.
 
+### Permissions
+
+The example deployment grants Icinga for Kubernetes read access to the whole
+cluster. With `include`, it can be limited to the included namespaces.
+Resources that Icinga for Kubernetes may not read are skipped:
+
+* A warning is logged once for each resource and namespace that may not be
+  listed and watched, and for each namespace whose container logs may not be
+  read.
+* Skipped resources are picked up as soon as they are permitted, without a
+  restart.
+* Objects of skipped resources that are already in the database are kept as
+  last seen.
+
+Only reading the `kube-system` namespace is required, since it identifies the
+cluster. Without it, Icinga for Kubernetes does not start.
+
+The following grants everything for `include: [production]`:
+
+```yaml
+# Cluster-scoped resources can only be granted through a ClusterRole.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: icinga-for-kubernetes
+rules:
+  - apiGroups: [ "" ]
+    resources: [ "namespaces", "nodes", "persistentvolumes" ]
+    verbs: [ "get", "list", "watch" ]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: icinga-for-kubernetes
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: icinga-for-kubernetes
+subjects:
+  - kind: ServiceAccount
+    name: icinga-for-kubernetes
+    namespace: icinga
+
+---
+# One Role and RoleBinding per included namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: icinga-for-kubernetes
+  namespace: production
+rules:
+  - apiGroups: [ "*" ]
+    resources: [ "*" ]
+    verbs: [ "get", "list", "watch" ]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: icinga-for-kubernetes
+  namespace: production
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: icinga-for-kubernetes
+subjects:
+  - kind: ServiceAccount
+    name: icinga-for-kubernetes
+    namespace: icinga
+
+---
+# Events about nodes, needed if the default namespace is not included.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: icinga-for-kubernetes-node-events
+  namespace: default
+rules:
+  - apiGroups: [ "events.k8s.io" ]
+    resources: [ "events" ]
+    verbs: [ "list", "watch" ]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: icinga-for-kubernetes-node-events
+  namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: icinga-for-kubernetes-node-events
+subjects:
+  - kind: ServiceAccount
+    name: icinga-for-kubernetes
+    namespace: icinga
+```
+
+If no Prometheus URL is configured, Icinga for Kubernetes looks for Prometheus
+by listing the services in the `monitoring` namespace. If it may not, set the
+URL in the [Prometheus configuration](#prometheus-configuration).
+
+With `exclude`, Icinga for Kubernetes lists resources across the whole cluster
+and needs read access to it, as in the example deployment.
+
 ### Limitations
 
 * Only run one instance of Icinga for Kubernetes per cluster and database.
