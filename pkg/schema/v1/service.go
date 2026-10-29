@@ -34,29 +34,26 @@ type Service struct {
 	LoadBalancerClass             sql.NullString
 	InternalTrafficPolicy         string
 	Yaml                          string
-	Selectors                     []Selector           `db:"-"`
-	ServiceSelectors              []ServiceSelector    `db:"-"`
-	Ports                         []ServicePort        `db:"-"`
-	Conditions                    []ServiceCondition   `db:"-"`
-	Labels                        []Label              `db:"-"`
-	ServiceLabels                 []ServiceLabel       `db:"-"`
-	ResourceLabels                []ResourceLabel      `db:"-"`
-	Annotations                   []Annotation         `db:"-"`
-	ServiceAnnotations            []ServiceAnnotation  `db:"-"`
-	ResourceAnnotations           []ResourceAnnotation `db:"-"`
-	ServicePods                   []ServicePod         `db:"-"`
-	Favorites                     []Favorite           `db:"-"`
+	Selectors                     []ServiceSelector  `db:"-"`
+	Ports                         []ServicePort      `db:"-"`
+	Conditions                    []ServiceCondition `db:"-"`
+	Labels                        []Label            `db:"-"`
+	Annotations                   []Annotation       `db:"-"`
+	ServicePods                   []ServicePod       `db:"-"`
+	Favorites                     []Favorite         `db:"-"`
 	factory                       *ServiceFactory
 }
 
 type ServiceSelector struct {
 	kdatabase.EntityStub
-	ServiceUuid  types.UUID
-	SelectorUuid types.UUID
+	Uuid        types.UUID
+	ServiceUuid types.UUID
+	Name        string
+	Value       string
 }
 
 func (s ServiceSelector) ID() database.ID {
-	return compoundId{id: s.ServiceUuid.String() + s.SelectorUuid.String()}
+	return s.Uuid
 }
 
 type ServicePort struct {
@@ -87,26 +84,6 @@ type ServiceCondition struct {
 
 func (s ServiceCondition) ID() database.ID {
 	return compoundId{id: s.ServiceUuid.String() + s.Type}
-}
-
-type ServiceLabel struct {
-	kdatabase.EntityStub
-	ServiceUuid types.UUID
-	LabelUuid   types.UUID
-}
-
-func (s ServiceLabel) ID() database.ID {
-	return compoundId{id: s.ServiceUuid.String() + s.LabelUuid.String()}
-}
-
-type ServiceAnnotation struct {
-	kdatabase.EntityStub
-	ServiceUuid    types.UUID
-	AnnotationUuid types.UUID
-}
-
-func (s ServiceAnnotation) ID() database.ID {
-	return compoundId{id: s.ServiceUuid.String() + s.AnnotationUuid.String()}
 }
 
 type ServicePod struct {
@@ -149,34 +126,20 @@ func (s *Service) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	for labelName, labelValue := range service.Labels {
 		labelUuid := NewUUID(s.Uuid, strings.ToLower(labelName+":"+labelValue))
 		s.Labels = append(s.Labels, Label{
-			Uuid:  labelUuid,
-			Name:  labelName,
-			Value: labelValue,
-		})
-		s.ServiceLabels = append(s.ServiceLabels, ServiceLabel{
-			ServiceUuid: s.Uuid,
-			LabelUuid:   labelUuid,
-		})
-		s.ResourceLabels = append(s.ResourceLabels, ResourceLabel{
+			Uuid:         labelUuid,
 			ResourceUuid: s.Uuid,
-			LabelUuid:    labelUuid,
+			Name:         labelName,
+			Value:        labelValue,
 		})
 	}
 
 	for annotationName, annotationValue := range service.Annotations {
 		annotationUuid := NewUUID(s.Uuid, strings.ToLower(annotationName+":"+annotationValue))
 		s.Annotations = append(s.Annotations, Annotation{
-			Uuid:  annotationUuid,
-			Name:  annotationName,
-			Value: annotationValue,
-		})
-		s.ServiceAnnotations = append(s.ServiceAnnotations, ServiceAnnotation{
-			ServiceUuid:    s.Uuid,
-			AnnotationUuid: annotationUuid,
-		})
-		s.ResourceAnnotations = append(s.ResourceAnnotations, ResourceAnnotation{
-			ResourceUuid:   s.Uuid,
-			AnnotationUuid: annotationUuid,
+			Uuid:         annotationUuid,
+			ResourceUuid: s.Uuid,
+			Name:         annotationName,
+			Value:        annotationValue,
 		})
 	}
 
@@ -198,14 +161,11 @@ func (s *Service) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 
 	for selectorName, selectorValue := range service.Spec.Selector {
 		selectorUuid := NewUUID(s.Uuid, strings.ToLower(selectorName+":"+selectorValue))
-		s.Selectors = append(s.Selectors, Selector{
-			Uuid:  selectorUuid,
-			Name:  selectorName,
-			Value: selectorValue,
-		})
-		s.ServiceSelectors = append(s.ServiceSelectors, ServiceSelector{
-			ServiceUuid:  s.Uuid,
-			SelectorUuid: selectorUuid,
+		s.Selectors = append(s.Selectors, ServiceSelector{
+			Uuid:        selectorUuid,
+			ServiceUuid: s.Uuid,
+			Name:        selectorName,
+			Value:       selectorValue,
 		})
 	}
 
@@ -273,14 +233,9 @@ func (s *Service) Relations() []kdatabase.Relation {
 	return []kdatabase.Relation{
 		kdatabase.HasMany(s.Conditions, fk),
 		kdatabase.HasMany(s.Ports, fk),
-		kdatabase.HasMany(s.Selectors, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(s.ServiceSelectors, fk),
-		kdatabase.HasMany(s.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(s.Labels, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(s.ServiceLabels, fk),
-		kdatabase.HasMany(s.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(s.Annotations, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(s.ServiceAnnotations, fk),
+		kdatabase.HasMany(s.Selectors, fk),
+		kdatabase.HasMany(s.Labels, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(s.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(s.ServicePods, fk),
 		kdatabase.HasMany(s.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}

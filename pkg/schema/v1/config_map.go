@@ -3,7 +3,6 @@ package v1
 import (
 	"strings"
 
-	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/pkg/kdatabase"
 	kcorev1 "k8s.io/api/core/v1"
@@ -12,33 +11,9 @@ import (
 
 type ConfigMap struct {
 	Meta
-	Immutable            types.Bool
-	Labels               []Label               `db:"-"`
-	ConfigMapLabels      []ConfigMapLabel      `db:"-"`
-	ResourceLabels       []ResourceLabel       `db:"-"`
-	Annotations          []Annotation          `db:"-"`
-	ConfigMapAnnotations []ConfigMapAnnotation `db:"-"`
-	ResourceAnnotations  []ResourceAnnotation  `db:"-"`
-}
-
-type ConfigMapLabel struct {
-	kdatabase.EntityStub
-	ConfigMapUuid types.UUID
-	LabelUuid     types.UUID
-}
-
-func (c ConfigMapLabel) ID() database.ID {
-	return compoundId{id: c.ConfigMapUuid.String() + c.LabelUuid.String()}
-}
-
-type ConfigMapAnnotation struct {
-	kdatabase.EntityStub
-	ConfigMapUuid  types.UUID
-	AnnotationUuid types.UUID
-}
-
-func (c ConfigMapAnnotation) ID() database.ID {
-	return compoundId{id: c.ConfigMapUuid.String() + c.AnnotationUuid.String()}
+	Immutable   types.Bool
+	Labels      []Label      `db:"-"`
+	Annotations []Annotation `db:"-"`
 }
 
 func NewConfigMap() Resource {
@@ -62,47 +37,27 @@ func (c *ConfigMap) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	for labelName, labelValue := range configMap.Labels {
 		labelUuid := NewUUID(c.Uuid, strings.ToLower(labelName+":"+labelValue))
 		c.Labels = append(c.Labels, Label{
-			Uuid:  labelUuid,
-			Name:  labelName,
-			Value: labelValue,
-		})
-		c.ConfigMapLabels = append(c.ConfigMapLabels, ConfigMapLabel{
-			ConfigMapUuid: c.Uuid,
-			LabelUuid:     labelUuid,
-		})
-		c.ResourceLabels = append(c.ResourceLabels, ResourceLabel{
+			Uuid:         labelUuid,
 			ResourceUuid: c.Uuid,
-			LabelUuid:    labelUuid,
+			Name:         labelName,
+			Value:        labelValue,
 		})
 	}
 
 	for annotationName, annotationValue := range configMap.Annotations {
 		annotationUuid := NewUUID(c.Uuid, strings.ToLower(annotationName+":"+annotationValue))
 		c.Annotations = append(c.Annotations, Annotation{
-			Uuid:  annotationUuid,
-			Name:  annotationName,
-			Value: annotationValue,
-		})
-		c.ConfigMapAnnotations = append(c.ConfigMapAnnotations, ConfigMapAnnotation{
-			ConfigMapUuid:  c.Uuid,
-			AnnotationUuid: annotationUuid,
-		})
-		c.ResourceAnnotations = append(c.ResourceAnnotations, ResourceAnnotation{
-			ResourceUuid:   c.Uuid,
-			AnnotationUuid: annotationUuid,
+			Uuid:         annotationUuid,
+			ResourceUuid: c.Uuid,
+			Name:         annotationName,
+			Value:        annotationValue,
 		})
 	}
 }
 
 func (c *ConfigMap) Relations() []kdatabase.Relation {
-	fk := kdatabase.WithForeignKey("config_map_uuid")
-
 	return []kdatabase.Relation{
-		kdatabase.HasMany(c.ResourceLabels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(c.Labels, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(c.ConfigMapLabels, fk),
-		kdatabase.HasMany(c.ResourceAnnotations, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(c.Annotations, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(c.ConfigMapAnnotations, fk),
+		kdatabase.HasMany(c.Labels, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(c.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }
