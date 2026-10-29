@@ -649,17 +649,6 @@ func main() {
 		return s.Run(ctx, syncv1.WithNoDelete(), syncv1.WithNoWarmup())
 	})
 
-	// A sync waits until all its informers have synced, so events about
-	// cluster-scoped objects get a sync of their own. Otherwise, missing
-	// permission for events in the default namespace would block all events.
-	if clusterEvents, ok := factory.ClusterEvents(); ok {
-		g.Go(func() error {
-			s := syncv1.NewSync(db, clusterEvents, logs.GetChildLogger("events"), schemav1.NewEvent)
-
-			return s.Run(ctx, syncv1.WithNoDelete(), syncv1.WithNoWarmup())
-		})
-	}
-
 	g.Go(func() error {
 		s := syncv1.NewSync(db, factory.PersistentVolumeClaims(), logs.GetChildLogger("pvcs"), schemav1.NewPvc)
 

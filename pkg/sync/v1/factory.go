@@ -1,8 +1,6 @@
 package v1
 
 import (
-	"slices"
-
 	"github.com/pkg/errors"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,10 +18,9 @@ import (
 // namespaces. Namespaces are filtered by name, and nodes and persistent volumes
 // are never filtered.
 type Factory struct {
-	cluster       informers.SharedInformerFactory
-	namespaces    informers.SharedInformerFactory
-	namespaced    []informers.SharedInformerFactory
-	clusterEvents informers.SharedInformerFactory
+	cluster    informers.SharedInformerFactory
+	namespaces informers.SharedInformerFactory
+	namespaced []informers.SharedInformerFactory
 }
 
 // NewFactory returns a Factory for the include namespaces, or for all
@@ -67,18 +64,6 @@ func NewFactory(clientset kubernetes.Interface, include, exclude []string) (*Fac
 		}
 	}
 
-	// Kubernetes records events about cluster-scoped objects, e.g., nodes and
-	// persistent volumes, in the default namespace. Keep synchronizing them even
-	// if the default namespace is filtered out.
-	if (len(include) > 0 && !slices.Contains(include, kmetav1.NamespaceDefault)) || slices.Contains(exclude, kmetav1.NamespaceDefault) {
-		f.clusterEvents = informers.NewSharedInformerFactoryWithOptions(
-			clientset,
-			0,
-			informers.WithNamespace(kmetav1.NamespaceDefault),
-			withFieldSelector(fields.OneTermEqualSelector("regarding.namespace", "")),
-		)
-	}
-
 	return f, nil
 }
 
@@ -116,16 +101,6 @@ func (f *Factory) Events() Informers {
 	return collect(f.namespaced, func(factory informers.SharedInformerFactory) cache.SharedIndexInformer {
 		return factory.Events().V1().Events().Informer()
 	})
-}
-
-// ClusterEvents returns the informer for events about cluster-scoped objects
-// if Events leaves them out, i.e., if the default namespace is filtered out.
-func (f *Factory) ClusterEvents() (Informers, bool) {
-	if f.clusterEvents == nil {
-		return nil, false
-	}
-
-	return Informers{f.clusterEvents.Events().V1().Events().Informer()}, true
 }
 
 func (f *Factory) Ingresses() Informers {

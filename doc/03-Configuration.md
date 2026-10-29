@@ -200,15 +200,16 @@ namespaces:
 
 Only the listed namespaces, or all but the listed ones, and their resources
 are synchronized. Cluster-scoped resources, i.e. nodes and persistent volumes,
-are always synchronized completely, and so are events about them, which
-Kubernetes records in the `default` namespace. When the filter changes, the
-database is brought in line with it on the next start, except for events,
-which are kept until they expire.
+are always synchronized completely. When the filter changes, the database is
+brought in line with it on the next start, except for events, which are kept
+until they expire.
 
 ### Limitations
 
 * Only run one instance of Icinga for Kubernetes per cluster and database.
   Instances with different namespace filters remove each other's data.
+* Kubernetes records events about nodes and persistent volumes in the `default`
+  namespace, so they are not synchronized if the filter leaves out `default`.
 
 ## Multi-Cluster Support using systemd Instantiated Services
 
