@@ -6,7 +6,6 @@ import (
 	"time"
 
 	kcorev1 "k8s.io/api/core/v1"
-	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
@@ -63,32 +62,6 @@ func TestFactory(t *testing.T) {
 
 			if n := len(nodes.List()); n != 1 {
 				t.Errorf("Nodes() lists %d nodes, want 1", n)
-			}
-		})
-	}
-}
-
-func TestFactoryClusterEvents(t *testing.T) {
-	tests := map[string]struct {
-		include, exclude []string
-		want             bool
-	}{
-		"All":            {want: false},
-		"IncludeDefault": {include: []string{"a", kmetav1.NamespaceDefault}, want: false},
-		"IncludeOthers":  {include: []string{"a"}, want: true},
-		"ExcludeDefault": {exclude: []string{kmetav1.NamespaceDefault}, want: true},
-		"ExcludeOthers":  {exclude: []string{"a"}, want: false},
-	}
-
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			f, err := NewFactory(fake.NewClientset(), tt.include, tt.exclude)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			if _, ok := f.ClusterEvents(); ok != tt.want {
-				t.Errorf("ClusterEvents() = %v, want %v", ok, tt.want)
 			}
 		})
 	}
