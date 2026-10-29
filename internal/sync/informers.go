@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/icinga/icinga-go-library/logging"
+	"go.uber.org/zap"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -33,7 +34,8 @@ func (i Informers) AddEventHandler(handler cache.ResourceEventHandler) error {
 
 // SkipForbidden makes informers that are denied to list or watch count as synced,
 // so that they do not hold up the others. Each logs a warning once and keeps
-// retrying quietly, so it catches up once permitted. It must be called before Run.
+// retrying quietly, so it catches up once permitted, which is logged as well.
+// It must be called before Run.
 func (i Informers) SkipForbidden(log *logging.Logger) error {
 	for _, informer := range i {
 		if err := informer.SetWatchErrorHandlerWithContext(func(ctx context.Context, r *cache.Reflector, err error) {
@@ -45,6 +47,23 @@ func (i Informers) SkipForbidden(log *logging.Logger) error {
 
 			if _, warned := forbiddenInformers.LoadOrStore(informer, struct{}{}); !warned {
 				log.Warnw("Cannot list and watch. Skipping until permitted", logging.Error(err))
+
+				// Being permitted is only logged for an informer denied before
+				// its first sync. Since the synced state is never reset, one
+				// denied after that would be reported as permitted while still
+				// denied.
+				if !informer.HasSynced() {
+					go func() {
+						select {
+						case <-informer.HasSyncedChecker().Done():
+							log.Infow(
+								"Permitted to list and watch now. Starting to synchronize",
+								zap.String("denied", err.Error()),
+							)
+						case <-ctx.Done():
+						}
+					}()
+				}
 			}
 		}); err != nil {
 			return err
