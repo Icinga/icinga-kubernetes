@@ -31,7 +31,9 @@ CREATE TABLE config_map (
   resource_version varchar(255) NOT NULL,
   immutable enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
   created bigint unsigned NOT NULL,
-  PRIMARY KEY (uuid)
+  deleted bigint unsigned NULL DEFAULT NULL,
+  PRIMARY KEY (uuid),
+  INDEX idx_config_map_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted config maps'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE container (
@@ -51,7 +53,8 @@ CREATE TABLE container (
   restart_count int unsigned NOT NULL,
   icinga_state enum('unknown', 'pending', 'ok', 'warning', 'critical') COLLATE utf8mb4_unicode_ci NOT NULL,
   icinga_state_reason text NULL DEFAULT NULL,
-  PRIMARY KEY (uuid)
+  PRIMARY KEY (uuid),
+  INDEX idx_container_pod_uuid (pod_uuid) COMMENT 'Filter for containers of a pod'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE init_container (
@@ -68,7 +71,8 @@ CREATE TABLE init_container (
   state_details longtext NULL DEFAULT NULL,
   icinga_state enum('unknown', 'pending', 'ok', 'warning', 'critical') COLLATE utf8mb4_unicode_ci NOT NULL,
   icinga_state_reason text NULL DEFAULT NULL,
-  PRIMARY KEY (uuid)
+  PRIMARY KEY (uuid),
+  INDEX idx_init_container_pod_uuid (pod_uuid) COMMENT 'Filter for init containers of a pod'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE sidecar_container (
@@ -88,7 +92,8 @@ CREATE TABLE sidecar_container (
   restart_count int unsigned NOT NULL,
   icinga_state enum('unknown', 'pending', 'ok', 'warning', 'critical') COLLATE utf8mb4_unicode_ci NOT NULL,
   icinga_state_reason text NULL DEFAULT NULL,
-  PRIMARY KEY (uuid)
+  PRIMARY KEY (uuid),
+  INDEX idx_sidecar_container_pod_uuid (pod_uuid) COMMENT 'Filter for sidecar containers of a pod'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE container_device (
@@ -138,7 +143,9 @@ CREATE TABLE cron_job (
   icinga_state_reason text NOT NULL,
   yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
-  PRIMARY KEY (uuid)
+  deleted bigint unsigned NULL DEFAULT NULL,
+  PRIMARY KEY (uuid),
+  INDEX idx_cron_job_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted cron jobs'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE daemon_set (
@@ -161,7 +168,9 @@ CREATE TABLE daemon_set (
   icinga_state enum('unknown', 'ok', 'warning', 'critical') COLLATE utf8mb4_unicode_ci NOT NULL,
   icinga_state_reason text NOT NULL,
   created bigint unsigned NOT NULL,
-  PRIMARY KEY (uuid)
+  deleted bigint unsigned NULL DEFAULT NULL,
+  PRIMARY KEY (uuid),
+  INDEX idx_daemon_set_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted daemon sets'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE daemon_set_condition (
@@ -206,7 +215,9 @@ CREATE TABLE deployment (
   icinga_state enum('unknown', 'ok', 'warning', 'critical') COLLATE utf8mb4_unicode_ci NOT NULL,
   icinga_state_reason text NOT NULL,
   created bigint unsigned NOT NULL,
-  PRIMARY KEY (uuid)
+  deleted bigint unsigned NULL DEFAULT NULL,
+  PRIMARY KEY (uuid),
+  INDEX idx_deployment_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted deployments'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE deployment_condition (
@@ -256,7 +267,9 @@ CREATE TABLE endpoint_slice (
   resource_version varchar(255) NOT NULL,
   address_type enum('IPv4', 'IPv6', 'FQDN') COLLATE utf8mb4_general_ci NOT NULL,
   created bigint unsigned NOT NULL,
-  PRIMARY KEY (uuid)
+  deleted bigint unsigned NULL DEFAULT NULL,
+  PRIMARY KEY (uuid),
+  INDEX idx_endpoint_slice_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted endpoint slices'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE endpoint_target_ref (
@@ -306,7 +319,9 @@ CREATE TABLE ingress (
   resource_version varchar(255) NOT NULL,
   yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
-  PRIMARY KEY (uuid)
+  deleted bigint unsigned NULL DEFAULT NULL,
+  PRIMARY KEY (uuid),
+  INDEX idx_ingress_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted ingresses'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE ingress_backend_resource (
@@ -369,7 +384,9 @@ CREATE TABLE job (
   icinga_state enum('pending', 'ok', 'warning', 'critical', 'unknown') COLLATE utf8mb4_unicode_ci NOT NULL,
   icinga_state_reason text NOT NULL,
   created bigint unsigned NOT NULL,
-  PRIMARY KEY (uuid)
+  deleted bigint unsigned NULL DEFAULT NULL,
+  PRIMARY KEY (uuid),
+  INDEX idx_job_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted jobs'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE job_condition (
@@ -404,7 +421,9 @@ CREATE TABLE namespace (
   phase enum('Active', 'Terminating') COLLATE utf8mb4_unicode_ci NOT NULL,
   yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
-  PRIMARY KEY (uuid)
+  deleted bigint unsigned NULL DEFAULT NULL,
+  PRIMARY KEY (uuid),
+  INDEX idx_namespace_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted namespaces'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE namespace_condition (
@@ -448,7 +467,9 @@ CREATE TABLE node (
   icinga_state enum('unknown', 'ok', 'warning', 'critical') COLLATE utf8mb4_unicode_ci NOT NULL,
   icinga_state_reason text NOT NULL,
   created bigint unsigned NOT NULL,
-  PRIMARY KEY (uuid)
+  deleted bigint unsigned NULL DEFAULT NULL,
+  PRIMARY KEY (uuid),
+  INDEX idx_node_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted nodes'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE node_condition (
@@ -489,7 +510,9 @@ CREATE TABLE persistent_volume (
   reclaim_policy enum('Recycle', 'Delete', 'Retain') COLLATE utf8mb4_unicode_ci NOT NULL,
   yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
-  PRIMARY KEY (uuid)
+  deleted bigint unsigned NULL DEFAULT NULL,
+  PRIMARY KEY (uuid),
+  INDEX idx_persistent_volume_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted persistent volumes'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE persistent_volume_claim_ref (
@@ -523,7 +546,9 @@ CREATE TABLE pod (
   qos enum('Guaranteed', 'Burstable', 'BestEffort') COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
-  PRIMARY KEY (uuid)
+  deleted bigint unsigned NULL DEFAULT NULL,
+  PRIMARY KEY (uuid),
+  INDEX idx_pod_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted pods'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE pod_condition (
@@ -634,7 +659,9 @@ CREATE TABLE pvc (
   storage_class varchar(255) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
-  PRIMARY KEY (uuid)
+  deleted bigint unsigned NULL DEFAULT NULL,
+  PRIMARY KEY (uuid),
+  INDEX idx_pvc_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted PVCs'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE pvc_condition (
@@ -665,7 +692,9 @@ CREATE TABLE replica_set (
   icinga_state enum('unknown', 'ok', 'warning', 'critical') COLLATE utf8mb4_unicode_ci NOT NULL,
   icinga_state_reason text NOT NULL,
   created bigint unsigned NOT NULL,
-  PRIMARY KEY (uuid)
+  deleted bigint unsigned NULL DEFAULT NULL,
+  PRIMARY KEY (uuid),
+  INDEX idx_replica_set_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted replica sets'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE replica_set_condition (
@@ -699,7 +728,9 @@ CREATE TABLE secret (
   type varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   immutable enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
   created bigint unsigned NOT NULL,
-  PRIMARY KEY (uuid)
+  deleted bigint unsigned NULL DEFAULT NULL,
+  PRIMARY KEY (uuid),
+  INDEX idx_secret_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted secrets'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE service (
@@ -725,7 +756,9 @@ CREATE TABLE service (
   internal_traffic_policy enum('Cluster', 'Local') COLLATE utf8mb4_unicode_ci NOT NULL,
   yaml mediumblob DEFAULT NULL,
   created bigint unsigned NOT NULL,
-  PRIMARY KEY (uuid)
+  deleted bigint unsigned NULL DEFAULT NULL,
+  PRIMARY KEY (uuid),
+  INDEX idx_service_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted services'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE service_condition (
@@ -789,7 +822,9 @@ CREATE TABLE stateful_set (
   icinga_state enum('unknown', 'ok', 'warning', 'critical') COLLATE utf8mb4_unicode_ci NOT NULL,
   icinga_state_reason text NOT NULL,
   created bigint unsigned NOT NULL,
-  PRIMARY KEY (uuid)
+  deleted bigint unsigned NULL DEFAULT NULL,
+  PRIMARY KEY (uuid),
+  INDEX idx_stateful_set_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted stateful sets'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE stateful_set_condition (
