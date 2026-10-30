@@ -34,6 +34,18 @@ to view and work with the data.
 | options    | **Optional.** Map of component names to log levels, overriding `level` for those components. See [Logging Components](#logging-components).                              |
 | kubernetes | **Optional.** Verbosity of the Kubernetes client libraries, from `0` to `9`. If not set, defaults to `0`. See [Kubernetes Client Logging](#kubernetes-client-logging).   |
 
+## Namespaces Configuration
+
+Namespaces whose resources Icinga for Kubernetes synchronizes.
+At most one of `include` and `exclude` may be set. If neither is set, all namespaces are synchronized.
+Defined in the `namespaces` section of the configuration file.
+See [Namespace Filtering](#namespace-filtering).
+
+| Option  | Description                                                    |
+|---------|----------------------------------------------------------------|
+| include | **Optional.** List of namespaces to synchronize exclusively.   |
+| exclude | **Optional.** List of namespaces not to synchronize.           |
+
 ## Notifications Configuration
 
 Connection configuration for [Icinga Notifications](https://github.com/icinga/icinga-notifications) daemon.
@@ -88,6 +100,13 @@ The configurations set by environment variables override the ones set by YAML.
 | LOGGING_INTERVAL   | **Optional.** Interval for periodic logging defined as duration string. Valid units are `ms`, `s`, `m`, `h`. Defaults to `20s`.                                          |
 | LOGGING_OPTIONS    | **Optional.** Comma-separated list of `component:level` pairs, overriding `LOGGING_LEVEL` for those components. See [Logging Components](#logging-components).           |
 | LOGGING_KUBERNETES | **Optional.** Verbosity of the Kubernetes client libraries, from `0` to `9`. If not set, defaults to `0`. See [Kubernetes Client Logging](#kubernetes-client-logging).   |
+
+## Namespaces Configuration
+
+| Env                | Description                                                                  |
+|--------------------|------------------------------------------------------------------------------|
+| NAMESPACES_INCLUDE | **Optional.** Comma-separated list of namespaces to synchronize exclusively. |
+| NAMESPACES_EXCLUDE | **Optional.** Comma-separated list of namespaces not to synchronize.         |
 
 ## Notifications Configuration
 
@@ -159,6 +178,38 @@ icinga-kubernetes -v 4
 Each systemd instance is configured through its environment file, so set
 `ICINGA_FOR_KUBERNETES_LOGGING_KUBERNETES` there rather than passing a command
 line flag.
+
+## Namespace Filtering
+
+By default, Icinga for Kubernetes synchronizes the resources of all namespaces.
+Limit this with either a list of namespaces to include or a list of namespaces
+to exclude:
+
+```yaml
+namespaces:
+  include:
+    - production
+    - staging
+```
+
+```yaml
+namespaces:
+  exclude:
+    - kube-system
+```
+
+Only the listed namespaces, or all but the listed ones, and their resources
+are synchronized. Cluster-scoped resources, i.e. nodes and persistent volumes,
+are always synchronized completely. When the filter changes, the database is
+brought in line with it on the next start, except for events, which are kept
+until they expire.
+
+### Limitations
+
+* Only run one instance of Icinga for Kubernetes per cluster and database.
+  Instances with different namespace filters remove each other's data.
+* Kubernetes records events about nodes and persistent volumes in the `default`
+  namespace, so they are not synchronized if the filter leaves out `default`.
 
 ## Multi-Cluster Support using systemd Instantiated Services
 
