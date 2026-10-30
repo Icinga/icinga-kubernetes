@@ -1,0 +1,10 @@
+package daemon
+
+import (
+	"github.com/icinga/icinga-go-library/version"
+)
+
+// Version contains version and Git commit information.
+//
+// The placeholders are replaced on `git archive` using the `export-subst` attribute.
+var Version = version.Version("0.4.0", "$Format:%(describe)$", "$Format:%H$")

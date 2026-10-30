@@ -1,2 +1,2 @@
 # Include version information on `git archive'
-/internal/version.go export-subst
+/internal/daemon/version.go export-subst

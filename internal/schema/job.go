@@ -1,0 +1,266 @@
+package schema
+
+import (
+	"database/sql"
+	"fmt"
+	"strings"
+
+	"github.com/icinga/icinga-go-library/database"
+	"github.com/icinga/icinga-go-library/strcase"
+	"github.com/icinga/icinga-go-library/types"
+	"github.com/icinga/icinga-kubernetes/internal/kdatabase"
+	kbatchv1 "k8s.io/api/batch/v1"
+	kcorev1 "k8s.io/api/core/v1"
+	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	ktypes "k8s.io/apimachinery/pkg/types"
+)
+
+type Job struct {
+	Meta
+	Parallelism             sql.NullInt32
+	Completions             sql.NullInt32
+	ActiveDeadlineSeconds   sql.NullInt64
+	BackoffLimit            sql.NullInt32
+	TtlSecondsAfterFinished sql.NullInt32
+	CompletionMode          sql.NullString
+	Suspend                 types.Bool
+	StartTime               types.UnixMilli
+	CompletionTime          types.UnixMilli
+	Active                  int32
+	Succeeded               int32
+	Failed                  int32
+	Yaml                    string
+	IcingaState             IcingaState
+	IcingaStateReason       string
+	Conditions              []JobCondition `db:"-"`
+	Labels                  []Label        `db:"-"`
+	Annotations             []Annotation   `db:"-"`
+	Owners                  []JobOwner     `db:"-"`
+	Favorites               []Favorite     `db:"-"`
+}
+
+type JobCondition struct {
+	kdatabase.EntityStub
+	JobUuid        types.UUID
+	Type           string
+	Status         string
+	LastProbe      types.UnixMilli
+	LastTransition types.UnixMilli
+	Reason         string
+	Message        string
+}
+
+func (j JobCondition) ID() database.ID {
+	return compoundId{id: j.JobUuid.String() + j.Type}
+}
+
+type JobOwner struct {
+	kdatabase.EntityStub
+	JobUuid            types.UUID
+	OwnerUuid          types.UUID
+	Kind               string
+	Name               string
+	Uid                ktypes.UID
+	Controller         types.Bool
+	BlockOwnerDeletion types.Bool
+}
+
+func (j JobOwner) ID() database.ID {
+	return compoundId{id: j.JobUuid.String() + j.OwnerUuid.String()}
+}
+
+func NewJob() Resource {
+	return &Job{}
+}
+
+func (j *Job) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
+	j.ObtainMeta(k8s, clusterUuid)
+
+	job := k8s.(*kbatchv1.Job)
+
+	var parallelism sql.NullInt32
+	if job.Spec.Parallelism != nil {
+		parallelism.Int32 = *job.Spec.Parallelism
+		parallelism.Valid = true
+	}
+	var completions sql.NullInt32
+	if job.Spec.Completions != nil {
+		completions.Int32 = *job.Spec.Completions
+		completions.Valid = true
+	}
+	var activeDeadlineSeconds sql.NullInt64
+	if job.Spec.ActiveDeadlineSeconds != nil {
+		activeDeadlineSeconds.Int64 = *job.Spec.ActiveDeadlineSeconds
+		activeDeadlineSeconds.Valid = true
+	}
+	var backoffLimit sql.NullInt32
+	if job.Spec.BackoffLimit != nil {
+		backoffLimit.Int32 = *job.Spec.BackoffLimit
+		backoffLimit.Valid = true
+	}
+	var ttlSecondsAfterFinished sql.NullInt32
+	if job.Spec.TTLSecondsAfterFinished != nil {
+		ttlSecondsAfterFinished.Int32 = *job.Spec.TTLSecondsAfterFinished
+		ttlSecondsAfterFinished.Valid = true
+	}
+	var suspend types.Bool
+	if job.Spec.Suspend != nil {
+		suspend.Bool = *job.Spec.Suspend
+		suspend.Valid = true
+	}
+	var completionMode sql.NullString
+	if job.Spec.CompletionMode != nil {
+		completionMode.String = string(*job.Spec.CompletionMode)
+		completionMode.Valid = true
+	}
+	var startTime kmetav1.Time
+	if job.Status.StartTime != nil {
+		startTime = *job.Status.StartTime
+	}
+	var completionTime kmetav1.Time
+	if job.Status.CompletionTime != nil {
+		completionTime = *job.Status.CompletionTime
+	}
+
+	j.Parallelism = parallelism
+	j.Completions = completions
+	j.ActiveDeadlineSeconds = activeDeadlineSeconds
+	j.BackoffLimit = backoffLimit
+	j.TtlSecondsAfterFinished = ttlSecondsAfterFinished
+	j.Suspend = suspend
+	j.CompletionMode = completionMode
+	j.StartTime = types.UnixMilli(startTime.Time)
+	j.CompletionTime = types.UnixMilli(completionTime.Time)
+	j.Active = job.Status.Active
+	j.Succeeded = job.Status.Succeeded
+	j.Failed = job.Status.Failed
+	j.IcingaState, j.IcingaStateReason = j.getIcingaState(job)
+
+	for _, condition := range job.Status.Conditions {
+		j.Conditions = append(j.Conditions, JobCondition{
+			JobUuid:        j.Uuid,
+			Type:           string(condition.Type),
+			Status:         string(condition.Status),
+			LastProbe:      types.UnixMilli(condition.LastProbeTime.Time),
+			LastTransition: types.UnixMilli(condition.LastTransitionTime.Time),
+			Reason:         condition.Reason,
+			Message:        condition.Message,
+		})
+	}
+
+	for labelName, labelValue := range job.Labels {
+		labelUuid := NewUUID(j.Uuid, strings.ToLower(labelName+":"+labelValue))
+		j.Labels = append(j.Labels, Label{
+			Uuid:         labelUuid,
+			ResourceUuid: j.Uuid,
+			Name:         labelName,
+			Value:        labelValue,
+		})
+	}
+
+	for annotationName, annotationValue := range job.Annotations {
+		annotationUuid := NewUUID(j.Uuid, strings.ToLower(annotationName+":"+annotationValue))
+		j.Annotations = append(j.Annotations, Annotation{
+			Uuid:         annotationUuid,
+			ResourceUuid: j.Uuid,
+			Name:         annotationName,
+			Value:        annotationValue,
+		})
+	}
+
+	for _, ownerReference := range job.OwnerReferences {
+		var blockOwnerDeletion, controller bool
+		if ownerReference.BlockOwnerDeletion != nil {
+			blockOwnerDeletion = *ownerReference.BlockOwnerDeletion
+		}
+		if ownerReference.Controller != nil {
+			controller = *ownerReference.Controller
+		}
+		j.Owners = append(j.Owners, JobOwner{
+			JobUuid:   j.Uuid,
+			OwnerUuid: EnsureUUID(ownerReference.UID),
+			Kind:      strcase.Snake(ownerReference.Kind),
+			Name:      ownerReference.Name,
+			Uid:       ownerReference.UID,
+			BlockOwnerDeletion: types.Bool{
+				Bool:  blockOwnerDeletion,
+				Valid: true,
+			},
+			Controller: types.Bool{
+				Bool:  controller,
+				Valid: true,
+			},
+		})
+	}
+
+	j.Yaml = MarshalYaml(job)
+}
+
+func (j *Job) getIcingaState(job *kbatchv1.Job) (IcingaState, string) {
+	for _, condition := range job.Status.Conditions {
+		if condition.Status != kcorev1.ConditionTrue {
+			continue
+		}
+
+		switch condition.Type {
+		case kbatchv1.JobSuccessCriteriaMet:
+			return Ok, fmt.Sprintf(
+				"Job %s/%s met its success criteria.",
+				j.Namespace, j.Name)
+		case kbatchv1.JobComplete:
+			reason := fmt.Sprintf(
+				"Job %s/%s has completed its execution successfully with",
+				j.Namespace, j.Name)
+
+			if j.Completions.Valid {
+				reason += fmt.Sprintf(" %d necessary pod completions.", j.Completions.Int32)
+			} else {
+				reason += " any pod completion."
+			}
+
+			return Ok, reason
+		case kbatchv1.JobFailed:
+			return Critical, fmt.Sprintf(
+				"Job %s/%s has failed its execution. %s: %s.",
+				j.Namespace, j.Name, condition.Reason, condition.Message)
+		case kbatchv1.JobFailureTarget:
+			return Warning, fmt.Sprintf(
+				"Job %s/%s is about to fail its execution. %s: %s.",
+				j.Namespace, j.Name, condition.Reason, condition.Message)
+		case kbatchv1.JobSuspended:
+			return Ok, fmt.Sprintf(
+				"Job %s/%s is suspended.",
+				j.Namespace, j.Name)
+		}
+	}
+
+	var completions string
+	if j.Completions.Valid {
+		completions = fmt.Sprintf("%d pod completions", j.Completions.Int32)
+	} else {
+		completions = "any pod completion"
+	}
+
+	reason := fmt.Sprintf(
+		"Job %s/%s is running since %s with currently %d active, %d completed and %d failed pods. "+
+			"Successful termination requires %s. The back-off limit is %d.",
+		j.Namespace, j.Name, job.Status.StartTime, j.Active, j.Succeeded, j.Failed, completions, *job.Spec.BackoffLimit)
+
+	if job.Spec.ActiveDeadlineSeconds != nil {
+		reason += fmt.Sprintf(" Deadline for completion is %d.", job.Spec.ActiveDeadlineSeconds)
+	}
+
+	return Pending, reason
+}
+
+func (j *Job) Relations() []kdatabase.Relation {
+	fk := kdatabase.WithForeignKey("job_uuid")
+
+	return []kdatabase.Relation{
+		kdatabase.HasMany(j.Conditions, fk),
+		kdatabase.HasMany(j.Labels, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(j.Annotations, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(j.Owners, fk),
+		kdatabase.HasMany(j.Favorites, kdatabase.WithForeignKey("resource_uuid")),
+	}
+}

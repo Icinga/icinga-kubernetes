@@ -1,0 +1,199 @@
+package schema
+
+import (
+	"fmt"
+	"net/url"
+	"strings"
+
+	"github.com/icinga/icinga-go-library/database"
+	"github.com/icinga/icinga-go-library/strcase"
+	"github.com/icinga/icinga-go-library/types"
+	"github.com/icinga/icinga-kubernetes/internal/kdatabase"
+	"github.com/icinga/icinga-kubernetes/internal/notifications"
+	kappsv1 "k8s.io/api/apps/v1"
+	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	ktypes "k8s.io/apimachinery/pkg/types"
+)
+
+type DaemonSet struct {
+	Meta
+	UpdateStrategy         string
+	MinReadySeconds        int32
+	DesiredNumberScheduled int32
+	CurrentNumberScheduled int32
+	NumberMisscheduled     int32
+	NumberReady            int32
+	UpdateNumberScheduled  int32
+	NumberAvailable        int32
+	NumberUnavailable      int32
+	Yaml                   string
+	IcingaState            IcingaState
+	IcingaStateReason      string
+	Conditions             []DaemonSetCondition `db:"-"`
+	Owners                 []DaemonSetOwner     `db:"-"`
+	Labels                 []Label              `db:"-"`
+	Annotations            []Annotation         `db:"-"`
+	Favorites              []Favorite           `db:"-"`
+}
+
+type DaemonSetCondition struct {
+	kdatabase.EntityStub
+	DaemonSetUuid  types.UUID
+	Type           string
+	Status         string
+	LastTransition types.UnixMilli
+	Reason         string
+	Message        string
+}
+
+func (d DaemonSetCondition) ID() database.ID {
+	return compoundId{id: d.DaemonSetUuid.String() + d.Type}
+}
+
+type DaemonSetOwner struct {
+	kdatabase.EntityStub
+	DaemonSetUuid      types.UUID
+	OwnerUuid          types.UUID
+	Kind               string
+	Name               string
+	Uid                ktypes.UID
+	Controller         types.Bool
+	BlockOwnerDeletion types.Bool
+}
+
+func (d DaemonSetOwner) ID() database.ID {
+	return compoundId{id: d.DaemonSetUuid.String() + d.OwnerUuid.String()}
+}
+
+func NewDaemonSet() Resource {
+	return &DaemonSet{}
+}
+
+func (d *DaemonSet) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
+	d.ObtainMeta(k8s, clusterUuid)
+
+	daemonSet := k8s.(*kappsv1.DaemonSet)
+
+	d.UpdateStrategy = string(daemonSet.Spec.UpdateStrategy.Type)
+	d.MinReadySeconds = daemonSet.Spec.MinReadySeconds
+	d.DesiredNumberScheduled = daemonSet.Status.DesiredNumberScheduled
+	d.CurrentNumberScheduled = daemonSet.Status.CurrentNumberScheduled
+	d.NumberMisscheduled = daemonSet.Status.NumberMisscheduled
+	d.NumberReady = daemonSet.Status.NumberReady
+	d.UpdateNumberScheduled = daemonSet.Status.UpdatedNumberScheduled
+	d.NumberAvailable = daemonSet.Status.NumberAvailable
+	d.NumberUnavailable = daemonSet.Status.NumberUnavailable
+	d.IcingaState, d.IcingaStateReason = d.getIcingaState()
+
+	for _, condition := range daemonSet.Status.Conditions {
+		d.Conditions = append(d.Conditions, DaemonSetCondition{
+			DaemonSetUuid:  d.Uuid,
+			Type:           string(condition.Type),
+			Status:         string(condition.Status),
+			LastTransition: types.UnixMilli(condition.LastTransitionTime.Time),
+			Reason:         condition.Reason,
+			Message:        condition.Message,
+		})
+	}
+
+	for _, ownerReference := range daemonSet.OwnerReferences {
+		var blockOwnerDeletion, controller bool
+		if ownerReference.BlockOwnerDeletion != nil {
+			blockOwnerDeletion = *ownerReference.BlockOwnerDeletion
+		}
+		if ownerReference.Controller != nil {
+			controller = *ownerReference.Controller
+		}
+		d.Owners = append(d.Owners, DaemonSetOwner{
+			DaemonSetUuid: d.Uuid,
+			OwnerUuid:     EnsureUUID(ownerReference.UID),
+			Kind:          strcase.Snake(ownerReference.Kind),
+			Name:          ownerReference.Name,
+			Uid:           ownerReference.UID,
+			BlockOwnerDeletion: types.Bool{
+				Bool:  blockOwnerDeletion,
+				Valid: true,
+			},
+			Controller: types.Bool{
+				Bool:  controller,
+				Valid: true,
+			},
+		})
+	}
+
+	for labelName, labelValue := range daemonSet.Labels {
+		labelUuid := NewUUID(d.Uuid, strings.ToLower(labelName+":"+labelValue))
+		d.Labels = append(d.Labels, Label{
+			Uuid:         labelUuid,
+			ResourceUuid: d.Uuid,
+			Name:         labelName,
+			Value:        labelValue,
+		})
+	}
+
+	for annotationName, annotationValue := range daemonSet.Annotations {
+		annotationUuid := NewUUID(d.Uuid, strings.ToLower(annotationName+":"+annotationValue))
+		d.Annotations = append(d.Annotations, Annotation{
+			Uuid:         annotationUuid,
+			ResourceUuid: d.Uuid,
+			Name:         annotationName,
+			Value:        annotationValue,
+		})
+	}
+
+	d.Yaml = MarshalYaml(daemonSet)
+}
+
+func (d *DaemonSet) MarshalEvent() notifications.Event {
+	return notifications.Event{
+		Uuid:        d.Uuid,
+		ClusterUuid: d.ClusterUuid,
+		Kind:        "daemon_set",
+		Name:        d.Namespace + "/" + d.Name,
+		Severity:    d.IcingaState.ToSeverity(),
+		Message:     d.IcingaStateReason,
+		URL:         &url.URL{Path: "/daemonset", RawQuery: fmt.Sprintf("id=%s", d.Uuid)},
+		Tags: map[string]string{
+			"uuid":         d.Uuid.String(),
+			"cluster_uuid": d.ClusterUuid.String(),
+			"name":         d.Name,
+			"namespace":    d.Namespace,
+			"resource":     "daemon_set",
+		},
+	}
+}
+
+func (d *DaemonSet) getIcingaState() (IcingaState, string) {
+	if d.DesiredNumberScheduled < 1 {
+		reason := fmt.Sprintf("DaemonSet %s/%s has an invalid desired node count: %d.", d.Namespace, d.Name, d.DesiredNumberScheduled)
+
+		return Unknown, reason
+	}
+
+	switch {
+	case d.NumberAvailable == 0:
+		reason := fmt.Sprintf("DaemonSet %s/%s does not have a single pod available which should run on %d desired nodes.", d.Namespace, d.Name, d.DesiredNumberScheduled)
+
+		return Critical, reason
+	case d.NumberAvailable < d.DesiredNumberScheduled:
+		reason := fmt.Sprintf("DaemonSet %s/%s pods are only available on %d out of %d desired nodes.", d.Namespace, d.Name, d.NumberAvailable, d.DesiredNumberScheduled)
+
+		return Warning, reason
+	default:
+		reason := fmt.Sprintf("DaemonSet %s/%s has pods available on all %d desired nodes.", d.Namespace, d.Name, d.DesiredNumberScheduled)
+
+		return Ok, reason
+	}
+}
+
+func (d *DaemonSet) Relations() []kdatabase.Relation {
+	fk := kdatabase.WithForeignKey("daemon_set_uuid")
+
+	return []kdatabase.Relation{
+		kdatabase.HasMany(d.Conditions, fk),
+		kdatabase.HasMany(d.Owners, fk),
+		kdatabase.HasMany(d.Labels, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(d.Annotations, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(d.Favorites, kdatabase.WithForeignKey("resource_uuid")),
+	}
+}
