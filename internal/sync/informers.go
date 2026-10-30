@@ -16,18 +16,21 @@ import (
 )
 
 // forbiddenInformers maps the informers that are denied to list or watch to
-// their resource version at their latest denial. It is shared, as the same
-// informer can be part of several Informers, e.g., pods for their sync and
-// their metrics.
+// the time of their latest denial. It is shared, as the same informer can be
+// part of several Informers, e.g., pods for their sync and their metrics.
 var forbiddenInformers sync.Map
 
 const (
 	// permittedInterval is how often a denied informer is checked for being permitted again.
 	permittedInterval = 1 * time.Second
 
-	// permittedFor is how long an informer must keep looking permitted, as a
-	// denied watch may follow a permitted list.
-	permittedFor = 5 * time.Second
+	// permittedFor is how long a denied informer must go without a denial to
+	// count as permitted. The reflector waits at most a minute between retries,
+	// i.e., up to 30 seconds plus as much jitter, as set by defaultBackoffMax
+	// and defaultBackoffJitter in k8s.io/client-go/tools/cache/reflector.go.
+	// If only the watch is denied, each retry lists first, and the remaining
+	// 30 seconds leave room for that.
+	permittedFor = 90 * time.Second
 )
 
 // Informers combines informers of the same resource, e.g., one per watched
@@ -50,6 +53,12 @@ func (i Informers) AddEventHandler(handler cache.ResourceEventHandler) error {
 // keeps retrying quietly, so it catches up once permitted, which is logged as
 // well. It must be called before Run.
 func (i Informers) SkipForbidden(log *logging.Logger) error {
+	return i.skipForbidden(log, permittedFor)
+}
+
+// skipForbidden is SkipForbidden with permittedFor passed in, so that tests
+// need not wait as long.
+func (i Informers) skipForbidden(log *logging.Logger, permittedFor time.Duration) error {
 	for _, informer := range i {
 		if err := informer.SetWatchErrorHandlerWithContext(func(ctx context.Context, r *cache.Reflector, err error) {
 			if !kerrors.IsForbidden(err) {
@@ -58,13 +67,15 @@ func (i Informers) SkipForbidden(log *logging.Logger) error {
 				return
 			}
 
-			if _, denied := forbiddenInformers.Swap(informer, informer.LastSyncResourceVersion()); denied {
+			if _, denied := forbiddenInformers.Swap(informer, time.Now()); denied {
+				log.Debugw("Cannot list and watch", logging.Error(err))
+
 				return
 			}
 
 			log.Warnw("Cannot list and watch. Skipping until permitted", logging.Error(err))
 
-			go awaitPermitted(ctx, log, informer, err)
+			go awaitPermitted(ctx, log, informer, err, permittedFor)
 		}); err != nil {
 			return err
 		}
@@ -73,16 +84,14 @@ func (i Informers) SkipForbidden(log *logging.Logger) error {
 	return nil
 }
 
-// awaitPermitted logs once denied informer is permitted to list and watch
-// again, i.e., its resource version has changed since its latest denial.
-// It then forgets the denial, so that the next one is logged again.
-func awaitPermitted(ctx context.Context, log *logging.Logger, informer cache.SharedIndexInformer, denial error) {
-	// The resource version of the denial the informer looks permitted after.
-	var permittedAfter string
-
-	// When the informer started to look permitted, or zero if it does not.
-	var passedAt time.Time
-
+// awaitPermitted logs once the denied informer is permitted to list and watch
+// again, i.e., it has synced and gone without a denial for permittedFor. The
+// reflector reports only failed attempts, and an informer stays synced once it
+// is, so the lack of denials is the only sign. It then forgets the denial, so
+// that the next one is logged again.
+func awaitPermitted(
+	ctx context.Context, log *logging.Logger, informer cache.SharedIndexInformer, denial error, permittedFor time.Duration,
+) {
 	if err := wait.PollUntilContextCancel(ctx, permittedInterval, false, func(context.Context) (bool, error) {
 		v, ok := forbiddenInformers.Load(informer)
 		if !ok {
@@ -90,31 +99,16 @@ func awaitPermitted(ctx context.Context, log *logging.Logger, informer cache.Sha
 			// This is defensive and currently can't happen.
 			return false, errors.New("denial forgotten")
 		}
-		deniedRV := v.(string)
+		deniedAt := v.(time.Time)
 
 		// Forgetting the denial before the informer has synced would make it
-		// hold up the others again.
-		if informer.LastSyncResourceVersion() == deniedRV || !informer.HasSynced() {
-			passedAt = time.Time{}
-
+		// hold up the others again. A denied watch following a permitted list
+		// renews deniedAt, as the reflector keeps retrying it.
+		if !informer.HasSynced() || time.Since(deniedAt) < permittedFor {
 			return false, nil
 		}
 
-		// A permitted list changes the resource version, but a denied watch may
-		// follow it within moments. Only if no denial follows for permittedFor
-		// is the informer permitted.
-		if passedAt.IsZero() || permittedAfter != deniedRV {
-			permittedAfter = deniedRV
-			passedAt = time.Now()
-
-			return false, nil
-		}
-
-		if time.Since(passedAt) < permittedFor {
-			return false, nil
-		}
-
-		return forbiddenInformers.CompareAndDelete(informer, deniedRV), nil
+		return forbiddenInformers.CompareAndDelete(informer, deniedAt), nil
 	}); err != nil {
 		return
 	}
