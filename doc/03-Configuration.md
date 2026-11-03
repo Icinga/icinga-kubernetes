@@ -212,9 +212,9 @@ Resources that Icinga for Kubernetes may not read are skipped:
 
 * A warning is logged when a resource may not be listed and watched in a
   namespace or cluster-wide, and an info message once it is permitted again.
-  The same applies to container logs that may not be read in a namespace.
-  Skipped resources are picked up as soon as they are permitted, without a
-  restart.
+  For container logs, a warning is logged once for each namespace whose logs
+  may not be read. Skipped resources are picked up within about a minute as
+  they are permitted, container logs within five minutes, without a restart.
 * Objects of skipped resources that are already in the database are deleted
   on startup, as if they were gone. Events are not deleted, but kept until
   they expire.
