@@ -31,15 +31,11 @@ var (
 	containerLogs   = make(map[string]ContainerLog)
 	containerLogsMu sync.Mutex
 
-	// deniedPods holds per namespace the names of the pods whose container logs
-	// are denied, by their UUIDs, to warn once when the first is denied and log
-	// once the last is permitted, gone or finished. Pods are tracked, not
-	// containers or namespaces, as RBAC can permit the logs of single pods by
-	// their names.
-	deniedPods   = make(map[string]map[types.UUID]string)
-	deniedPodsMu sync.Mutex
-
 	deletedPodIds = make(map[string]bool)
+
+	// forbiddenLogNamespaces holds the namespaces whose container logs were
+	// denied, to warn about each only once.
+	forbiddenLogNamespaces sync.Map
 )
 
 const (
@@ -326,24 +322,18 @@ func (cl *ContainerLog) syncContainerLogs(
 	body, err := req.Stream(ctx)
 	if err != nil {
 		if kerrors.IsForbidden(err) {
-			denyLogs(log, cl, err)
-		} else {
-			// Such errors are expected, e.g., for containers that are still
-			// waiting to start or for pods that are deleted meanwhile.
-			log.Debugw(
-				"Cannot get container logs",
-				zap.String("namespace", cl.Namespace),
-				zap.String("pod", cl.PodName),
-				zap.String("container", cl.ContainerName),
-				logging.Error(err),
-			)
+			if _, warned := forbiddenLogNamespaces.LoadOrStore(cl.Namespace, struct{}{}); !warned {
+				log.Warnw(
+					"Cannot get container logs. Skipping until permitted",
+					zap.String("namespace", cl.Namespace),
+					logging.Error(err),
+				)
+			}
 		}
 
 		return err
 	}
 	defer func() { _ = body.Close() }()
-
-	permitLogs(log, cl)
 
 	logs, err := io.ReadAll(body)
 	if err != nil || len(logs) == 0 {
@@ -504,107 +494,6 @@ func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStat
 		container.Name, reason)
 }
 
-// denyLogs records that the container logs of the pod of cl are denied, and
-// warns if no other pod of its namespace is denied yet.
-func denyLogs(log *logging.Logger, cl *ContainerLog, err error) {
-	deniedPodsMu.Lock()
-	defer deniedPodsMu.Unlock()
-
-	// A sync still running when its pod is deleted or finished must not deny the
-	// pod after forgetLogs, as nothing would forget it again. The jobs of the
-	// containers of such a pod are removed before that.
-	if _, err := scheduler.FindJobsByTag(cl.ContainerUuid.String()); err != nil {
-		return
-	}
-
-	denied, ok := deniedPods[cl.Namespace]
-	if !ok {
-		denied = make(map[types.UUID]string)
-		deniedPods[cl.Namespace] = denied
-	}
-
-	if _, ok := denied[cl.PodUuid]; ok {
-		return
-	}
-	denied[cl.PodUuid] = cl.PodName
-
-	log.Debugw(
-		"Cannot get container logs. Skipping until permitted",
-		zap.String("namespace", cl.Namespace),
-		zap.String("pod", cl.PodName),
-		logging.Error(err),
-	)
-
-	if len(denied) == 1 {
-		log.Warnw(
-			"Cannot get container logs. Skipping denied pods until permitted",
-			zap.String("namespace", cl.Namespace),
-			logging.Error(err),
-		)
-	}
-}
-
-// permitLogs forgets that the container logs of the pod of cl are denied, and
-// logs that its namespace is permitted if no other pod of it is denied anymore.
-func permitLogs(log *logging.Logger, cl *ContainerLog) {
-	deniedPodsMu.Lock()
-	defer deniedPodsMu.Unlock()
-
-	denied := deniedPods[cl.Namespace]
-	if _, ok := denied[cl.PodUuid]; !ok {
-		return
-	}
-	delete(denied, cl.PodUuid)
-
-	log.Debugw(
-		"Permitted to get container logs now. No longer skipping",
-		zap.String("namespace", cl.Namespace),
-		zap.String("pod", cl.PodName),
-		zap.Int("still_denied", len(denied)),
-	)
-
-	if len(denied) > 0 {
-		return
-	}
-
-	delete(deniedPods, cl.Namespace)
-	log.Infow("Permitted to get container logs now. No longer skipping", zap.String("namespace", cl.Namespace))
-}
-
-// forgetLogs forgets that the container logs of the deleted or finished pod are
-// denied, as it is not synced anymore, and logs that its namespace is no longer
-// skipped if no other pod of it is denied. It does not claim the namespace is
-// permitted, as the pod never was. Its namespace is not known here, so all
-// namespaces with denied pods are searched.
-func forgetLogs(log *logging.Logger, pod types.UUID) {
-	deniedPodsMu.Lock()
-	defer deniedPodsMu.Unlock()
-
-	for namespace, denied := range deniedPods {
-		name, ok := denied[pod]
-		if !ok {
-			continue
-		}
-		delete(denied, pod)
-
-		log.Debugw(
-			"Denied pod is gone or finished",
-			zap.String("namespace", namespace),
-			zap.String("pod", name),
-			zap.Int("still_denied", len(denied)),
-		)
-
-		if len(denied) > 0 {
-			return
-		}
-
-		delete(deniedPods, namespace)
-		log.Infow("Denied pods are gone or finished. No longer skipping", zap.String("namespace", namespace))
-
-		return
-	}
-}
-
 // SyncContainers consumes from the `upsertPods` and `deletePods` chans
 // concurrently and schedules a job for each of the containers (drawn from
 // `upsertPods`) that periodically syncs the container logs with the database.
@@ -672,10 +561,6 @@ func SyncContainers(
 							return ctx.Err()
 						case e, ok := <-entities:
 							if !ok {
-								// Only now that the jobs of all its containers are
-								// removed, no sync can deny the pod again.
-								forgetLogs(log, meta.PodUuid)
-
 								return nil
 							}
 
@@ -739,13 +624,6 @@ func SyncContainers(
 						delete(containerLogs, container.Uuid.String())
 						containerLogsMu.Unlock()
 					}
-				}
-
-				// Pods that only stopped their containers may run them again, but
-				// finished pods never do, and the jobs of their containers are
-				// removed above, so no sync can deny them again.
-				if pod.Phase == string(kcorev1.PodSucceeded) || pod.Phase == string(kcorev1.PodFailed) {
-					forgetLogs(log, pod.Uuid)
 				}
 			}
 		}
