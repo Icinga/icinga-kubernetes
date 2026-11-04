@@ -314,6 +314,15 @@ func (cl *ContainerLog) syncContainerLogs(
 			}
 		}
 
+		// The scheduler running the log sync discards its errors.
+		log.Debugw(
+			"Cannot get container logs",
+			zap.String("namespace", cl.Namespace),
+			zap.String("pod", cl.PodName),
+			zap.String("container", cl.ContainerName),
+			logging.Error(err),
+		)
+
 		return err
 	}
 	defer func() { _ = body.Close() }()
@@ -483,7 +492,12 @@ func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStat
 // When pods are deleted, matching log jobs are stopped and cached logs are
 // evicted. Their container rows stay until the soft-deleted pod is purged.
 func SyncContainers(
-	ctx context.Context, db *kdatabase.DB, g *errgroup.Group, upsertPods <-chan database.Entity, deletePods <-chan any, log *logging.Logger,
+	ctx context.Context,
+	db *kdatabase.DB,
+	g *errgroup.Group,
+	upsertPods <-chan database.Entity,
+	deletePods <-chan any,
+	log *logging.Logger,
 ) {
 	type containerFingerprint struct {
 		Uuid    types.UUID
