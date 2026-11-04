@@ -2,14 +2,13 @@ package schema
 
 import (
 	"fmt"
-	"net/url"
 	"strings"
 
 	"github.com/icinga/icinga-go-library/database"
+	"github.com/icinga/icinga-go-library/notifications/event"
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/internal/kdatabase"
-	"github.com/icinga/icinga-kubernetes/internal/notifications"
 	kappsv1 "k8s.io/api/apps/v1"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -156,21 +155,29 @@ func (d *Deployment) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	d.Yaml = MarshalYaml(deployment)
 }
 
-func (d *Deployment) MarshalEvent() notifications.Event {
-	return notifications.Event{
-		Uuid:        d.Uuid,
-		ClusterUuid: d.ClusterUuid,
-		Kind:        "deployment",
-		Name:        d.Namespace + "/" + d.Name,
-		Severity:    d.IcingaState.ToSeverity(),
-		Message:     d.IcingaStateReason,
-		URL:         &url.URL{Path: "/deployment", RawQuery: fmt.Sprintf("id=%s", d.Uuid)},
+func (d *Deployment) MarshalEvent() *event.Event {
+	return &event.Event{
+		Name: d.Namespace + ": " + d.Name,
+		URL:  fmt.Sprintf("kubernetes/deployment?id=%s", d.Uuid),
 		Tags: map[string]string{
 			"uuid":         d.Uuid.String(),
 			"cluster_uuid": d.ClusterUuid.String(),
 			"name":         d.Name,
 			"namespace":    d.Namespace,
 			"resource":     "deployment",
+		},
+		Severity: d.IcingaState.ToSeverity(),
+		Message:  d.IcingaStateReason,
+		Incident: types.MakeBool(true),
+		Relations: map[string]any{
+			"object": map[string]any{
+				"kind":      "deployment",
+				"name":      d.Name,
+				"namespace": d.Namespace,
+				"labels":    LabelsToMap(d.Labels),
+			},
+			"owners": OwnersToRelation(d.Owners),
+			"node":   nil, // Deployments don't have a node relation.
 		},
 	}
 }

@@ -78,3 +78,54 @@ func MaxInt[T constraints.Integer](x, y T) T {
 
 	return y
 }
+
+// LabelsToMap converts a slice of Label structs to a map of label names to label values.
+func LabelsToMap(labels []Label) map[string]string {
+	labelMap := make(map[string]string, len(labels))
+	for _, label := range labels {
+		labelMap[label.Name] = label.Value
+	}
+	return labelMap
+}
+
+// Owner is the constraint satisfied by all owner reference schema types.
+type Owner interface {
+	PodOwner | DeploymentOwner | ReplicaSetOwner | DaemonSetOwner | StatefulSetOwner | JobOwner
+}
+
+// OwnersToRelation converts a slice of owner structs to a slice of maps containing the kind and name of each owner.
+func OwnersToRelation[T Owner](owners []T) []map[string]string {
+	ownerSlice := make([]map[string]string, len(owners))
+	for i, owner := range owners {
+		var kind, name string
+		switch o := any(owner).(type) {
+		case PodOwner:
+			kind = o.Kind
+			name = o.Name
+		case DeploymentOwner:
+			kind = o.Kind
+			name = o.Name
+		case ReplicaSetOwner:
+			kind = o.Kind
+			name = o.Name
+		case DaemonSetOwner:
+			kind = o.Kind
+			name = o.Name
+		case StatefulSetOwner:
+			kind = o.Kind
+			name = o.Name
+		case JobOwner:
+			kind = o.Kind
+			name = o.Name
+		default:
+			panic("unreachable")
+		}
+
+		ownerSlice[i] = map[string]string{
+			"kind": kind,
+			"name": name,
+		}
+	}
+
+	return ownerSlice
+}

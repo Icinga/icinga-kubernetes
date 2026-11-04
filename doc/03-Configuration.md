@@ -34,18 +34,34 @@ to view and work with the data.
 | options    | **Optional.** Map of component names to log levels, overriding `level` for those components. See [Logging Components](#logging-components).                              |
 | kubernetes | **Optional.** Verbosity of the Kubernetes client libraries, from `0` to `9`. If not set, defaults to `0`. See [Kubernetes Client Logging](#kubernetes-client-logging).   |
 
-## Notifications Configuration
+## Icinga Notifications Configuration
 
-Connection configuration for [Icinga Notifications](https://github.com/icinga/icinga-notifications) daemon.
-If one of `url`, `username`, or `password` is set, **all** must be set.
-Defined in the `notifications` section of the configuration file.
+Connection configuration for the [Icinga Notifications API](https://icinga.com/docs/icinga-notifications/latest/doc/20-HTTP-API/#http-api).
+Defined in the `notifications` section of the configuration file. If `url` is
+not set, the configuration stored in the database (e.g. set via Icinga for Kubernetes Web)
+is used, if any.
 
-| Option             | Description                                                                                            |
-|--------------------|--------------------------------------------------------------------------------------------------------|
-| url                | **Optional.** Icinga Notifications daemon URL. If not set, notifications are disabled                  | 
-| username           | **Optional.** Username for authenticating the Icinga for Kubernetes source in Icinga Notifications.    |
-| password           | **Optional.** Password for authenticating the Icinga for Kubernetes source in Icinga Notifications.    |
-| kubernetes_web_url | **Optional.** The base URL of Icinga for Kubernetes Web used in generated Icinga Notifications events. |
+Which authentication options are required depends on the scheme of `url`:
+
+* `http`: Unencrypted HTTP connection. `username` and `password` or
+  `password_file` are required.
+* `https`: HTTPS connection. Either `username` and `password` or `password_file`,
+  or `cert` and `key` are required.
+* `unix`: HTTP connection over a Unix domain socket. Authentication is based on
+  the operating system user, so `username`, `password` and `password_file` must
+  not be set.
+
+| Option         | Description                                                                                                                                   |
+|----------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| url            | **Optional.** Icinga Notifications API URL, e.g. `http://localhost:5680` or `unix:///path/to/socket`. If not set, notifications are disabled. |
+| icingaweb2_url | **Optional.** Absolute base URL of Icinga Web 2, e.g. `https://example.com/icingaweb2`. Used to build the object URLs sent with each event.   |
+| username       | **Optional.** Username for authenticating the Icinga for Kubernetes source in Icinga Notifications.                                           |
+| password       | **Optional.** Password for authenticating the Icinga for Kubernetes source in Icinga Notifications. Mutually exclusive with `password_file`.  |
+| password_file  | **Optional.** Path to a file containing the password. Mutually exclusive with `password`.                                                     |
+| ca             | **Optional.** Path to a CA certificate used to verify the Icinga Notifications API server certificate.                                        |
+| cert           | **Optional.** Path to a TLS client certificate for `https`. Requires `key`.                                                                   |
+| key            | **Optional.** Path to the TLS client private key for `https`. Requires `cert`.                                                                |
+| insecure       | **Optional.** Skip verification of the server certificate. Can be set to `true` or `false`. Defaults to `false`.                              |
 
 ## Prometheus Configuration
 
@@ -89,14 +105,19 @@ The configurations set by environment variables override the ones set by YAML.
 | LOGGING_OPTIONS    | **Optional.** Comma-separated list of `component:level` pairs, overriding `LOGGING_LEVEL` for those components. See [Logging Components](#logging-components).           |
 | LOGGING_KUBERNETES | **Optional.** Verbosity of the Kubernetes client libraries, from `0` to `9`. If not set, defaults to `0`. See [Kubernetes Client Logging](#kubernetes-client-logging).   |
 
-## Notifications Configuration
+## Icinga Notifications Configuration <a id="icinga-notifications-env-vars"></a>
 
-| Env                              | Description                                                                                            |
-|----------------------------------|--------------------------------------------------------------------------------------------------------|
-| NOTIFICATIONS_URL                | **Optional.** Icinga Notifications daemon URL. If not set, notifications are disabled                  |
-| NOTIFICATIONS_USERNAME           | **Optional.** Username for authenticating the Icinga for Kubernetes source in Icinga Notifications.    |
-| NOTIFICATIONS_PASSWORD           | **Optional.** Password for authenticating the Icinga for Kubernetes source in Icinga Notifications.    |
-| NOTIFICATIONS_KUBERNETES_WEB_URL | **Optional.** The base URL of Icinga for Kubernetes Web used in generated Icinga Notifications events. |
+| Env                          | Description                                                                                                                                                 |
+|------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| NOTIFICATIONS_URL            | **Optional.** Icinga Notifications API URL. If not set, notifications are disabled. See [Notifications Configuration](#icinga-notifications-configuration). |
+| NOTIFICATIONS_ICINGAWEB2_URL | **Optional.** Absolute base URL of Icinga Web 2. If not set, events are sent without an object URL.                                                         |
+| NOTIFICATIONS_USERNAME       | **Optional.** Username for authenticating the Icinga for Kubernetes source in Icinga Notifications.                                                         |
+| NOTIFICATIONS_PASSWORD       | **Optional.** Password for authenticating the Icinga for Kubernetes source in Icinga Notifications. Mutually exclusive with `NOTIFICATIONS_PASSWORD_FILE`.  |
+| NOTIFICATIONS_PASSWORD_FILE  | **Optional.** Path to a file containing the password. Mutually exclusive with `NOTIFICATIONS_PASSWORD`.                                                     |
+| NOTIFICATIONS_CA             | **Optional.** Path to a CA certificate used to verify the Icinga Notifications API server certificate.                                                      |
+| NOTIFICATIONS_CERT           | **Optional.** Path to a TLS client certificate for `https`. Requires `NOTIFICATIONS_KEY`.                                                                   |
+| NOTIFICATIONS_KEY            | **Optional.** Path to the TLS client private key for `https`. Requires `NOTIFICATIONS_CERT`.                                                                |
+| NOTIFICATIONS_INSECURE       | **Optional.** Skip verification of the server certificate. Can be set to `true` or `false`. Defaults to `false`.                                            |
 
 ## Prometheus Configuration
 

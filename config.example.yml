@@ -48,14 +48,28 @@ prometheus:
 
 # Configuration for Icinga Notifications daemon.
 notifications:
-  # Icinga Notifications daemon URL.
-#  url: http://localhost:5680
+  # URL to the API root. Different URI schemes are possible.
+  # - http: Unencrypted HTTP connection. Requires username and password/password_file to be set.
+  #   For example: http://example.com:5680
+  # - https: HTTPS connection. Either username and password/password_file or cert and key are required.
+  #   For example: https://example.com:5680
+  # - unix: HTTP connection over a Unix Domain Socket. Authentication is based on the operating system user.
+  #   For example: unix:///path/to/socket
+#  url:
 
-  # Username for authenticating the Icinga for Kubernetes source in Icinga Notifications.
-#  username: source-\d+
+  # Base URL of the Icinga Web 2 setup. It is used to build the absolute object URLs transmitted with each event,
+  # which Icinga Notifications passes on to the notified contacts. This must be an absolute URL. If left empty,
+  # events are submitted without an object URL.
+#  icingaweb2_url: https://example.com/icingaweb2
 
-  # Password for authenticating the Icinga for Kubernetes source in Icinga Notifications.
-#  password: password
+  # Username to authenticate against the Icinga Notifications API.
+#  username:
 
-  # The base URL of Icinga for Kubernetes Web used in generated Icinga Notifications events.
-#  kubernetes_web_url: http://localhost/icingaweb2/kubernetes
+  # Password for the defined user.
+#  password:
+#  password_file: /run/secrets/notifications_password
+
+  # TLS configuration for https URLs. The ca is used to verify the server cert, while cert and key are the client certificate.
+#  ca: /path/to/ca
+#  cert: /path/to/client.crt
+#  key: /path/to/client.key
