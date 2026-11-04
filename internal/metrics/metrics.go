@@ -340,13 +340,14 @@ func (pms *PromMetricSync) run(
 		g.Go(func() error {
 			var result model.Value
 			var warnings v1.Warnings
+			var infos v1.Infos
 			var err error
 
 			for {
 				if err := retry.WithBackoff(
 					ctx,
 					func(ctx context.Context) error {
-						result, warnings, err = pms.promApiClient.Query(
+						result, warnings, infos, err = pms.promApiClient.Query(
 							ctx,
 							promQuery.query,
 							time.Time{},
@@ -380,6 +381,10 @@ func (pms *PromMetricSync) run(
 
 				if len(warnings) > 0 {
 					pms.logger.Warnw("Prometheus warnings", zap.Strings("warnings", warnings))
+				}
+
+				if len(infos) > 0 {
+					pms.logger.Debugw("Prometheus infos", zap.Strings("infos", infos))
 				}
 
 				if result == nil {
