@@ -529,6 +529,7 @@ func main() {
 			g,
 			cache.Multiplexers().Pods().UpsertEvents().Out(),
 			cache.Multiplexers().Pods().DeleteEvents().Out(),
+			logs.GetChildLogger("containers"),
 		)
 
 		f := schema.NewPodFactory(clientset)
