@@ -3,15 +3,14 @@ package schema
 import (
 	"database/sql"
 	"fmt"
-	"net/url"
 	"strings"
 	"time"
 
 	"github.com/icinga/icinga-go-library/database"
+	"github.com/icinga/icinga-go-library/notifications/event"
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/internal/kdatabase"
-	"github.com/icinga/icinga-kubernetes/internal/notifications"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ktypes "k8s.io/apimachinery/pkg/types"
@@ -276,21 +275,31 @@ func (p *Pod) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	p.Yaml = MarshalYaml(pod)
 }
 
-func (p *Pod) MarshalEvent() notifications.Event {
-	return notifications.Event{
-		Uuid:        p.Uuid,
-		ClusterUuid: p.ClusterUuid,
-		Kind:        "pod",
-		Name:        p.Namespace + "/" + p.Name,
-		Severity:    p.IcingaState.ToSeverity(),
-		Message:     p.IcingaStateReason,
-		URL:         &url.URL{Path: "/pod", RawQuery: fmt.Sprintf("id=%s", p.Uuid)},
+func (p *Pod) MarshalEvent() *event.Event {
+	return &event.Event{
+		Name: p.Namespace + ": " + p.Name,
+		URL:  fmt.Sprintf("kubernetes/pod?id=%s", p.Uuid),
 		Tags: map[string]string{
 			"uuid":         p.Uuid.String(),
 			"cluster_uuid": p.ClusterUuid.String(),
 			"name":         p.Name,
 			"namespace":    p.Namespace,
 			"resource":     "pod",
+		},
+		Severity: p.IcingaState.ToSeverity(),
+		Message:  p.IcingaStateReason,
+		Incident: types.MakeBool(true),
+		Relations: map[string]any{
+			"object": map[string]any{
+				"kind":      "pod",
+				"name":      p.Name,
+				"namespace": p.Namespace,
+				"labels":    LabelsToMap(p.Labels),
+			},
+			"owners": OwnersToRelation(p.Owners),
+			"node": map[string]any{
+				"name": p.NodeName.String,
+			},
 		},
 	}
 }

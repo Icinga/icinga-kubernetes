@@ -3,8 +3,8 @@ package daemon
 import (
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/logging"
+	"github.com/icinga/icinga-go-library/notifications/source"
 	"github.com/icinga/icinga-kubernetes/internal/metrics"
-	"github.com/icinga/icinga-kubernetes/internal/notifications"
 	"github.com/pkg/errors"
 )
 
@@ -16,7 +16,7 @@ const DefaultConfigPath = "./config.yml"
 type Config struct {
 	Database      database.Config          `yaml:"database" envPrefix:"DATABASE_"`
 	Logging       LoggingConfig            `yaml:"logging" envPrefix:"LOGGING_"`
-	Notifications notifications.Config     `yaml:"notifications" envPrefix:"NOTIFICATIONS_"`
+	Notifications source.Config            `yaml:"notifications" envPrefix:"NOTIFICATIONS_"`
 	Prometheus    metrics.PrometheusConfig `yaml:"prometheus" envPrefix:"PROMETHEUS_"`
 }
 

@@ -841,7 +841,7 @@ CREATE TABLE config (
     'notifications.url',
     'notifications.username',
     'notifications.password',
-    'notifications.kubernetes_web_url',
+    'notifications.icingaweb2_url',
     'prometheus.url',
     'prometheus.insecure',
     'prometheus.username',

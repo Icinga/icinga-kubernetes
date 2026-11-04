@@ -23,12 +23,12 @@ func (c Config) ID() database.ID {
 type ConfigKey string
 
 const (
-	ConfigKeyNotificationsUsername         ConfigKey = "notifications.username"
-	ConfigKeyNotificationsPassword         ConfigKey = "notifications.password"
-	ConfigKeyNotificationsUrl              ConfigKey = "notifications.url"
-	ConfigKeyNotificationsKubernetesWebUrl ConfigKey = "notifications.kubernetes_web_url"
-	ConfigKeyPrometheusUrl                 ConfigKey = "prometheus.url"
-	ConfigKeyPrometheusInsecure            ConfigKey = "prometheus.insecure"
-	ConfigKeyPrometheusUsername            ConfigKey = "prometheus.username"
-	ConfigKeyPrometheusPassword            ConfigKey = "prometheus.password"
+	ConfigKeyNotificationsUsername      ConfigKey = "notifications.username"
+	ConfigKeyNotificationsPassword      ConfigKey = "notifications.password"
+	ConfigKeyNotificationsUrl           ConfigKey = "notifications.url"
+	ConfigKeyNotificationsIcingaWeb2Url ConfigKey = "notifications.icingaweb2_url"
+	ConfigKeyPrometheusUrl              ConfigKey = "prometheus.url"
+	ConfigKeyPrometheusInsecure         ConfigKey = "prometheus.insecure"
+	ConfigKeyPrometheusUsername         ConfigKey = "prometheus.username"
+	ConfigKeyPrometheusPassword         ConfigKey = "prometheus.password"
 )
