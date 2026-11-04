@@ -401,9 +401,9 @@ func (p *Pod) Relations() []kdatabase.Relation {
 
 	return []kdatabase.Relation{
 		kdatabase.HasMany(p.Conditions, fk),
-		kdatabase.HasMany(p.Containers, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(p.InitContainers, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(p.SidecarContainers, kdatabase.WithoutCascadeDelete()),
+		kdatabase.HasMany(p.Containers, fk),
+		kdatabase.HasMany(p.InitContainers, fk),
+		kdatabase.HasMany(p.SidecarContainers, fk),
 		kdatabase.HasMany(p.Owners, fk),
 		kdatabase.HasMany(p.Labels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(p.Annotations, kdatabase.WithForeignKey("resource_uuid")),

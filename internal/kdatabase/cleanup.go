@@ -12,31 +12,132 @@ import (
 	"github.com/icinga/icinga-go-library/periodic"
 	"github.com/icinga/icinga-go-library/retry"
 	"github.com/icinga/icinga-go-library/types"
+	"github.com/icinga/icinga-go-library/utils"
 )
 
-// CleanupStmt defines information needed to compose cleanup statements.
-type CleanupStmt struct {
+const batchSize = 5000
+
+// Cleaner deletes rows that are older than a given retention, see PeriodicCleanup.
+type Cleaner interface {
+	cleanup(ctx context.Context, db *DB, retention time.Duration) error
+}
+
+// DefaultCleaner defines information needed to compose cleanup statements.
+type DefaultCleaner struct {
 	Table string
 	// PK lists the columns of the table's primary key.
 	PK     []string
 	Column string
 }
 
-// Build assembles the cleanup statement for the specified database driver with the given limit.
-func (stmt *CleanupStmt) Build(driverName string, limit uint64) string {
+// buildStmt assembles the cleanup statement for the specified database driver
+// with the given limit.
+func (c *DefaultCleaner) buildStmt(driverName string, limit uint64) string {
 	switch driverName {
 	case database.MySQL:
-		return fmt.Sprintf(`DELETE FROM %q WHERE %q < :time LIMIT %d`, stmt.Table, stmt.Column, limit)
+		return fmt.Sprintf(`DELETE FROM %q WHERE %q < :time LIMIT %d`, c.Table, c.Column, limit)
 	case database.PostgreSQL:
 		return fmt.Sprintf(
 			`DELETE FROM %[2]q WHERE (%[1]s) IN (SELECT %[1]s FROM %[2]q WHERE %[3]q < :time LIMIT %[4]d)`,
-			fmt.Sprintf(`"%s"`, strings.Join(stmt.PK, `", "`)),
-			stmt.Table,
-			stmt.Column,
+			fmt.Sprintf(`"%s"`, strings.Join(c.PK, `", "`)),
+			c.Table,
+			c.Column,
 			limit,
 		)
 	default:
 		panic(fmt.Sprintf("invalid database type %s", driverName))
+	}
+}
+
+// cleanup deletes all rows of the table whose time column is older than
+// the retention, measured against the daemon's clock.
+// Deletes a maximum of batchSize rows per round.
+func (c *DefaultCleaner) cleanup(ctx context.Context, db *DB, retention time.Duration) error {
+	var counter com.Counter
+
+	query := db.Rebind(c.buildStmt(db.DriverName(), batchSize))
+	olderThan := time.Now().Add(-retention)
+
+	defer db.Log(ctx, query, &counter).Stop()
+
+	for {
+		var rowsDeleted int64
+
+		if err := retry.WithBackoff(
+			ctx,
+			func(ctx context.Context) error {
+				rs, err := db.NamedExecContext(ctx, query, cleanupWhere{
+					Time: types.UnixMilli(olderThan),
+				})
+				if err != nil {
+					return database.CantPerformQuery(err, query)
+				}
+
+				rowsDeleted, err = rs.RowsAffected()
+
+				return err
+			},
+			retry.Retryable,
+			backoff.DefaultBackoff,
+			db.GetDefaultRetrySettings(),
+		); err != nil {
+			return err
+		}
+
+		counter.Add(uint64(rowsDeleted))
+
+		if rowsDeleted < int64(batchSize) {
+			break
+		}
+	}
+
+	return nil
+}
+
+// CascadeCleaner defines an entity whose rows are cleaned up together with
+// their relations based on the given time column.
+type CascadeCleaner struct {
+	Entity database.Entity
+
+	// Column must hold Unix milliseconds set by the database clock.
+	Column      string
+	ClusterUuid types.UUID
+}
+
+// cleanup deletes all rows of the entity whose time column is older than the
+// retention, measured against the database clock, in rounds of at most
+// batchSize rows via DeleteStreamed with cascading, so that the relations of
+// the entity are deleted as well.
+func (c *CascadeCleaner) cleanup(ctx context.Context, db *DB, retention time.Duration) error {
+	query := db.Rebind(db.BuildSelectStmt(c.Entity, &struct{ Uuid types.UUID }{}) + fmt.Sprintf(
+		` WHERE %q < UNIX_TIMESTAMP() * 1000 - ? AND "cluster_uuid" = ? LIMIT %d`, c.Column, batchSize,
+	))
+
+	for {
+		// Scanned into []any so that the UUIDs can feed DeleteStreamed's <-chan any.
+		var uuids []any
+
+		if err := retry.WithBackoff(
+			ctx,
+			func(ctx context.Context) error {
+				uuids = nil
+
+				return db.SelectContext(ctx, &uuids, query, retention.Milliseconds(), c.ClusterUuid)
+			},
+			retry.Retryable,
+			backoff.DefaultBackoff,
+			db.GetDefaultRetrySettings(),
+		); err != nil {
+			return database.CantPerformQuery(err, query)
+		}
+
+		if err := db.DeleteStreamedCascading(ctx, c.Entity, utils.ChanFromSlice(uuids)); err != nil {
+			return err
+		}
+
+		if len(uuids) < batchSize {
+			return nil
+		}
 	}
 }
 
@@ -56,71 +157,47 @@ func NewCleanup(db *DB) *Cleanup {
 	}
 }
 
-// CleanupOlderThan deletes all rows with the specified statement that are older
-// than the given time. Deletes a maximum of as many rows per round as defined
-// in count. Actually deleted rows will be passed to onSuccess. Returns the total
-// number of rows deleted.
-func (c *Cleanup) CleanupOlderThan(
-	ctx context.Context, stmt CleanupStmt, count uint64, olderThan time.Time, onSuccess ...database.OnSuccess[struct{}],
-) (uint64, error) {
-	var counter com.Counter
+// CleanupOption configures PeriodicCleanup.
+type CleanupOption func(*cleanupOptions)
 
-	q := c.db.Rebind(stmt.Build(c.db.DriverName(), count))
-
-	defer c.db.Log(ctx, q, &counter).Stop()
-
-	for {
-		var rowsDeleted int64
-
-		err := retry.WithBackoff(
-			ctx,
-			func(ctx context.Context) error {
-				rs, err := c.db.NamedExecContext(ctx, q, cleanupWhere{
-					Time: types.UnixMilli(olderThan),
-				})
-				if err != nil {
-					return database.CantPerformQuery(err, q)
-				}
-
-				rowsDeleted, err = rs.RowsAffected()
-
-				return err
-			},
-			retry.Retryable,
-			backoff.DefaultBackoff,
-			c.db.GetDefaultRetrySettings(),
-		)
-		if err != nil {
-			return 0, err
-		}
-
-		counter.Add(uint64(rowsDeleted))
-
-		for _, onSuccess := range onSuccess {
-			if err := onSuccess(ctx, make([]struct{}, rowsDeleted)); err != nil {
-				return 0, err
-			}
-		}
-
-		if rowsDeleted < int64(count) {
-			break
-		}
-	}
-
-	return counter.Total(), nil
+type cleanupOptions struct {
+	interval  time.Duration
+	retention time.Duration
 }
 
-// PeriodicCleanup deletes the rows of stmt that are older than one day, once
-// right away and then every hour, in batches of 5000. It blocks until a cleanup
-// fails or ctx is done, and returns the cleanup error or ctx.Err().
-func (c *Cleanup) PeriodicCleanup(ctx context.Context, stmt CleanupStmt) error {
+// WithInterval sets how often PeriodicCleanup runs. Defaults to one hour.
+func WithInterval(interval time.Duration) CleanupOption {
+	return func(o *cleanupOptions) {
+		o.interval = interval
+	}
+}
+
+// WithRetention sets how long rows are kept before PeriodicCleanup deletes
+// them. Defaults to 24 hours.
+func WithRetention(retention time.Duration) CleanupOption {
+	return func(o *cleanupOptions) {
+		o.retention = retention
+	}
+}
+
+// PeriodicCleanup lets the given Cleaner delete the rows that are older than
+// the retention once per interval in batches of batchSize. If no interval is
+// set, the default is one hour. If no retention is set, the default is one day.
+// It blocks until a cleanup fails or ctx is done, and returns the cleanup error
+// or ctx.Err().
+func (c *Cleanup) PeriodicCleanup(ctx context.Context, cleaner Cleaner, options ...CleanupOption) error {
+	o := &cleanupOptions{
+		interval:  time.Hour,
+		retention: 24 * time.Hour,
+	}
+	for _, option := range options {
+		option(o)
+	}
+
 	errs := make(chan error, 1)
 
-	defer periodic.Start(ctx, time.Hour, func(tick periodic.Tick) {
-		olderThan := tick.Time.AddDate(0, 0, -1)
-
-		_, err := c.CleanupOlderThan(ctx, stmt, 5000, olderThan)
-		if err != nil {
+	defer periodic.Start(ctx, o.interval, func(tick periodic.Tick) {
+		if err := cleaner.cleanup(ctx, c.db, o.retention); err != nil {
 			select {
 			case errs <- err:
 			case <-ctx.Done():

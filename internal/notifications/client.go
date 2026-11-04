@@ -3,9 +3,11 @@ package notifications
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 
 	"github.com/icinga/icinga-go-library/database"
@@ -116,7 +118,7 @@ func (c *Client) Stream(ctx context.Context, entities <-chan database.Entity) er
 				return nil
 			}
 
-			event := entity.(Marshaler).MarshalEvent()
+			event := marshalEvent(entity)
 
 			if err := c.ProcessEvent(ctx, event); err != nil {
 				c.logger.Errorw("Cannot process event", logging.Error(err))
@@ -125,6 +127,25 @@ func (c *Client) Stream(ctx context.Context, entities <-chan database.Entity) er
 			return ctx.Err()
 		}
 	}
+}
+
+// marshalEvent returns the event for the given entity, which must implement
+// Marshaler. An object that is being deleted is reported as OK, whatever state
+// it is in while shutting down.
+func marshalEvent(entity any) Event {
+	event := entity.(Marshaler).MarshalEvent()
+
+	if d, ok := entity.(Deleter); ok && d.IsDeleting() {
+		// The object goes away on purpose, so failures during its shutdown,
+		// such as containers exiting non-zero on SIGTERM, are no incident.
+		// Reporting OK also closes an open incident as soon as the deletion
+		// starts instead of when the hourly orphan check finds it.
+		kind := strings.ReplaceAll(event.Kind, "_", " ")
+		event.Severity = "ok"
+		event.Message = fmt.Sprintf("%s%s %s is being deleted.", strings.ToUpper(kind[:1]), kind[1:], event.Name)
+	}
+
+	return event
 }
 
 func (c *Client) Incidents(ctx context.Context) (io.ReadCloser, error) {
