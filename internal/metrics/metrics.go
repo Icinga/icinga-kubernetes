@@ -16,7 +16,7 @@ import (
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/internal/schema"
 	"github.com/pkg/errors"
-	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
+	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -274,13 +274,13 @@ var (
 
 // PromMetricSync synchronizes prometheus metrics from the prometheus API to the database
 type PromMetricSync struct {
-	promApiClient v1.API
+	promApiClient promv1.API
 	db            *database.DB
 	logger        *logging.Logger
 }
 
 // NewPromMetricSync creates a new PromMetricSync
-func NewPromMetricSync(promApiClient v1.API, db *database.DB, logger *logging.Logger) *PromMetricSync {
+func NewPromMetricSync(promApiClient promv1.API, db *database.DB, logger *logging.Logger) *PromMetricSync {
 	return &PromMetricSync{
 		promApiClient: promApiClient,
 		db:            db,
@@ -339,8 +339,8 @@ func (pms *PromMetricSync) run(
 	for _, promQuery := range promQueries {
 		g.Go(func() error {
 			var result model.Value
-			var warnings v1.Warnings
-			var infos v1.Infos
+			var warnings promv1.Warnings
+			var infos promv1.Infos
 			var err error
 
 			for {
