@@ -2,14 +2,13 @@ package schema
 
 import (
 	"fmt"
-	"net/url"
 	"strings"
 
 	"github.com/icinga/icinga-go-library/database"
+	"github.com/icinga/icinga-go-library/notifications/event"
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/internal/kdatabase"
-	"github.com/icinga/icinga-kubernetes/internal/notifications"
 	kappsv1 "k8s.io/api/apps/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ktypes "k8s.io/apimachinery/pkg/types"
@@ -168,21 +167,29 @@ func (s *StatefulSet) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	s.Yaml = MarshalYaml(statefulSet)
 }
 
-func (s *StatefulSet) MarshalEvent() notifications.Event {
-	return notifications.Event{
-		Uuid:        s.Uuid,
-		ClusterUuid: s.ClusterUuid,
-		Kind:        "stateful_set",
-		Name:        s.Namespace + "/" + s.Name,
-		Severity:    s.IcingaState.ToSeverity(),
-		Message:     s.IcingaStateReason,
-		URL:         &url.URL{Path: "/statefulset", RawQuery: fmt.Sprintf("id=%s", s.Uuid)},
+func (s *StatefulSet) MarshalEvent() *event.Event {
+	return &event.Event{
+		Name: s.Namespace + ": " + s.Name,
+		URL:  fmt.Sprintf("kubernetes/statefulset?id=%s", s.Uuid),
 		Tags: map[string]string{
 			"uuid":         s.Uuid.String(),
 			"cluster_uuid": s.ClusterUuid.String(),
 			"name":         s.Name,
 			"namespace":    s.Namespace,
 			"resource":     "stateful_set",
+		},
+		Severity: s.IcingaState.ToSeverity(),
+		Message:  s.IcingaStateReason,
+		Incident: types.MakeBool(true),
+		Relations: map[string]any{
+			"object": map[string]any{
+				"kind":      "stateful_set",
+				"name":      s.Name,
+				"namespace": s.Namespace,
+				"labels":    LabelsToMap(s.Labels),
+			},
+			"owners": OwnersToRelation(s.Owners),
+			"node":   nil, // Isn't applicable for stateful sets.
 		},
 	}
 }

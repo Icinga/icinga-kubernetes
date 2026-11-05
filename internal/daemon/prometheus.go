@@ -40,7 +40,7 @@ func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *metrics.
 			)
 		}
 
-		if err := db.ExecTx(ctx, func(ctx context.Context, tx *sqlx.Tx) error {
+		if err := db.ExecTx(ctx, nil, func(ctx context.Context, tx *sqlx.Tx) error {
 			if _, err := tx.ExecContext(
 				ctx,
 				fmt.Sprintf(
@@ -64,7 +64,7 @@ func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *metrics.
 			return errors.Wrap(err, "transaction failed")
 		}
 	} else {
-		if err := db.ExecTx(ctx, func(ctx context.Context, tx *sqlx.Tx) error {
+		if err := db.ExecTx(ctx, nil, func(ctx context.Context, tx *sqlx.Tx) error {
 			if _, err := tx.ExecContext(
 				ctx,
 				fmt.Sprintf(
