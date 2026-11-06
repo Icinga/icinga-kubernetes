@@ -43,9 +43,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/informers"
-	corev1 "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	kcache "k8s.io/client-go/tools/cache"
 	kclientcmd "k8s.io/client-go/tools/clientcmd"
@@ -447,8 +445,28 @@ func main() {
 
 	factory := informers.NewSharedInformerFactory(clientset, 0)
 
+	multiplexerWg := stdsync.WaitGroup{}
+
+	multiplexerWg.Add(1)
 	g.Go(func() error {
-		return SyncServicePods(ctx, db, factory.Core().V1().Services(), factory.Core().V1().Pods())
+		podEvents := cache.Multiplexers().Pods().UpsertEvents().Out()
+		podDeletes := cache.Multiplexers().Pods().DeleteEvents().Out()
+		serviceEvents := cache.Multiplexers().Services().UpsertEvents().Out()
+		serviceDeletes := cache.Multiplexers().Services().DeleteEvents().Out()
+
+		multiplexerWg.Done()
+
+		s := sync.NewServicePodSync(
+			db,
+			factory.Core().V1().Services(),
+			factory.Core().V1().Pods(),
+			podEvents,
+			podDeletes,
+			serviceEvents,
+			serviceDeletes,
+		)
+
+		return s.Run(ctx)
 	})
 
 	if err := daemon.SyncPrometheusConfig(ctx, db.DB, &cfg.Prometheus, clusterInstance.Uuid); err != nil {
@@ -494,9 +512,7 @@ func main() {
 		return s.Run(ctx)
 	})
 
-	wg := stdsync.WaitGroup{}
-
-	wg.Add(1)
+	multiplexerWg.Add(1)
 	g.Go(func() error {
 		s := sync.NewSync(db, factory.Core().V1().Nodes().Informer(), logs.GetChildLogger("nodes"), schema.NewNode)
 
@@ -509,12 +525,12 @@ func main() {
 			)
 		}
 
-		wg.Done()
+		multiplexerWg.Done()
 
 		return s.Run(ctx, forwardForNotifications...)
 	})
 
-	wg.Add(1)
+	multiplexerWg.Add(1)
 	g.Go(func() error {
 		schema.SyncContainers(
 			ctx,
@@ -527,7 +543,7 @@ func main() {
 		f := schema.NewPodFactory(clientset)
 		s := sync.NewSync(db, factory.Core().V1().Pods().Informer(), logs.GetChildLogger("pods"), f.New)
 
-		wg.Done()
+		multiplexerWg.Done()
 
 		return s.Run(
 			ctx,
@@ -536,7 +552,7 @@ func main() {
 		)
 	})
 
-	wg.Add(1)
+	multiplexerWg.Add(1)
 	g.Go(func() error {
 		s := sync.NewSync(db, factory.Apps().V1().Deployments().Informer(), logs.GetChildLogger("deployments"), schema.NewDeployment)
 
@@ -549,12 +565,12 @@ func main() {
 			)
 		}
 
-		wg.Done()
+		multiplexerWg.Done()
 
 		return s.Run(ctx, forwardForNotifications...)
 	})
 
-	wg.Add(1)
+	multiplexerWg.Add(1)
 	g.Go(func() error {
 		s := sync.NewSync(db, factory.Apps().V1().DaemonSets().Informer(), logs.GetChildLogger("daemon-sets"), schema.NewDaemonSet)
 
@@ -567,12 +583,12 @@ func main() {
 			)
 		}
 
-		wg.Done()
+		multiplexerWg.Done()
 
 		return s.Run(ctx, forwardForNotifications...)
 	})
 
-	wg.Add(1)
+	multiplexerWg.Add(1)
 	g.Go(func() error {
 		s := sync.NewSync(db, factory.Apps().V1().ReplicaSets().Informer(), logs.GetChildLogger("replica-sets"), schema.NewReplicaSet)
 
@@ -585,12 +601,12 @@ func main() {
 			)
 		}
 
-		wg.Done()
+		multiplexerWg.Done()
 
 		return s.Run(ctx, forwardForNotifications...)
 	})
 
-	wg.Add(1)
+	multiplexerWg.Add(1)
 	g.Go(func() error {
 		s := sync.NewSync(db, factory.Apps().V1().StatefulSets().Informer(), logs.GetChildLogger("stateful-sets"), schema.NewStatefulSet)
 
@@ -603,7 +619,7 @@ func main() {
 			)
 		}
 
-		wg.Done()
+		multiplexerWg.Done()
 
 		return s.Run(ctx, forwardForNotifications...)
 	})
@@ -615,6 +631,7 @@ func main() {
 		return s.Run(
 			ctx,
 			sync.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().Services().UpsertEvents().In())),
+			sync.WithOnDelete(database.OnSuccessSendTo(cache.Multiplexers().Services().DeleteEvents().In())),
 		)
 	})
 
@@ -672,7 +689,7 @@ func main() {
 	})
 
 	g.Go(func() error {
-		wg.Wait()
+		multiplexerWg.Wait()
 
 		logger.Debug("Starting multiplexers")
 
@@ -797,120 +814,6 @@ func dbHasSchema(db *kdatabase.DB, dbName string) (bool, error) {
 	defer func() { _ = rows.Close() }()
 
 	return rows.Next(), rows.Err()
-}
-
-func SyncServicePods(ctx context.Context, db *kdatabase.DB, serviceList corev1.ServiceInformer, podList corev1.PodInformer) error {
-	servicePods := make(chan database.Entity)
-
-	g, ctx := errgroup.WithContext(ctx)
-	g.Go(func() error {
-		return db.UpsertStreamed(ctx, servicePods)
-	})
-
-	g.Go(func() error {
-		// Out() panics once the multiplexer has started, so subscribe before waiting for the cache.
-		ch := cache.Multiplexers().Pods().UpsertEvents().Out()
-
-		if !kcache.WaitForCacheSync(ctx.Done(), serviceList.Informer().HasSynced) {
-			return ctx.Err()
-		}
-
-		for {
-			select {
-			case pod, more := <-ch:
-				if !more {
-					return nil
-				}
-
-				services, err := serviceList.Lister().Services(pod.(*schema.Pod).Namespace).List(labels.NewSelector())
-				if err != nil {
-					return err
-				}
-
-				podLabels := make(labels.Set)
-				for _, label := range pod.(*schema.Pod).Labels {
-					podLabels[label.Name] = label.Value
-				}
-
-				for _, service := range services {
-					if len(service.Spec.Selector) == 0 {
-						continue
-					}
-
-					labelSelector := &v1.LabelSelector{MatchLabels: service.Spec.Selector}
-					selector, err := v1.LabelSelectorAsSelector(labelSelector)
-					if err != nil {
-						return err
-					}
-
-					if selector.Matches(podLabels) {
-						select {
-						case servicePods <- schema.ServicePod{
-							ServiceUuid: schema.EnsureUUID(service.UID),
-							PodUuid:     pod.(*schema.Pod).Uuid,
-						}:
-						case <-ctx.Done():
-							return ctx.Err()
-						}
-					}
-				}
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		}
-	})
-
-	g.Go(func() error {
-		// Out() panics once the multiplexer has started, so subscribe before waiting for the cache.
-		ch := cache.Multiplexers().Services().UpsertEvents().Out()
-
-		if !kcache.WaitForCacheSync(ctx.Done(), podList.Informer().HasSynced) {
-			return ctx.Err()
-		}
-
-		for {
-			select {
-			case service, more := <-ch:
-				if !more {
-					return nil
-				}
-
-				if len(service.(*schema.Service).Selectors) == 0 {
-					continue
-				}
-
-				labelSelector := &v1.LabelSelector{MatchLabels: map[string]string{}}
-				for _, selector := range service.(*schema.Service).Selectors {
-					labelSelector.MatchLabels[selector.Name] = selector.Value
-				}
-
-				selector, err := v1.LabelSelectorAsSelector(labelSelector)
-				if err != nil {
-					return err
-				}
-
-				pods, err := podList.Lister().Pods(service.(*schema.Service).Namespace).List(selector)
-				if err != nil {
-					return err
-				}
-
-				for _, pod := range pods {
-					select {
-					case servicePods <- schema.ServicePod{
-						ServiceUuid: service.(*schema.Service).Uuid,
-						PodUuid:     schema.EnsureUUID(pod.UID),
-					}:
-					case <-ctx.Done():
-						return ctx.Err()
-					}
-				}
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		}
-	})
-
-	return g.Wait()
 }
 
 // uuidSliceValue is a pflag.Value that collects UUIDs from a flag that may be
