@@ -2,7 +2,6 @@ package schema
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"io"
@@ -119,31 +118,27 @@ func (c *ContainerCommon) Relations() []kdatabase.Relation {
 }
 
 type ContainerResources struct {
-	CpuLimits      sql.NullInt64
-	CpuRequests    sql.NullInt64
-	MemoryLimits   sql.NullInt64
-	MemoryRequests sql.NullInt64
+	CpuLimits      types.Int
+	CpuRequests    types.Int
+	MemoryLimits   types.Int
+	MemoryRequests types.Int
 }
 
 func (c *ContainerResources) Obtain(container kcorev1.Container) {
 	if !container.Resources.Limits.Cpu().IsZero() {
-		c.CpuLimits.Int64 = container.Resources.Limits.Cpu().MilliValue()
-		c.CpuLimits.Valid = true
+		c.CpuLimits = types.MakeInt(container.Resources.Limits.Cpu().MilliValue())
 	}
 
 	if !container.Resources.Requests.Cpu().IsZero() {
-		c.CpuRequests.Int64 = container.Resources.Requests.Cpu().MilliValue()
-		c.CpuRequests.Valid = true
+		c.CpuRequests = types.MakeInt(container.Resources.Requests.Cpu().MilliValue())
 	}
 
 	if !container.Resources.Limits.Memory().IsZero() {
-		c.MemoryLimits.Int64 = container.Resources.Limits.Memory().MilliValue()
-		c.MemoryLimits.Valid = true
+		c.MemoryLimits = types.MakeInt(container.Resources.Limits.Memory().MilliValue())
 	}
 
 	if !container.Resources.Requests.Memory().IsZero() {
-		c.MemoryRequests.Int64 = container.Resources.Requests.Memory().MilliValue()
-		c.MemoryRequests.Valid = true
+		c.MemoryRequests = types.MakeInt(container.Resources.Requests.Memory().MilliValue())
 	}
 }
 
