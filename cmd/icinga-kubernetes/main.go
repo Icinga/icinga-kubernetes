@@ -32,6 +32,7 @@ import (
 	"github.com/icinga/icinga-kubernetes/internal/schema"
 	"github.com/icinga/icinga-kubernetes/internal/sync"
 	k8sMysql "github.com/icinga/icinga-kubernetes/schema/mysql"
+	"github.com/jmoiron/sqlx"
 	"github.com/okzk/sdnotify"
 	"github.com/pkg/errors"
 	promapi "github.com/prometheus/client_golang/api"
@@ -39,6 +40,7 @@ import (
 	"github.com/spf13/pflag"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/informers"
@@ -358,6 +360,7 @@ func main() {
 	wg.Add(1)
 	g.Go(func() error {
 		podEvents := cache.Multiplexers().Pods().UpsertEvents().Out()
+		podDeletes := cache.Multiplexers().Pods().DeleteEvents().Out()
 		serviceEvents := cache.Multiplexers().Services().UpsertEvents().Out()
 
 		wg.Done()
@@ -368,6 +371,7 @@ func main() {
 			factory.Core().V1().Services(),
 			factory.Core().V1().Pods(),
 			podEvents,
+			podDeletes,
 			serviceEvents,
 		)
 	})
@@ -718,119 +722,171 @@ func dbHasSchema(db *kdatabase.DB, dbName string) (bool, error) {
 	return rows.Next(), rows.Err()
 }
 
+// SyncServicePods links services to the pods their selectors match. On each
+// service upsert and on each pod upsert that changes the pod's labels, it
+// replaces all links of that service or pod, which also removes links that no
+// longer match.
 func SyncServicePods(
 	ctx context.Context,
 	db *kdatabase.DB,
 	serviceList corev1.ServiceInformer,
 	podList corev1.PodInformer,
 	podEvents <-chan database.Entity,
+	podDeletes <-chan any,
 	serviceEvents <-chan database.Entity,
 ) error {
-	servicePods := make(chan database.Entity)
+	if !kcache.WaitForCacheSync(ctx.Done(), serviceList.Informer().HasSynced, podList.Informer().HasSynced) {
+		return ctx.Err()
+	}
 
-	g, ctx := errgroup.WithContext(ctx)
-	g.Go(func() error {
-		return db.UpsertStreamed(ctx, servicePods)
-	})
+	// A pod's links depend only on its labels and on the services, which send
+	// events of their own. Most pod events are status updates, so skipping
+	// those with the labels of the last replacement saves a transaction each.
+	// The map starts empty, so every pod is still replaced once on startup.
+	replacedPodLabels := make(map[types.UUID]labels.Set)
 
-	g.Go(func() error {
-		if !kcache.WaitForCacheSync(ctx.Done(), serviceList.Informer().HasSynced) {
-			return ctx.Err()
-		}
-
-		for {
-			select {
-			case pod, more := <-podEvents:
-				if !more {
-					return nil
-				}
-
-				services, err := serviceList.Lister().Services(pod.(*schema.Pod).Namespace).List(labels.NewSelector())
-				if err != nil {
-					return err
-				}
-
-				podLabels := make(labels.Set)
-				for _, label := range pod.(*schema.Pod).Labels {
-					podLabels[label.Name] = label.Value
-				}
-
-				for _, service := range services {
-					if len(service.Spec.Selector) == 0 {
-						continue
-					}
-
-					labelSelector := &v1.LabelSelector{MatchLabels: service.Spec.Selector}
-					selector, err := v1.LabelSelectorAsSelector(labelSelector)
-					if err != nil {
-						return err
-					}
-
-					if selector.Matches(podLabels) {
-						select {
-						case servicePods <- schema.ServicePod{
-							ServiceUuid: schema.EnsureUUID(service.UID),
-							PodUuid:     pod.(*schema.Pod).Uuid,
-						}:
-						case <-ctx.Done():
-							return ctx.Err()
-						}
-					}
-				}
-			case <-ctx.Done():
-				return ctx.Err()
+	// Pod and service events share one loop so that their replacements cannot
+	// interleave and delete each other's links.
+	for podEvents != nil || podDeletes != nil || serviceEvents != nil {
+		select {
+		case entity, more := <-podEvents:
+			if !more {
+				podEvents = nil
+				continue
 			}
-		}
-	})
 
-	g.Go(func() error {
-		if !kcache.WaitForCacheSync(ctx.Done(), podList.Informer().HasSynced) {
-			return ctx.Err()
-		}
+			pod := entity.(*schema.Pod)
 
-		for {
-			select {
-			case service, more := <-serviceEvents:
-				if !more {
-					return nil
-				}
+			// Upserts of the same pod can finish out of order, so the event may
+			// carry outdated labels. Take them from the cache instead. A pod
+			// that is gone or was replaced is left to its delete, which removes
+			// its links. Linking it here would leave orphans behind.
+			k8sPod, err := podList.Lister().Pods(pod.Namespace).Get(pod.Name)
+			if kerrors.IsNotFound(err) {
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			if k8sPod.UID != pod.Uid {
+				continue
+			}
 
-				if len(service.(*schema.Service).Selectors) == 0 {
+			podLabels := labels.Set(k8sPod.Labels)
+			if replaced, ok := replacedPodLabels[pod.Uuid]; ok && labels.Equals(replaced, podLabels) {
+				continue
+			}
+
+			services, err := serviceList.Lister().Services(pod.Namespace).List(labels.NewSelector())
+			if err != nil {
+				return err
+			}
+
+			var servicePods []schema.ServicePod
+			for _, service := range services {
+				if len(service.Spec.Selector) == 0 {
 					continue
 				}
 
-				labelSelector := &v1.LabelSelector{MatchLabels: map[string]string{}}
-				for _, selector := range service.(*schema.Service).Selectors {
-					labelSelector.MatchLabels[selector.Name] = selector.Value
+				if labels.ValidatedSetSelector(service.Spec.Selector).Matches(podLabels) {
+					servicePods = append(servicePods, schema.ServicePod{
+						ServiceUuid: schema.EnsureUUID(service.UID),
+						PodUuid:     pod.Uuid,
+					})
 				}
+			}
 
-				selector, err := v1.LabelSelectorAsSelector(labelSelector)
-				if err != nil {
-					return err
-				}
+			if err := replaceServicePods(ctx, db, "pod_uuid", pod.Uuid, servicePods); err != nil {
+				return err
+			}
 
-				pods, err := podList.Lister().Pods(service.(*schema.Service).Namespace).List(selector)
+			replacedPodLabels[pod.Uuid] = podLabels
+		case id, more := <-podDeletes:
+			if !more {
+				podDeletes = nil
+				continue
+			}
+
+			podUuid := id.(types.UUID)
+
+			delete(replacedPodLabels, podUuid)
+		case entity, more := <-serviceEvents:
+			if !more {
+				serviceEvents = nil
+				continue
+			}
+
+			service := entity.(*schema.Service)
+
+			// As with pods, take the selector from the cache, not from the event.
+			k8sService, err := serviceList.Lister().Services(service.Namespace).Get(service.Name)
+			if kerrors.IsNotFound(err) {
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			if k8sService.UID != service.Uid {
+				continue
+			}
+
+			var servicePods []schema.ServicePod
+			// A service without selectors selects no pods, but its old links still have to go.
+			if len(k8sService.Spec.Selector) > 0 {
+				pods, err := podList.Lister().Pods(service.Namespace).List(labels.ValidatedSetSelector(k8sService.Spec.Selector))
 				if err != nil {
 					return err
 				}
 
 				for _, pod := range pods {
-					select {
-					case servicePods <- schema.ServicePod{
-						ServiceUuid: service.(*schema.Service).Uuid,
+					servicePods = append(servicePods, schema.ServicePod{
+						ServiceUuid: service.Uuid,
 						PodUuid:     schema.EnsureUUID(pod.UID),
-					}:
-					case <-ctx.Done():
-						return ctx.Err()
+					})
+				}
+			}
+
+			if err := replaceServicePods(ctx, db, "service_uuid", service.Uuid, servicePods); err != nil {
+				return err
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	return nil
+}
+
+// replaceServicePods replaces the service_pod rows whose column equals id with
+// servicePods. It does so in one transaction, so readers never see the links
+// missing in between.
+func replaceServicePods(
+	ctx context.Context, db *kdatabase.DB, column string, id types.UUID, servicePods []schema.ServicePod,
+) error {
+	deleteStmt := db.Rebind(fmt.Sprintf(`DELETE FROM %q WHERE %q = ?`, database.TableName(schema.ServicePod{}), column))
+	insertStmt, placeholders := db.BuildInsertStmt(schema.ServicePod{})
+
+	return retry.WithBackoff(
+		ctx,
+		func(ctx context.Context) error {
+			return db.ExecTx(ctx, nil, func(ctx context.Context, tx *sqlx.Tx) error {
+				if _, err := tx.ExecContext(ctx, deleteStmt, id); err != nil {
+					return database.CantPerformQuery(err, deleteStmt)
+				}
+
+				for chunk := range slices.Chunk(servicePods, db.BatchSizeByPlaceholders(placeholders)) {
+					if _, err := tx.NamedExecContext(ctx, insertStmt, chunk); err != nil {
+						return database.CantPerformQuery(err, insertStmt)
 					}
 				}
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		}
-	})
 
-	return g.Wait()
+				return nil
+			})
+		},
+		retry.Retryable,
+		backoff.DefaultBackoff,
+		db.GetDefaultRetrySettings(),
+	)
 }
 
 // uuidSliceValue is a pflag.Value that collects UUIDs from a flag that may be
