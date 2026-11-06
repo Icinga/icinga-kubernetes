@@ -171,7 +171,7 @@ func main() {
 
 	clusterInstance := &schema.Cluster{
 		Uuid: schema.EnsureUUID(ns.UID),
-		Name: schema.NewNullableString(clusterName),
+		Name: types.MakeString(clusterName, types.TransformEmptyStringToNull),
 	}
 
 	g, ctx := errgroup.WithContext(cluster.NewClusterUuidContext(context.Background(), clusterInstance.Uuid))
@@ -195,14 +195,19 @@ func main() {
 			kubernetesHeartbeat = tick.Time
 		}
 
+		var message types.String
+		if err != nil {
+			message = types.MakeString(err.Error())
+		}
+
 		instance := schema.Instance{
 			Uuid:                   types.MakeUUID(instanceId),
 			ClusterUuid:            clusterInstance.Uuid,
 			Version:                daemon.Version.Version,
-			KubernetesVersion:      schema.NewNullableString(kubernetesVersion),
+			KubernetesVersion:      types.MakeString(kubernetesVersion, types.TransformEmptyStringToNull),
 			KubernetesHeartbeat:    types.UnixMilli(kubernetesHeartbeat),
 			KubernetesApiReachable: types.MakeBool(err == nil),
-			Message:                schema.NewNullableString(err),
+			Message:                message,
 			Heartbeat:              types.UnixMilli(tick.Time),
 		}
 

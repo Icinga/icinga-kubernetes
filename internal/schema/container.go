@@ -52,8 +52,8 @@ type ContainerCommon struct {
 	Name              string
 	Image             string
 	ImagePullPolicy   string
-	State             sql.NullString
-	StateDetails      sql.NullString
+	State             types.String
+	StateDetails      types.String
 	IcingaState       IcingaState
 	IcingaStateReason string
 	Devices           []ContainerDevice `db:"-"`
@@ -76,13 +76,8 @@ func (c *ContainerCommon) Obtain(podUuid types.UUID, container kcorev1.Container
 		panic(err)
 	}
 
-	if state != "" {
-		c.State.String = state
-		c.State.Valid = true
-		c.StateDetails.String = stateDetails
-		c.StateDetails.Valid = true
-	}
-
+	c.State = types.MakeString(state, types.TransformEmptyStringToNull)
+	c.StateDetails = types.MakeString(stateDetails, types.TransformEmptyStringToNull)
 	c.IcingaState, c.IcingaStateReason = GetContainerState(container, status)
 
 	for _, device := range container.VolumeDevices {
@@ -95,20 +90,14 @@ func (c *ContainerCommon) Obtain(podUuid types.UUID, container kcorev1.Container
 	}
 
 	for _, mount := range container.VolumeMounts {
-		m := ContainerMount{
+		c.Mounts = append(c.Mounts, ContainerMount{
 			ContainerUuid: c.Uuid,
 			PodUuid:       c.PodUuid,
 			VolumeName:    mount.Name,
 			Path:          mount.MountPath,
+			SubPath:       types.MakeString(mount.SubPath, types.TransformEmptyStringToNull),
 			ReadOnly:      types.MakeBool(mount.ReadOnly),
-		}
-
-		if mount.SubPath != "" {
-			m.SubPath.String = mount.SubPath
-			m.SubPath.Valid = true
-		}
-
-		c.Mounts = append(c.Mounts, m)
+		})
 	}
 }
 
@@ -246,7 +235,7 @@ type ContainerMount struct {
 	PodUuid       types.UUID
 	VolumeName    string
 	Path          string
-	SubPath       sql.NullString
+	SubPath       types.String
 	ReadOnly      types.Bool
 }
 

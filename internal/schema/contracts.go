@@ -1,10 +1,6 @@
 package schema
 
 import (
-	"database/sql"
-	"fmt"
-	"reflect"
-
 	"github.com/google/uuid"
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/types"
@@ -95,44 +91,6 @@ func EnsureUUID(uid ktypes.UID) types.UUID {
 
 func NewUUID(space types.UUID, data string) types.UUID {
 	return types.MakeUUID(uuid.NewSHA1(space.UUID, []byte(data)))
-}
-
-func NewNullableString(s any) sql.NullString {
-	if v, ok := s.(string); ok {
-		return sql.NullString{Valid: v != "", String: v}
-	}
-
-	if v, ok := s.(*string); ok {
-		if v != nil {
-			return sql.NullString{Valid: true, String: *v}
-		}
-
-		return sql.NullString{Valid: false, String: ""}
-	}
-
-	if v, ok := s.(error); ok {
-		return sql.NullString{Valid: true, String: v.Error()}
-	}
-
-	if s == nil {
-		return sql.NullString{Valid: false, String: ""}
-	}
-
-	v := reflect.ValueOf(s)
-	if v.Kind() == reflect.Pointer {
-		if v.IsNil() {
-			return sql.NullString{Valid: false, String: ""}
-		}
-
-		stringType := reflect.TypeFor[string]()
-		if v.Elem().CanConvert(stringType) {
-			v := v.Elem().Convert(stringType).Interface().(string)
-
-			return sql.NullString{Valid: v != "", String: v}
-		}
-	}
-
-	panic(fmt.Sprintf("invalid type %T", s))
 }
 
 // Assert interface compliance.

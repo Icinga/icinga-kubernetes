@@ -1,8 +1,6 @@
 package schema
 
 import (
-	"database/sql"
-
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/internal/kdatabase"
@@ -13,10 +11,10 @@ type Instance struct {
 	Uuid                   types.UUID
 	ClusterUuid            types.UUID
 	Version                string
-	KubernetesVersion      sql.NullString
+	KubernetesVersion      types.String
 	KubernetesHeartbeat    types.UnixMilli
 	KubernetesApiReachable types.Bool
-	Message                sql.NullString
+	Message                types.String
 	Heartbeat              types.UnixMilli
 }
 

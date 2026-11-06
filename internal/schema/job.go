@@ -22,7 +22,7 @@ type Job struct {
 	ActiveDeadlineSeconds   sql.NullInt64
 	BackoffLimit            sql.NullInt32
 	TtlSecondsAfterFinished sql.NullInt32
-	CompletionMode          sql.NullString
+	CompletionMode          types.String
 	Suspend                 types.Bool
 	StartTime               types.UnixMilli
 	CompletionTime          types.UnixMilli
@@ -109,11 +109,6 @@ func (j *Job) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	if job.Spec.Suspend != nil {
 		suspend = types.MakeBool(*job.Spec.Suspend)
 	}
-	var completionMode sql.NullString
-	if job.Spec.CompletionMode != nil {
-		completionMode.String = string(*job.Spec.CompletionMode)
-		completionMode.Valid = true
-	}
 	var startTime kmetav1.Time
 	if job.Status.StartTime != nil {
 		startTime = *job.Status.StartTime
@@ -129,7 +124,9 @@ func (j *Job) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	j.BackoffLimit = backoffLimit
 	j.TtlSecondsAfterFinished = ttlSecondsAfterFinished
 	j.Suspend = suspend
-	j.CompletionMode = completionMode
+	if job.Spec.CompletionMode != nil {
+		j.CompletionMode = types.MakeString(string(*job.Spec.CompletionMode))
+	}
 	j.StartTime = types.UnixMilli(startTime.Time)
 	j.CompletionTime = types.UnixMilli(completionTime.Time)
 	j.Active = job.Status.Active

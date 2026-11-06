@@ -1,7 +1,6 @@
 package schema
 
 import (
-	"database/sql"
 	"strings"
 
 	"github.com/icinga/icinga-go-library/database"
@@ -52,7 +51,7 @@ type IngressBackendResource struct {
 	ResourceUuid    types.UUID
 	IngressUuid     types.UUID
 	IngressRuleUuid types.UUID
-	ApiGroup        sql.NullString
+	ApiGroup        types.String
 	Kind            string
 	Name            string
 }
@@ -66,8 +65,8 @@ type IngressRule struct {
 	Uuid        types.UUID
 	BackendUuid types.UUID
 	IngressUuid types.UUID
-	Host        sql.NullString
-	Path        sql.NullString
+	Host        types.String
+	Path        types.String
 	PathType    string
 }
 
@@ -107,14 +106,11 @@ func (i *Ingress) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		}
 		if ingress.Spec.DefaultBackend.Resource != nil {
 			resourceUuid := NewUUID(i.Uuid, ingress.Spec.DefaultBackend.Resource.Kind+ingress.Spec.DefaultBackend.Resource.Name)
-			var apiGroup sql.NullString
 			if ingress.Spec.DefaultBackend.Resource.APIGroup != nil {
-				apiGroup.String = *ingress.Spec.DefaultBackend.Resource.APIGroup
-				apiGroup.Valid = true
 				i.IngressBackendResource = append(i.IngressBackendResource, IngressBackendResource{
 					ResourceUuid: resourceUuid,
 					IngressUuid:  i.Uuid,
-					ApiGroup:     apiGroup,
+					ApiGroup:     types.MakeString(*ingress.Spec.DefaultBackend.Resource.APIGroup),
 					Kind:         ingress.Spec.DefaultBackend.Resource.Kind,
 					Name:         ingress.Spec.DefaultBackend.Resource.Name,
 				})
@@ -145,17 +141,16 @@ func (i *Ingress) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 					Uuid:        ingressRuleUuid,
 					BackendUuid: serviceUuid,
 					IngressUuid: i.Uuid,
-					Host:        NewNullableString(rules.Host),
-					Path:        NewNullableString(ruleValue.Path),
+					Host:        types.MakeString(rules.Host, types.TransformEmptyStringToNull),
+					Path:        types.MakeString(ruleValue.Path, types.TransformEmptyStringToNull),
 					PathType:    pathType,
 				})
 			} else if ruleValue.Backend.Resource != nil {
 				ingressRuleUuid := NewUUID(i.Uuid, rules.Host+ruleValue.Path+ruleValue.Backend.Resource.Name)
 				resourceUuid := NewUUID(ingressRuleUuid, ruleValue.Backend.Resource.Name)
-				var apiGroup sql.NullString
+				var apiGroup types.String
 				if ruleValue.Backend.Resource.APIGroup != nil {
-					apiGroup.String = *ruleValue.Backend.Resource.APIGroup
-					apiGroup.Valid = true
+					apiGroup = types.MakeString(*ruleValue.Backend.Resource.APIGroup)
 				}
 				i.IngressBackendResource = append(i.IngressBackendResource, IngressBackendResource{
 					ResourceUuid:    resourceUuid,
@@ -169,8 +164,8 @@ func (i *Ingress) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 					Uuid:        ingressRuleUuid,
 					IngressUuid: i.Uuid,
 					BackendUuid: resourceUuid,
-					Host:        NewNullableString(rules.Host),
-					Path:        NewNullableString(ruleValue.Path),
+					Host:        types.MakeString(rules.Host, types.TransformEmptyStringToNull),
+					Path:        types.MakeString(ruleValue.Path, types.TransformEmptyStringToNull),
 					PathType:    pathType,
 				})
 			}

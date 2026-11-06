@@ -1,8 +1,6 @@
 package schema
 
 import (
-	"database/sql"
-
 	"github.com/icinga/icinga-go-library/types"
 	keventsv1 "k8s.io/api/events/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -11,14 +9,14 @@ import (
 type Event struct {
 	Meta
 	ReferenceUuid       types.UUID
-	ReportingController sql.NullString
-	ReportingInstance   sql.NullString
-	Action              sql.NullString
+	ReportingController types.String
+	ReportingInstance   types.String
+	Action              types.String
 	Reason              string
 	Note                string
 	Type                string
 	ReferenceKind       string
-	ReferenceNamespace  sql.NullString
+	ReferenceNamespace  types.String
 	ReferenceName       string
 	FirstSeen           types.UnixMilli
 	LastSeen            types.UnixMilli
@@ -36,14 +34,14 @@ func (e *Event) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	event := k8s.(*keventsv1.Event)
 
 	e.ReferenceUuid = EnsureUUID(event.Regarding.UID)
-	e.ReportingController = NewNullableString(event.ReportingController)
-	e.ReportingInstance = NewNullableString(event.ReportingInstance)
-	e.Action = NewNullableString(event.Action)
+	e.ReportingController = types.MakeString(event.ReportingController, types.TransformEmptyStringToNull)
+	e.ReportingInstance = types.MakeString(event.ReportingInstance, types.TransformEmptyStringToNull)
+	e.Action = types.MakeString(event.Action, types.TransformEmptyStringToNull)
 	e.Reason = event.Reason
 	e.Note = event.Note
 	e.Type = event.Type
 	e.ReferenceKind = event.Regarding.Kind
-	e.ReferenceNamespace = NewNullableString(event.Regarding.Namespace)
+	e.ReferenceNamespace = types.MakeString(event.Regarding.Namespace, types.TransformEmptyStringToNull)
 	e.ReferenceName = event.Regarding.Name
 
 	if !event.EventTime.Time.IsZero() {
