@@ -1,7 +1,6 @@
 package schema
 
 import (
-	"database/sql"
 	"strings"
 
 	"github.com/icinga/icinga-go-library/database"
@@ -17,13 +16,13 @@ type PersistentVolume struct {
 	AccessModes      Bitmask[kpersistentVolumeAccessModesSize]
 	Capacity         int64
 	ReclaimPolicy    string
-	StorageClass     sql.NullString
+	StorageClass     types.String
 	VolumeMode       string
 	VolumeSourceType string
 	VolumeSource     string
 	Phase            string
-	Reason           sql.NullString
-	Message          sql.NullString
+	Reason           types.String
+	Message          types.String
 	Yaml             string
 	Claim            *PersistentVolumeClaimRef `db:"-"`
 	Labels           []Label                   `db:"-"`
@@ -55,10 +54,10 @@ func (p *PersistentVolume) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	p.AccessModes = persistentVolumeAccessModes.Bitmask(persistentVolume.Spec.AccessModes...)
 	p.Capacity = persistentVolume.Spec.Capacity.Storage().MilliValue()
 	p.ReclaimPolicy = string(persistentVolume.Spec.PersistentVolumeReclaimPolicy)
-	p.StorageClass = NewNullableString(persistentVolume.Spec.StorageClassName)
+	p.StorageClass = types.MakeString(persistentVolume.Spec.StorageClassName, types.TransformEmptyStringToNull)
 	p.Phase = string(persistentVolume.Status.Phase)
-	p.Reason = NewNullableString(persistentVolume.Status.Reason)
-	p.Message = NewNullableString(persistentVolume.Status.Message)
+	p.Reason = types.MakeString(persistentVolume.Status.Reason, types.TransformEmptyStringToNull)
+	p.Message = types.MakeString(persistentVolume.Status.Message, types.TransformEmptyStringToNull)
 	var volumeMode string
 	if persistentVolume.Spec.VolumeMode != nil {
 		volumeMode = string(*persistentVolume.Spec.VolumeMode)

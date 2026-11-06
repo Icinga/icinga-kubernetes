@@ -15,7 +15,7 @@ import (
 type CronJob struct {
 	Meta
 	Schedule                   string
-	Timezone                   sql.NullString
+	Timezone                   types.String
 	StartingDeadlineSeconds    sql.NullInt64
 	ConcurrencyPolicy          string
 	Suspend                    types.Bool
@@ -42,7 +42,9 @@ func (c *CronJob) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	cronJob := k8s.(*kbatchv1.CronJob)
 
 	c.Schedule = cronJob.Spec.Schedule
-	c.Timezone = NewNullableString(cronJob.Spec.TimeZone)
+	if cronJob.Spec.TimeZone != nil {
+		c.Timezone = types.MakeString(*cronJob.Spec.TimeZone)
+	}
 	if cronJob.Spec.StartingDeadlineSeconds != nil {
 		c.StartingDeadlineSeconds.Int64 = *cronJob.Spec.StartingDeadlineSeconds
 		c.StartingDeadlineSeconds.Valid = true

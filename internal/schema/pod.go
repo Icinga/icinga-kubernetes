@@ -23,9 +23,9 @@ type PodFactory struct {
 
 type Pod struct {
 	Meta
-	NodeName          sql.NullString
-	NominatedNodeName sql.NullString
-	Ip                sql.NullString
+	NodeName          types.String
+	NominatedNodeName types.String
+	Ip                types.String
 	Phase             string
 	IcingaState       IcingaState
 	IcingaStateReason string
@@ -33,9 +33,9 @@ type Pod struct {
 	CpuRequests       sql.NullInt64
 	MemoryLimits      sql.NullInt64
 	MemoryRequests    sql.NullInt64
-	Reason            sql.NullString
-	Message           sql.NullString
-	Qos               sql.NullString
+	Reason            types.String
+	Message           types.String
+	Qos               types.String
 	RestartPolicy     string
 	Yaml              string
 	Conditions        []PodCondition      `db:"-"`
@@ -130,14 +130,14 @@ func (p *Pod) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 
 	pod := k8s.(*kcorev1.Pod)
 
-	p.NodeName = NewNullableString(pod.Spec.NodeName)
-	p.NominatedNodeName = NewNullableString(pod.Status.NominatedNodeName)
-	p.Ip = NewNullableString(pod.Status.PodIP)
+	p.NodeName = types.MakeString(pod.Spec.NodeName, types.TransformEmptyStringToNull)
+	p.NominatedNodeName = types.MakeString(pod.Status.NominatedNodeName, types.TransformEmptyStringToNull)
+	p.Ip = types.MakeString(pod.Status.PodIP, types.TransformEmptyStringToNull)
 	p.Phase = string(pod.Status.Phase)
-	p.Reason = NewNullableString(pod.Status.Reason)
-	p.Message = NewNullableString(pod.Status.Message)
+	p.Reason = types.MakeString(pod.Status.Reason, types.TransformEmptyStringToNull)
+	p.Message = types.MakeString(pod.Status.Message, types.TransformEmptyStringToNull)
 	p.RestartPolicy = string(pod.Spec.RestartPolicy)
-	p.Qos = NewNullableString(string(pod.Status.QOSClass))
+	p.Qos = types.MakeString(string(pod.Status.QOSClass), types.TransformEmptyStringToNull)
 
 	for _, condition := range pod.Status.Conditions {
 		p.Conditions = append(p.Conditions, PodCondition{
