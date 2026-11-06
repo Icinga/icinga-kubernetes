@@ -455,6 +455,7 @@ func main() {
 		podEvents := cache.Multiplexers().Pods().UpsertEvents().Out()
 		podDeletes := cache.Multiplexers().Pods().DeleteEvents().Out()
 		serviceEvents := cache.Multiplexers().Services().UpsertEvents().Out()
+		serviceDeletes := cache.Multiplexers().Services().DeleteEvents().Out()
 
 		multiplexerWg.Done()
 
@@ -466,6 +467,7 @@ func main() {
 			podEvents,
 			podDeletes,
 			serviceEvents,
+			serviceDeletes,
 		)
 	})
 
@@ -631,6 +633,7 @@ func main() {
 		return s.Run(
 			ctx,
 			sync.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().Services().UpsertEvents().In())),
+			sync.WithOnDelete(database.OnSuccessSendTo(cache.Multiplexers().Services().DeleteEvents().In())),
 		)
 	})
 
@@ -818,7 +821,8 @@ func dbHasSchema(db *kdatabase.DB, dbName string) (bool, error) {
 // SyncServicePods links services to the pods their selectors match. On each
 // service upsert and on each pod upsert that changes the pod's labels, it
 // replaces all links of that service or pod, which also removes links that no
-// longer match.
+// longer match. On each pod or service delete, it removes all links of that
+// pod or service.
 func SyncServicePods(
 	ctx context.Context,
 	db *kdatabase.DB,
@@ -827,6 +831,7 @@ func SyncServicePods(
 	podEvents <-chan database.Entity,
 	podDeletes <-chan any,
 	serviceEvents <-chan database.Entity,
+	serviceDeletes <-chan any,
 ) error {
 	if !kcache.WaitForCacheSync(ctx.Done(), serviceList.Informer().HasSynced, podList.Informer().HasSynced) {
 		return ctx.Err()
@@ -840,7 +845,7 @@ func SyncServicePods(
 
 	// Pod and service events share one loop so that their replacements cannot
 	// interleave and delete each other's links.
-	for podEvents != nil || podDeletes != nil || serviceEvents != nil {
+	for podEvents != nil || podDeletes != nil || serviceEvents != nil || serviceDeletes != nil {
 		select {
 		case entity, more := <-podEvents:
 			if !more {
@@ -902,6 +907,12 @@ func SyncServicePods(
 
 			podUuid := id.(types.UUID)
 
+			// A replacement racing the cascading delete, for example through a retry,
+			// can re-insert the pod's links after the cascading delete removed them.
+			if err := replaceServicePods(ctx, db, "pod_uuid", podUuid, nil); err != nil {
+				return err
+			}
+
 			delete(replacedPodLabels, podUuid)
 		case entity, more := <-serviceEvents:
 			if !more {
@@ -940,6 +951,17 @@ func SyncServicePods(
 			}
 
 			if err := replaceServicePods(ctx, db, "service_uuid", service.Uuid, servicePods); err != nil {
+				return err
+			}
+		case id, more := <-serviceDeletes:
+			if !more {
+				serviceDeletes = nil
+				continue
+			}
+
+			// A pod replacement that listed the service before it left the cache
+			// can re-insert its links after the cascading delete removed them.
+			if err := replaceServicePods(ctx, db, "service_uuid", id.(types.UUID), nil); err != nil {
 				return err
 			}
 		case <-ctx.Done():
