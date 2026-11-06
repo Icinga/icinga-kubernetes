@@ -1,7 +1,6 @@
 package schema
 
 import (
-	"database/sql"
 	"fmt"
 	"strings"
 	"time"
@@ -29,10 +28,10 @@ type Pod struct {
 	Phase             string
 	IcingaState       IcingaState
 	IcingaStateReason string
-	CpuLimits         sql.NullInt64
-	CpuRequests       sql.NullInt64
-	MemoryLimits      sql.NullInt64
-	MemoryRequests    sql.NullInt64
+	CpuLimits         types.Int
+	CpuRequests       types.Int
+	MemoryLimits      types.Int
+	MemoryRequests    types.Int
 	Reason            types.String
 	Message           types.String
 	Qos               types.String
@@ -159,23 +158,19 @@ func (p *Pod) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 
 	for _, container := range pod.Spec.Containers {
 		if !container.Resources.Limits.Cpu().IsZero() {
-			p.CpuLimits.Int64 += container.Resources.Limits.Cpu().MilliValue()
-			p.CpuLimits.Valid = true
+			p.CpuLimits = types.MakeInt(p.CpuLimits.Int64 + container.Resources.Limits.Cpu().MilliValue())
 		}
 
 		if !container.Resources.Requests.Cpu().IsZero() {
-			p.CpuRequests.Int64 += container.Resources.Requests.Cpu().MilliValue()
-			p.CpuRequests.Valid = true
+			p.CpuRequests = types.MakeInt(p.CpuRequests.Int64 + container.Resources.Requests.Cpu().MilliValue())
 		}
 
 		if !container.Resources.Limits.Memory().IsZero() {
-			p.MemoryLimits.Int64 += container.Resources.Limits.Memory().MilliValue()
-			p.MemoryLimits.Valid = true
+			p.MemoryLimits = types.MakeInt(p.MemoryLimits.Int64 + container.Resources.Limits.Memory().MilliValue())
 		}
 
 		if !container.Resources.Requests.Memory().IsZero() {
-			p.MemoryRequests.Int64 += container.Resources.Requests.Memory().MilliValue()
-			p.MemoryRequests.Valid = true
+			p.MemoryRequests = types.MakeInt(p.MemoryRequests.Int64 + container.Resources.Requests.Memory().MilliValue())
 		}
 	}
 
@@ -184,23 +179,19 @@ func (p *Pod) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		// Init container must complete successfully before the next one starts,
 		// so we don't have to sum their resources.
 		if !container.Resources.Limits.Cpu().IsZero() {
-			p.CpuLimits.Int64 = MaxInt(p.CpuLimits.Int64, container.Resources.Limits.Cpu().MilliValue())
-			p.CpuLimits.Valid = true
+			p.CpuLimits = types.MakeInt(MaxInt(p.CpuLimits.Int64, container.Resources.Limits.Cpu().MilliValue()))
 		}
 
 		if !container.Resources.Requests.Cpu().IsZero() {
-			p.CpuRequests.Int64 = MaxInt(p.CpuRequests.Int64, container.Resources.Requests.Cpu().MilliValue())
-			p.CpuRequests.Valid = true
+			p.CpuRequests = types.MakeInt(MaxInt(p.CpuRequests.Int64, container.Resources.Requests.Cpu().MilliValue()))
 		}
 
 		if !container.Resources.Limits.Memory().IsZero() {
-			p.MemoryLimits.Int64 = MaxInt(p.MemoryLimits.Int64, container.Resources.Limits.Memory().MilliValue())
-			p.MemoryLimits.Valid = true
+			p.MemoryLimits = types.MakeInt(MaxInt(p.MemoryLimits.Int64, container.Resources.Limits.Memory().MilliValue()))
 		}
 
 		if !container.Resources.Requests.Memory().IsZero() {
-			p.MemoryRequests.Int64 = MaxInt(p.MemoryRequests.Int64, container.Resources.Requests.Memory().MilliValue())
-			p.MemoryRequests.Valid = true
+			p.MemoryRequests = types.MakeInt(MaxInt(p.MemoryRequests.Int64, container.Resources.Requests.Memory().MilliValue()))
 		}
 	}
 

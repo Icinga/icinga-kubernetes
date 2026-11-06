@@ -1,7 +1,6 @@
 package schema
 
 import (
-	"database/sql"
 	"fmt"
 	"strings"
 	"time"
@@ -16,7 +15,7 @@ type CronJob struct {
 	Meta
 	Schedule                   string
 	Timezone                   types.String
-	StartingDeadlineSeconds    sql.NullInt64
+	StartingDeadlineSeconds    types.Int
 	ConcurrencyPolicy          string
 	Suspend                    types.Bool
 	SuccessfulJobsHistoryLimit int32
@@ -46,8 +45,7 @@ func (c *CronJob) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		c.Timezone = types.MakeString(*cronJob.Spec.TimeZone)
 	}
 	if cronJob.Spec.StartingDeadlineSeconds != nil {
-		c.StartingDeadlineSeconds.Int64 = *cronJob.Spec.StartingDeadlineSeconds
-		c.StartingDeadlineSeconds.Valid = true
+		c.StartingDeadlineSeconds = types.MakeInt(*cronJob.Spec.StartingDeadlineSeconds)
 	}
 	c.ConcurrencyPolicy = string(cronJob.Spec.ConcurrencyPolicy)
 	// It is safe to use the pointer directly here,

@@ -19,7 +19,7 @@ type Job struct {
 	Meta
 	Parallelism             sql.NullInt32
 	Completions             sql.NullInt32
-	ActiveDeadlineSeconds   sql.NullInt64
+	ActiveDeadlineSeconds   types.Int
 	BackoffLimit            sql.NullInt32
 	TtlSecondsAfterFinished sql.NullInt32
 	CompletionMode          types.String
@@ -91,10 +91,9 @@ func (j *Job) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		completions.Int32 = *job.Spec.Completions
 		completions.Valid = true
 	}
-	var activeDeadlineSeconds sql.NullInt64
+	var activeDeadlineSeconds types.Int
 	if job.Spec.ActiveDeadlineSeconds != nil {
-		activeDeadlineSeconds.Int64 = *job.Spec.ActiveDeadlineSeconds
-		activeDeadlineSeconds.Valid = true
+		activeDeadlineSeconds = types.MakeInt(*job.Spec.ActiveDeadlineSeconds)
 	}
 	var backoffLimit sql.NullInt32
 	if job.Spec.BackoffLimit != nil {

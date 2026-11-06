@@ -1,7 +1,6 @@
 package schema
 
 import (
-	"database/sql"
 	"strings"
 
 	"github.com/icinga/icinga-go-library/database"
@@ -37,8 +36,8 @@ type Pvc struct {
 	Meta
 	DesiredAccessModes Bitmask[kpersistentVolumeAccessModesSize]
 	ActualAccessModes  Bitmask[kpersistentVolumeAccessModesSize]
-	MinimumCapacity    sql.NullInt64
-	ActualCapacity     sql.NullInt64
+	MinimumCapacity    types.Int
+	ActualCapacity     types.Int
 	Phase              string
 	VolumeName         types.String
 	VolumeMode         string
@@ -77,16 +76,10 @@ func (p *Pvc) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	p.DesiredAccessModes = persistentVolumeAccessModes.Bitmask(pvc.Spec.AccessModes...)
 	p.ActualAccessModes = persistentVolumeAccessModes.Bitmask(pvc.Status.AccessModes...)
 	if storageRequest, ok := pvc.Spec.Resources.Requests[kcorev1.ResourceStorage]; ok {
-		p.MinimumCapacity = sql.NullInt64{
-			Int64: storageRequest.MilliValue(),
-			Valid: true,
-		}
+		p.MinimumCapacity = types.MakeInt(storageRequest.MilliValue())
 	}
 	if actualStorage, ok := pvc.Status.Capacity[kcorev1.ResourceStorage]; ok {
-		p.ActualCapacity = sql.NullInt64{
-			Int64: actualStorage.MilliValue(),
-			Valid: true,
-		}
+		p.ActualCapacity = types.MakeInt(actualStorage.MilliValue())
 	}
 	p.Phase = string(pvc.Status.Phase)
 	p.VolumeName = types.MakeString(pvc.Spec.VolumeName, types.TransformEmptyStringToNull)
