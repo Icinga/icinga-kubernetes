@@ -1,7 +1,6 @@
 package schema
 
 import (
-	"database/sql"
 	"strings"
 
 	"github.com/icinga/icinga-go-library/database"
@@ -26,7 +25,7 @@ type Service struct {
 	SessionAffinity               string
 	ExternalName                  types.String
 	ExternalTrafficPolicy         types.String
-	HealthCheckNodePort           sql.NullInt32
+	HealthCheckNodePort           types.Int
 	PublishNotReadyAddresses      types.Bool
 	IpFamilies                    types.String
 	IpFamilyPolicy                types.String
@@ -177,10 +176,7 @@ func (s *Service) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	// TODO(el): Support LoadBalancerSourceRanges?
 	s.ExternalName = types.MakeString(service.Spec.ExternalName, types.TransformEmptyStringToNull)
 	s.ExternalTrafficPolicy = types.MakeString(string(service.Spec.ExternalTrafficPolicy), types.TransformEmptyStringToNull)
-	s.HealthCheckNodePort = sql.NullInt32{
-		Int32: service.Spec.HealthCheckNodePort,
-		Valid: service.Spec.HealthCheckNodePort != 0,
-	}
+	s.HealthCheckNodePort = types.MakeInt(int64(service.Spec.HealthCheckNodePort), types.TransformZeroIntToNull)
 	s.PublishNotReadyAddresses = types.MakeBool(service.Spec.PublishNotReadyAddresses)
 	// TODO(el): Support SessionAffinityConfig?
 	var ipv4 bool
