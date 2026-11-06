@@ -447,8 +447,23 @@ func main() {
 
 	factory := informers.NewSharedInformerFactory(clientset, 0)
 
+	multiplexerWg := stdsync.WaitGroup{}
+
+	multiplexerWg.Add(1)
 	g.Go(func() error {
-		return SyncServicePods(ctx, db, factory.Core().V1().Services(), factory.Core().V1().Pods())
+		podEvents := cache.Multiplexers().Pods().UpsertEvents().Out()
+		serviceEvents := cache.Multiplexers().Services().UpsertEvents().Out()
+
+		multiplexerWg.Done()
+
+		return SyncServicePods(
+			ctx,
+			db,
+			factory.Core().V1().Services(),
+			factory.Core().V1().Pods(),
+			podEvents,
+			serviceEvents,
+		)
 	})
 
 	if err := daemon.SyncPrometheusConfig(ctx, db.DB, &cfg.Prometheus, clusterInstance.Uuid); err != nil {
@@ -494,9 +509,7 @@ func main() {
 		return s.Run(ctx)
 	})
 
-	wg := stdsync.WaitGroup{}
-
-	wg.Add(1)
+	multiplexerWg.Add(1)
 	g.Go(func() error {
 		s := sync.NewSync(db, factory.Core().V1().Nodes().Informer(), logs.GetChildLogger("nodes"), schema.NewNode)
 
@@ -509,12 +522,12 @@ func main() {
 			)
 		}
 
-		wg.Done()
+		multiplexerWg.Done()
 
 		return s.Run(ctx, forwardForNotifications...)
 	})
 
-	wg.Add(1)
+	multiplexerWg.Add(1)
 	g.Go(func() error {
 		schema.SyncContainers(
 			ctx,
@@ -527,7 +540,7 @@ func main() {
 		f := schema.NewPodFactory(clientset)
 		s := sync.NewSync(db, factory.Core().V1().Pods().Informer(), logs.GetChildLogger("pods"), f.New)
 
-		wg.Done()
+		multiplexerWg.Done()
 
 		return s.Run(
 			ctx,
@@ -536,7 +549,7 @@ func main() {
 		)
 	})
 
-	wg.Add(1)
+	multiplexerWg.Add(1)
 	g.Go(func() error {
 		s := sync.NewSync(db, factory.Apps().V1().Deployments().Informer(), logs.GetChildLogger("deployments"), schema.NewDeployment)
 
@@ -549,12 +562,12 @@ func main() {
 			)
 		}
 
-		wg.Done()
+		multiplexerWg.Done()
 
 		return s.Run(ctx, forwardForNotifications...)
 	})
 
-	wg.Add(1)
+	multiplexerWg.Add(1)
 	g.Go(func() error {
 		s := sync.NewSync(db, factory.Apps().V1().DaemonSets().Informer(), logs.GetChildLogger("daemon-sets"), schema.NewDaemonSet)
 
@@ -567,12 +580,12 @@ func main() {
 			)
 		}
 
-		wg.Done()
+		multiplexerWg.Done()
 
 		return s.Run(ctx, forwardForNotifications...)
 	})
 
-	wg.Add(1)
+	multiplexerWg.Add(1)
 	g.Go(func() error {
 		s := sync.NewSync(db, factory.Apps().V1().ReplicaSets().Informer(), logs.GetChildLogger("replica-sets"), schema.NewReplicaSet)
 
@@ -585,12 +598,12 @@ func main() {
 			)
 		}
 
-		wg.Done()
+		multiplexerWg.Done()
 
 		return s.Run(ctx, forwardForNotifications...)
 	})
 
-	wg.Add(1)
+	multiplexerWg.Add(1)
 	g.Go(func() error {
 		s := sync.NewSync(db, factory.Apps().V1().StatefulSets().Informer(), logs.GetChildLogger("stateful-sets"), schema.NewStatefulSet)
 
@@ -603,7 +616,7 @@ func main() {
 			)
 		}
 
-		wg.Done()
+		multiplexerWg.Done()
 
 		return s.Run(ctx, forwardForNotifications...)
 	})
@@ -672,7 +685,7 @@ func main() {
 	})
 
 	g.Go(func() error {
-		wg.Wait()
+		multiplexerWg.Wait()
 
 		logger.Debug("Starting multiplexers")
 
@@ -799,7 +812,14 @@ func dbHasSchema(db *kdatabase.DB, dbName string) (bool, error) {
 	return rows.Next(), rows.Err()
 }
 
-func SyncServicePods(ctx context.Context, db *kdatabase.DB, serviceList corev1.ServiceInformer, podList corev1.PodInformer) error {
+func SyncServicePods(
+	ctx context.Context,
+	db *kdatabase.DB,
+	serviceList corev1.ServiceInformer,
+	podList corev1.PodInformer,
+	podEvents <-chan database.Entity,
+	serviceEvents <-chan database.Entity,
+) error {
 	servicePods := make(chan database.Entity)
 
 	g, ctx := errgroup.WithContext(ctx)
@@ -808,16 +828,13 @@ func SyncServicePods(ctx context.Context, db *kdatabase.DB, serviceList corev1.S
 	})
 
 	g.Go(func() error {
-		// Out() panics once the multiplexer has started, so subscribe before waiting for the cache.
-		ch := cache.Multiplexers().Pods().UpsertEvents().Out()
-
 		if !kcache.WaitForCacheSync(ctx.Done(), serviceList.Informer().HasSynced) {
 			return ctx.Err()
 		}
 
 		for {
 			select {
-			case pod, more := <-ch:
+			case pod, more := <-podEvents:
 				if !more {
 					return nil
 				}
@@ -861,16 +878,13 @@ func SyncServicePods(ctx context.Context, db *kdatabase.DB, serviceList corev1.S
 	})
 
 	g.Go(func() error {
-		// Out() panics once the multiplexer has started, so subscribe before waiting for the cache.
-		ch := cache.Multiplexers().Services().UpsertEvents().Out()
-
 		if !kcache.WaitForCacheSync(ctx.Done(), podList.Informer().HasSynced) {
 			return ctx.Err()
 		}
 
 		for {
 			select {
-			case service, more := <-ch:
+			case service, more := <-serviceEvents:
 				if !more {
 					return nil
 				}
