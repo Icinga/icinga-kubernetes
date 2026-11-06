@@ -181,10 +181,7 @@ func (s *Service) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		Int32: service.Spec.HealthCheckNodePort,
 		Valid: service.Spec.HealthCheckNodePort != 0,
 	}
-	s.PublishNotReadyAddresses = types.Bool{
-		Bool:  service.Spec.PublishNotReadyAddresses,
-		Valid: true,
-	}
+	s.PublishNotReadyAddresses = types.MakeBool(service.Spec.PublishNotReadyAddresses)
 	// TODO(el): Support SessionAffinityConfig?
 	var ipv4 bool
 	var ipv6 bool
@@ -212,10 +209,7 @@ func (s *Service) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	if service.Spec.AllocateLoadBalancerNodePorts != nil {
 		allocateLoadBalancerNodePorts = *service.Spec.AllocateLoadBalancerNodePorts
 	}
-	s.AllocateLoadBalancerNodePorts = types.Bool{
-		Bool:  allocateLoadBalancerNodePorts,
-		Valid: true,
-	}
+	s.AllocateLoadBalancerNodePorts = types.MakeBool(allocateLoadBalancerNodePorts)
 	s.LoadBalancerClass = NewNullableString(service.Spec.LoadBalancerClass)
 	var internalTrafficPolicy string
 	if service.Spec.InternalTrafficPolicy == nil {

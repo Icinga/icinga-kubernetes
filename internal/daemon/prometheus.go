@@ -18,7 +18,7 @@ import (
 )
 
 func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *metrics.PrometheusConfig, clusterUuid types.UUID) error {
-	_true := types.Bool{Bool: true, Valid: true}
+	_true := types.MakeBool(true)
 
 	if config.Url != "" {
 		toDb := []schema.Config{

@@ -29,10 +29,7 @@ func (c *ConfigMap) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	if configMap.Immutable != nil {
 		immutable = *configMap.Immutable
 	}
-	c.Immutable = types.Bool{
-		Bool:  immutable,
-		Valid: true,
-	}
+	c.Immutable = types.MakeBool(immutable)
 
 	for labelName, labelValue := range configMap.Labels {
 		labelUuid := NewUUID(c.Uuid, strings.ToLower(labelName+":"+labelValue))

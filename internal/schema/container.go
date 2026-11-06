@@ -100,10 +100,7 @@ func (c *ContainerCommon) Obtain(podUuid types.UUID, container kcorev1.Container
 			PodUuid:       c.PodUuid,
 			VolumeName:    mount.Name,
 			Path:          mount.MountPath,
-			ReadOnly: types.Bool{
-				Bool:  mount.ReadOnly,
-				Valid: true,
-			},
+			ReadOnly:      types.MakeBool(mount.ReadOnly),
 		}
 
 		if mount.SubPath != "" {
@@ -173,14 +170,8 @@ func (c *ContainerRestartable) Obtain(status kcorev1.ContainerStatus) {
 		started = *status.Started
 	}
 
-	c.Ready = types.Bool{
-		Bool:  status.Ready,
-		Valid: true,
-	}
-	c.Started = types.Bool{
-		Bool:  started,
-		Valid: true,
-	}
+	c.Ready = types.MakeBool(status.Ready)
+	c.Started = types.MakeBool(started)
 	c.RestartCount = status.RestartCount
 }
 

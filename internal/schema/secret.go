@@ -32,10 +32,7 @@ func (s *Secret) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	if secret.Immutable != nil {
 		immutable = *secret.Immutable
 	}
-	s.Immutable = types.Bool{
-		Bool:  immutable,
-		Valid: true,
-	}
+	s.Immutable = types.MakeBool(immutable)
 
 	for labelName, labelValue := range secret.Labels {
 		labelUuid := NewUUID(s.Uuid, strings.ToLower(labelName+":"+labelValue))

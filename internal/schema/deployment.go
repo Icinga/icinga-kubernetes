@@ -84,10 +84,7 @@ func (d *Deployment) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	// It is safe to use the pointer directly here,
 	// as Kubernetes sets it to 600s if no deadline is configured.
 	d.ProgressDeadlineSeconds = *deployment.Spec.ProgressDeadlineSeconds
-	d.Paused = types.Bool{
-		Bool:  deployment.Spec.Paused,
-		Valid: true,
-	}
+	d.Paused = types.MakeBool(deployment.Spec.Paused)
 	// It is safe to use the pointer directly here,
 	// as Kubernetes sets it to 1 if no replicas are configured.
 	d.DesiredReplicas = *deployment.Spec.Replicas
@@ -119,19 +116,13 @@ func (d *Deployment) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			controller = *ownerReference.Controller
 		}
 		d.Owners = append(d.Owners, DeploymentOwner{
-			DeploymentUuid: d.Uuid,
-			OwnerUuid:      EnsureUUID(ownerReference.UID),
-			Kind:           strcase.Snake(ownerReference.Kind),
-			Name:           ownerReference.Name,
-			Uid:            ownerReference.UID,
-			BlockOwnerDeletion: types.Bool{
-				Bool:  blockOwnerDeletion,
-				Valid: true,
-			},
-			Controller: types.Bool{
-				Bool:  controller,
-				Valid: true,
-			},
+			DeploymentUuid:     d.Uuid,
+			OwnerUuid:          EnsureUUID(ownerReference.UID),
+			Kind:               strcase.Snake(ownerReference.Kind),
+			Name:               ownerReference.Name,
+			Uid:                ownerReference.UID,
+			BlockOwnerDeletion: types.MakeBool(blockOwnerDeletion),
+			Controller:         types.MakeBool(controller),
 		})
 	}
 

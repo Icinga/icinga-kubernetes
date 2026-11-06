@@ -108,8 +108,7 @@ func (j *Job) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	}
 	var suspend types.Bool
 	if job.Spec.Suspend != nil {
-		suspend.Bool = *job.Spec.Suspend
-		suspend.Valid = true
+		suspend = types.MakeBool(*job.Spec.Suspend)
 	}
 	var completionMode sql.NullString
 	if job.Spec.CompletionMode != nil {
@@ -180,19 +179,13 @@ func (j *Job) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			controller = *ownerReference.Controller
 		}
 		j.Owners = append(j.Owners, JobOwner{
-			JobUuid:   j.Uuid,
-			OwnerUuid: EnsureUUID(ownerReference.UID),
-			Kind:      strcase.Snake(ownerReference.Kind),
-			Name:      ownerReference.Name,
-			Uid:       ownerReference.UID,
-			BlockOwnerDeletion: types.Bool{
-				Bool:  blockOwnerDeletion,
-				Valid: true,
-			},
-			Controller: types.Bool{
-				Bool:  controller,
-				Valid: true,
-			},
+			JobUuid:            j.Uuid,
+			OwnerUuid:          EnsureUUID(ownerReference.UID),
+			Kind:               strcase.Snake(ownerReference.Kind),
+			Name:               ownerReference.Name,
+			Uid:                ownerReference.UID,
+			BlockOwnerDeletion: types.MakeBool(blockOwnerDeletion),
+			Controller:         types.MakeBool(controller),
 		})
 	}
 

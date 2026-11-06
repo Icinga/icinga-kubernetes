@@ -107,19 +107,13 @@ func (d *DaemonSet) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			controller = *ownerReference.Controller
 		}
 		d.Owners = append(d.Owners, DaemonSetOwner{
-			DaemonSetUuid: d.Uuid,
-			OwnerUuid:     EnsureUUID(ownerReference.UID),
-			Kind:          strcase.Snake(ownerReference.Kind),
-			Name:          ownerReference.Name,
-			Uid:           ownerReference.UID,
-			BlockOwnerDeletion: types.Bool{
-				Bool:  blockOwnerDeletion,
-				Valid: true,
-			},
-			Controller: types.Bool{
-				Bool:  controller,
-				Valid: true,
-			},
+			DaemonSetUuid:      d.Uuid,
+			OwnerUuid:          EnsureUUID(ownerReference.UID),
+			Kind:               strcase.Snake(ownerReference.Kind),
+			Name:               ownerReference.Name,
+			Uid:                ownerReference.UID,
+			BlockOwnerDeletion: types.MakeBool(blockOwnerDeletion),
+			Controller:         types.MakeBool(controller),
 		})
 	}
 

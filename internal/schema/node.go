@@ -91,14 +91,8 @@ func (n *Node) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		}
 		n.NumIps = knet.RangeSize(cidr) - 2
 	}
-	n.Unschedulable = types.Bool{
-		Bool:  node.Spec.Unschedulable,
-		Valid: true,
-	}
-	n.Ready = types.Bool{
-		Bool:  getNodeConditionStatus(node, kcorev1.NodeReady),
-		Valid: true,
-	}
+	n.Unschedulable = types.MakeBool(node.Spec.Unschedulable)
+	n.Ready = types.MakeBool(getNodeConditionStatus(node, kcorev1.NodeReady))
 	n.CpuCapacity = node.Status.Capacity.Cpu().MilliValue()
 	n.CpuAllocatable = node.Status.Allocatable.Cpu().MilliValue()
 	n.MemoryCapacity = node.Status.Capacity.Memory().MilliValue()
@@ -152,10 +146,7 @@ func (n *Node) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			NodeUuid:   n.Uuid,
 			Name:       volume.Name,
 			DevicePath: volume.DevicePath,
-			Mounted: types.Bool{
-				Bool:  mounted,
-				Valid: true,
-			},
+			Mounted:    types.MakeBool(mounted),
 		})
 	}
 

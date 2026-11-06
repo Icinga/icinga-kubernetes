@@ -50,8 +50,7 @@ func (c *CronJob) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	c.ConcurrencyPolicy = string(cronJob.Spec.ConcurrencyPolicy)
 	// It is safe to use the pointer directly here,
 	// as Kubernetes sets it to false by default.
-	c.Suspend.Bool = *cronJob.Spec.Suspend
-	c.Suspend.Valid = true
+	c.Suspend = types.MakeBool(*cronJob.Spec.Suspend)
 	// It is safe to use the pointer directly here,
 	// as Kubernetes sets it to 3 if not configured.
 	c.SuccessfulJobsHistoryLimit = *cronJob.Spec.SuccessfulJobsHistoryLimit
