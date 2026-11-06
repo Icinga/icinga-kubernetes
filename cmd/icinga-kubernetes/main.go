@@ -40,6 +40,7 @@ import (
 	"github.com/spf13/pflag"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
+	kcorev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -789,7 +790,7 @@ func SyncServicePods(
 
 			var servicePods []schema.ServicePod
 			for _, service := range services {
-				if len(service.Spec.Selector) == 0 {
+				if !isSelectingService(service) {
 					continue
 				}
 
@@ -842,8 +843,9 @@ func SyncServicePods(
 			}
 
 			var servicePods []schema.ServicePod
-			// A service without selectors selects no pods, but its old links still have to go.
-			if len(k8sService.Spec.Selector) > 0 {
+			// A service without selectors or of type ExternalName selects no pods,
+			// but its old links still have to go.
+			if isSelectingService(k8sService) {
 				pods, err := podList.Lister().Pods(service.Namespace).List(labels.ValidatedSetSelector(k8sService.Spec.Selector))
 				if err != nil {
 					return err
@@ -909,6 +911,10 @@ func replaceServicePods(
 		backoff.DefaultBackoff,
 		db.GetDefaultRetrySettings(),
 	)
+}
+
+func isSelectingService(service *kcorev1.Service) bool {
+	return len(service.Spec.Selector) > 0 && service.Spec.Type != kcorev1.ServiceTypeExternalName
 }
 
 // uuidSliceValue is a pflag.Value that collects UUIDs from a flag that may be
