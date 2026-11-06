@@ -196,17 +196,14 @@ func main() {
 		}
 
 		instance := schema.Instance{
-			Uuid:                types.MakeUUID(instanceId),
-			ClusterUuid:         clusterInstance.Uuid,
-			Version:             daemon.Version.Version,
-			KubernetesVersion:   schema.NewNullableString(kubernetesVersion),
-			KubernetesHeartbeat: types.UnixMilli(kubernetesHeartbeat),
-			KubernetesApiReachable: types.Bool{
-				Bool:  err == nil,
-				Valid: true,
-			},
-			Message:   schema.NewNullableString(err),
-			Heartbeat: types.UnixMilli(tick.Time),
+			Uuid:                   types.MakeUUID(instanceId),
+			ClusterUuid:            clusterInstance.Uuid,
+			Version:                daemon.Version.Version,
+			KubernetesVersion:      schema.NewNullableString(kubernetesVersion),
+			KubernetesHeartbeat:    types.UnixMilli(kubernetesHeartbeat),
+			KubernetesApiReachable: types.MakeBool(err == nil),
+			Message:                schema.NewNullableString(err),
+			Heartbeat:              types.UnixMilli(tick.Time),
 		}
 
 		stmt, _ := db.BuildUpsertStmt(instance)

@@ -87,16 +87,13 @@ func (e *EndpointSlice) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		}
 		var ready, serving, terminating types.Bool
 		if endpoint.Conditions.Ready != nil {
-			ready.Bool = *endpoint.Conditions.Ready
-			ready.Valid = true
+			ready = types.MakeBool(*endpoint.Conditions.Ready)
 		}
 		if endpoint.Conditions.Serving != nil {
-			serving.Bool = *endpoint.Conditions.Serving
-			serving.Valid = true
+			serving = types.MakeBool(*endpoint.Conditions.Serving)
 		}
 		if endpoint.Conditions.Terminating != nil {
-			terminating.Bool = *endpoint.Conditions.Terminating
-			terminating.Valid = true
+			terminating = types.MakeBool(*endpoint.Conditions.Terminating)
 		}
 		for _, endpointPort := range endpointSlice.Ports {
 			var name, protocol, appProtocol string

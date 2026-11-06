@@ -105,19 +105,13 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			controller = *ownerReference.Controller
 		}
 		r.Owners = append(r.Owners, ReplicaSetOwner{
-			ReplicaSetUuid: r.Uuid,
-			OwnerUuid:      EnsureUUID(ownerReference.UID),
-			Kind:           strcase.Snake(ownerReference.Kind),
-			Name:           ownerReference.Name,
-			Uid:            ownerReference.UID,
-			BlockOwnerDeletion: types.Bool{
-				Bool:  blockOwnerDeletion,
-				Valid: true,
-			},
-			Controller: types.Bool{
-				Bool:  controller,
-				Valid: true,
-			},
+			ReplicaSetUuid:     r.Uuid,
+			OwnerUuid:          EnsureUUID(ownerReference.UID),
+			Kind:               strcase.Snake(ownerReference.Kind),
+			Name:               ownerReference.Name,
+			Uid:                ownerReference.UID,
+			BlockOwnerDeletion: types.MakeBool(blockOwnerDeletion),
+			Controller:         types.MakeBool(controller),
 		})
 	}
 

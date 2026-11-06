@@ -232,19 +232,13 @@ func (p *Pod) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			controller = *ownerReference.Controller
 		}
 		p.Owners = append(p.Owners, PodOwner{
-			PodUuid:   p.Uuid,
-			OwnerUuid: EnsureUUID(ownerReference.UID),
-			Kind:      strcase.Snake(ownerReference.Kind),
-			Name:      ownerReference.Name,
-			Uid:       ownerReference.UID,
-			BlockOwnerDeletion: types.Bool{
-				Bool:  blockOwnerDeletion,
-				Valid: true,
-			},
-			Controller: types.Bool{
-				Bool:  controller,
-				Valid: true,
-			},
+			PodUuid:            p.Uuid,
+			OwnerUuid:          EnsureUUID(ownerReference.UID),
+			Kind:               strcase.Snake(ownerReference.Kind),
+			Name:               ownerReference.Name,
+			Uid:                ownerReference.UID,
+			BlockOwnerDeletion: types.MakeBool(blockOwnerDeletion),
+			Controller:         types.MakeBool(controller),
 		})
 	}
 
@@ -254,10 +248,7 @@ func (p *Pod) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 				PodUuid:    p.Uuid,
 				VolumeName: volume.Name,
 				ClaimName:  volume.PersistentVolumeClaim.ClaimName,
-				ReadOnly: types.Bool{
-					Bool:  volume.PersistentVolumeClaim.ReadOnly,
-					Valid: true,
-				},
+				ReadOnly:   types.MakeBool(volume.PersistentVolumeClaim.ReadOnly),
 			})
 		} else {
 			t, source, err := MarshalFirstNonNilStructFieldToJSON(volume.VolumeSource)
