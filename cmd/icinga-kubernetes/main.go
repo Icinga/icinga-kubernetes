@@ -353,8 +353,23 @@ func main() {
 
 	factory := informers.NewSharedInformerFactory(clientset, 0)
 
+	wg := stdsync.WaitGroup{}
+
+	wg.Add(1)
 	g.Go(func() error {
-		return SyncServicePods(ctx, db, factory.Core().V1().Services(), factory.Core().V1().Pods())
+		podEvents := cache.Multiplexers().Pods().UpsertEvents().Out()
+		serviceEvents := cache.Multiplexers().Services().UpsertEvents().Out()
+
+		wg.Done()
+
+		return SyncServicePods(
+			ctx,
+			db,
+			factory.Core().V1().Services(),
+			factory.Core().V1().Pods(),
+			podEvents,
+			serviceEvents,
+		)
 	})
 
 	if err := daemon.SyncPrometheusConfig(ctx, db.DB, &cfg.Prometheus, clusterInstance.Uuid); err != nil {
@@ -399,8 +414,6 @@ func main() {
 
 		return s.Run(ctx)
 	})
-
-	wg := stdsync.WaitGroup{}
 
 	wg.Add(1)
 	g.Go(func() error {
@@ -705,7 +718,14 @@ func dbHasSchema(db *kdatabase.DB, dbName string) (bool, error) {
 	return rows.Next(), rows.Err()
 }
 
-func SyncServicePods(ctx context.Context, db *kdatabase.DB, serviceList corev1.ServiceInformer, podList corev1.PodInformer) error {
+func SyncServicePods(
+	ctx context.Context,
+	db *kdatabase.DB,
+	serviceList corev1.ServiceInformer,
+	podList corev1.PodInformer,
+	podEvents <-chan database.Entity,
+	serviceEvents <-chan database.Entity,
+) error {
 	servicePods := make(chan database.Entity)
 
 	g, ctx := errgroup.WithContext(ctx)
@@ -714,16 +734,13 @@ func SyncServicePods(ctx context.Context, db *kdatabase.DB, serviceList corev1.S
 	})
 
 	g.Go(func() error {
-		// Out() panics once the multiplexer has started, so subscribe before waiting for the cache.
-		ch := cache.Multiplexers().Pods().UpsertEvents().Out()
-
 		if !kcache.WaitForCacheSync(ctx.Done(), serviceList.Informer().HasSynced) {
 			return ctx.Err()
 		}
 
 		for {
 			select {
-			case pod, more := <-ch:
+			case pod, more := <-podEvents:
 				if !more {
 					return nil
 				}
@@ -767,16 +784,13 @@ func SyncServicePods(ctx context.Context, db *kdatabase.DB, serviceList corev1.S
 	})
 
 	g.Go(func() error {
-		// Out() panics once the multiplexer has started, so subscribe before waiting for the cache.
-		ch := cache.Multiplexers().Services().UpsertEvents().Out()
-
 		if !kcache.WaitForCacheSync(ctx.Done(), podList.Informer().HasSynced) {
 			return ctx.Err()
 		}
 
 		for {
 			select {
-			case service, more := <-ch:
+			case service, more := <-serviceEvents:
 				if !more {
 					return nil
 				}
