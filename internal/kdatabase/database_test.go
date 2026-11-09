@@ -94,6 +94,80 @@ func TestUpsertStreamedCascadingWithRelations(t *testing.T) {
 	}
 }
 
+func TestUpsertStreamedCascadingReplacingRelations(t *testing.T) {
+	t.Parallel()
+
+	db, mock := newTestDB(t)
+
+	p1, p2 := uuid.New(), uuid.New()
+	l1, l2, l3, l4, n1 := uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()
+
+	parents := []database.Entity{
+		&testReplacingParent{testRow: testRow{Uuid: p1}, Labels: []testLabel{{Uuid: l1}, {Uuid: l2}}},
+		&testReplacingParent{testRow: testRow{Uuid: p2}, Notes: []testNote{{Uuid: n1}}},
+		&testReplacingParent{
+			testRow:      testRow{Uuid: p1},
+			Labels:       []testLabel{{Uuid: l3}},
+			PrimaryLabel: &testLabel{testRow{Uuid: l4}},
+		},
+	}
+
+	// The upsert splits on the second version of p1.
+	mock.ExpectExec(upsert("test_replacing_parent", 2)).WithArgs(p1, p2).WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectExec(upsert("test_replacing_parent", 1)).WithArgs(p1).WillReturnResult(sqlmock.NewResult(0, 1))
+	// Labels and PrimaryLabel share the table and are replaced together. Only
+	// the last version of p1 counts, and p2 has no labels left at all.
+	mock.ExpectBegin()
+	mock.ExpectExec(`DELETE FROM "test_label" WHERE "parent_uuid" IN (?, ?)`).WithArgs(p1, p2).WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectExec(upsert("test_label", 2)).WithArgs(l3, l4).WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectCommit()
+	// Notes are upserted as usual.
+	mock.ExpectExec(upsert("test_note", 1)).WithArgs(n1).WillReturnResult(sqlmock.NewResult(0, 1))
+
+	ctx, cancel := context.WithTimeout(t.Context(), testTimeout)
+	t.Cleanup(cancel)
+
+	if err := db.UpsertStreamedCascading(ctx, utils.ChanFromSlice(parents)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestUpsertStreamedCascadingRejectsReplacing(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		entity database.Entity
+	}{
+		{"rows with relations", &testInvalidParent{relations: []Relation{
+			HasMany([]*testChild(nil), WithForeignKey("parent_uuid"), WithReplaceOnUpsert()),
+		}}},
+		{"different foreign keys", &testInvalidParent{relations: []Relation{
+			HasMany([]testLabel(nil), WithForeignKey("parent_uuid"), WithReplaceOnUpsert()),
+			HasMany([]testLabel(nil), WithForeignKey("other_uuid"), WithReplaceOnUpsert()),
+		}}},
+		{"replaced and upserted", &testInvalidParent{relations: []Relation{
+			HasMany([]testLabel(nil), WithForeignKey("parent_uuid"), WithReplaceOnUpsert()),
+			HasMany([]testLabel(nil), WithForeignKey("parent_uuid")),
+		}}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			db, _ := newTestDB(t)
+
+			ctx, cancel := context.WithTimeout(t.Context(), testTimeout)
+			t.Cleanup(cancel)
+
+			if err := db.UpsertStreamedCascading(ctx, utils.ChanFromSlice([]database.Entity{tt.entity})); err == nil {
+				t.Error("got no error")
+			}
+		})
+	}
+}
+
 func TestUpsertStreamedCascadingWithNilCallback(t *testing.T) {
 	t.Parallel()
 
@@ -235,6 +309,35 @@ func (p *testParent) Relations() []Relation {
 		HasMany(p.Children, fk),
 		HasMany(p.Notes, fk, WithoutCascadeDelete()),
 	}
+}
+
+// testReplacingParent replaces its labels on upsert, two relations of which
+// share the table, and upserts its notes.
+type testReplacingParent struct {
+	testRow
+	Labels       []testLabel `db:"-"`
+	PrimaryLabel *testLabel  `db:"-"`
+	Notes        []testNote  `db:"-"`
+}
+
+func (p *testReplacingParent) Relations() []Relation {
+	fk := WithForeignKey("parent_uuid")
+
+	return []Relation{
+		HasMany(p.Labels, fk, WithReplaceOnUpsert()),
+		HasOne(p.PrimaryLabel, fk, WithReplaceOnUpsert()),
+		HasMany(p.Notes, fk),
+	}
+}
+
+// testInvalidParent has the given relations, which UpsertStreamedCascading rejects.
+type testInvalidParent struct {
+	testRow
+	relations []Relation
+}
+
+func (p *testInvalidParent) Relations() []Relation {
+	return p.relations
 }
 
 type testChild struct {
