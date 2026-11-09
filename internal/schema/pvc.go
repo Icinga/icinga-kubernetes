@@ -138,9 +138,9 @@ func (p *Pvc) Relations() []kdatabase.Relation {
 	fk := kdatabase.WithForeignKey("pvc_uuid")
 
 	return []kdatabase.Relation{
-		kdatabase.HasMany(p.Conditions, fk),
-		kdatabase.HasMany(p.Labels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(p.Annotations, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(p.Conditions, fk, kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(p.Labels, kdatabase.WithForeignKey("resource_uuid"), kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(p.Annotations, kdatabase.WithForeignKey("resource_uuid"), kdatabase.WithReplaceOnUpsert()),
 		kdatabase.HasMany(p.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

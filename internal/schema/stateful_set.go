@@ -218,10 +218,10 @@ func (s *StatefulSet) Relations() []kdatabase.Relation {
 	fk := kdatabase.WithForeignKey("stateful_set_uuid")
 
 	return []kdatabase.Relation{
-		kdatabase.HasMany(s.Conditions, fk),
-		kdatabase.HasMany(s.Owners, fk),
-		kdatabase.HasMany(s.Labels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(s.Annotations, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(s.Conditions, fk, kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(s.Owners, fk, kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(s.Labels, kdatabase.WithForeignKey("resource_uuid"), kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(s.Annotations, kdatabase.WithForeignKey("resource_uuid"), kdatabase.WithReplaceOnUpsert()),
 		kdatabase.HasMany(s.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

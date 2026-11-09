@@ -417,15 +417,15 @@ func (p *Pod) Relations() []kdatabase.Relation {
 	fk := kdatabase.WithForeignKey("pod_uuid")
 
 	return []kdatabase.Relation{
-		kdatabase.HasMany(p.Conditions, fk),
+		kdatabase.HasMany(p.Conditions, fk, kdatabase.WithReplaceOnUpsert()),
 		kdatabase.HasMany(p.Containers, kdatabase.WithoutCascadeDelete()),
 		kdatabase.HasMany(p.InitContainers, kdatabase.WithoutCascadeDelete()),
 		kdatabase.HasMany(p.SidecarContainers, kdatabase.WithoutCascadeDelete()),
-		kdatabase.HasMany(p.Owners, fk),
-		kdatabase.HasMany(p.Labels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(p.Annotations, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(p.Pvcs, fk),
-		kdatabase.HasMany(p.Volumes, fk),
+		kdatabase.HasMany(p.Owners, fk, kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(p.Labels, kdatabase.WithForeignKey("resource_uuid"), kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(p.Annotations, kdatabase.WithForeignKey("resource_uuid"), kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(p.Pvcs, fk, kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(p.Volumes, fk, kdatabase.WithReplaceOnUpsert()),
 		kdatabase.HasMany(p.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 
 		// Delete-only relations.

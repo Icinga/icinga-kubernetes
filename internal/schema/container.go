@@ -119,8 +119,8 @@ func (c *ContainerCommon) Relations() []kdatabase.Relation {
 	fk := kdatabase.WithForeignKey("container_uuid")
 
 	return []kdatabase.Relation{
-		kdatabase.HasMany(c.Devices, fk),
-		kdatabase.HasMany(c.Mounts, fk),
+		kdatabase.HasMany(c.Devices, fk, kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(c.Mounts, fk, kdatabase.WithReplaceOnUpsert()),
 
 		// Allow to automatically remove the logs when a container is deleted.
 		// Otherwise, we will have some dangling container logs in the database

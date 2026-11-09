@@ -83,9 +83,9 @@ func (n *Namespace) Relations() []kdatabase.Relation {
 	fk := kdatabase.WithForeignKey("namespace_uuid")
 
 	return []kdatabase.Relation{
-		kdatabase.HasMany(n.Conditions, fk),
-		kdatabase.HasMany(n.Labels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(n.Annotations, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(n.Conditions, fk, kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(n.Labels, kdatabase.WithForeignKey("resource_uuid"), kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(n.Annotations, kdatabase.WithForeignKey("resource_uuid"), kdatabase.WithReplaceOnUpsert()),
 		kdatabase.HasMany(n.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

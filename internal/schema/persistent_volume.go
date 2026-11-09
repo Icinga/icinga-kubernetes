@@ -109,9 +109,9 @@ func (p *PersistentVolume) Relations() []kdatabase.Relation {
 	fk := kdatabase.WithForeignKey("persistent_volume_uuid")
 
 	return []kdatabase.Relation{
-		kdatabase.HasOne(p.Claim, fk),
-		kdatabase.HasMany(p.Labels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(p.Annotations, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasOne(p.Claim, fk, kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(p.Labels, kdatabase.WithForeignKey("resource_uuid"), kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(p.Annotations, kdatabase.WithForeignKey("resource_uuid"), kdatabase.WithReplaceOnUpsert()),
 		kdatabase.HasMany(p.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

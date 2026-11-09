@@ -260,10 +260,10 @@ func (j *Job) Relations() []kdatabase.Relation {
 	fk := kdatabase.WithForeignKey("job_uuid")
 
 	return []kdatabase.Relation{
-		kdatabase.HasMany(j.Conditions, fk),
-		kdatabase.HasMany(j.Labels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(j.Annotations, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(j.Owners, fk),
+		kdatabase.HasMany(j.Conditions, fk, kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(j.Labels, kdatabase.WithForeignKey("resource_uuid"), kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(j.Annotations, kdatabase.WithForeignKey("resource_uuid"), kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(j.Owners, fk, kdatabase.WithReplaceOnUpsert()),
 		kdatabase.HasMany(j.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 	}
 }
