@@ -157,7 +157,7 @@ func (e *EndpointSlice) Relations() []kdatabase.Relation {
 
 	return []kdatabase.Relation{
 		kdatabase.HasMany(e.Endpoints, fk),
-		kdatabase.HasMany(e.Labels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(e.EndpointTargetRefs, fk),
+		kdatabase.HasMany(e.Labels, kdatabase.WithForeignKey("resource_uuid"), kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(e.EndpointTargetRefs, fk, kdatabase.WithReplaceOnUpsert()),
 	}
 }

@@ -127,8 +127,8 @@ func (c *CronJob) getIcingaState() (IcingaState, string) {
 
 func (c *CronJob) Relations() []kdatabase.Relation {
 	return []kdatabase.Relation{
-		kdatabase.HasMany(c.Labels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(c.Annotations, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(c.Labels, kdatabase.WithForeignKey("resource_uuid"), kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(c.Annotations, kdatabase.WithForeignKey("resource_uuid"), kdatabase.WithReplaceOnUpsert()),
 
 		// Delete-only relations.
 		kdatabase.HasMany([]Favorite(nil), kdatabase.WithForeignKey("resource_uuid")),

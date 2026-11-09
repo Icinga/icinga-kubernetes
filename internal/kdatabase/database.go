@@ -374,7 +374,7 @@ func (db *DB) replaceRows(ctx context.Context, rel Relation, ids []any, rows []d
 	return retry.WithBackoff(
 		ctx,
 		func(ctx context.Context) error {
-			return db.ExecTx(ctx, func(ctx context.Context, tx *sqlx.Tx) error {
+			return db.ExecTx(ctx, nil, func(ctx context.Context, tx *sqlx.Tx) error {
 				if _, err := tx.ExecContext(ctx, deleteStmt, args...); err != nil {
 					return database.CantPerformQuery(err, query)
 				}

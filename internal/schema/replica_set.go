@@ -200,10 +200,10 @@ func (r *ReplicaSet) Relations() []kdatabase.Relation {
 	fk := kdatabase.WithForeignKey("replica_set_uuid")
 
 	return []kdatabase.Relation{
-		kdatabase.HasMany(r.Conditions, fk),
-		kdatabase.HasMany(r.Owners, fk),
-		kdatabase.HasMany(r.Labels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(r.Annotations, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(r.Conditions, fk, kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(r.Owners, fk, kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(r.Labels, kdatabase.WithForeignKey("resource_uuid"), kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(r.Annotations, kdatabase.WithForeignKey("resource_uuid"), kdatabase.WithReplaceOnUpsert()),
 
 		// Delete-only relations.
 		kdatabase.HasMany([]Favorite(nil), kdatabase.WithForeignKey("resource_uuid")),

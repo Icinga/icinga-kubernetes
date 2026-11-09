@@ -265,10 +265,10 @@ func (n *Node) Relations() []kdatabase.Relation {
 	fk := kdatabase.WithForeignKey("node_uuid")
 
 	return []kdatabase.Relation{
-		kdatabase.HasMany(n.Conditions, fk),
-		kdatabase.HasMany(n.Volumes, fk),
-		kdatabase.HasMany(n.Labels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(n.Annotations, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(n.Conditions, fk, kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(n.Volumes, fk, kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(n.Labels, kdatabase.WithForeignKey("resource_uuid"), kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(n.Annotations, kdatabase.WithForeignKey("resource_uuid"), kdatabase.WithReplaceOnUpsert()),
 
 		// Delete-only relations.
 		kdatabase.HasMany([]Favorite(nil), kdatabase.WithForeignKey("resource_uuid")),
