@@ -12,7 +12,11 @@ type Relation interface {
 	SetForeignKey(fk string)
 	CascadeDelete() bool
 	WithoutCascadeDelete()
+	ReplaceOnUpsert() bool
+	WithReplaceOnUpsert()
 	StreamInto(context.Context, chan database.Entity) error
+	// Entities returns the related entities that StreamInto sends.
+	Entities() []database.Entity
 	TableName() string
 	// NewEntity returns a pointer to a new zero value of the related entity
 	// type, even if the related entities are pointers themselves.
@@ -45,9 +49,20 @@ func WithoutCascadeDelete() RelationOption {
 	}
 }
 
+// WithReplaceOnUpsert makes UpsertStreamedCascading replace all rows of the
+// relation that reference an upserted entity, which deletes the rows the entity
+// no longer has. Use it only for rows that the entity alone determines, as any
+// other row referencing the entity is deleted, too.
+func WithReplaceOnUpsert() RelationOption {
+	return func(r Relation) {
+		r.WithReplaceOnUpsert()
+	}
+}
+
 type relation[T database.Entity] struct {
 	foreignKey           string
 	withoutCascadeDelete bool
+	replaceOnUpsert      bool
 }
 
 func (r *relation[T]) ForeignKey() string {
@@ -64,6 +79,14 @@ func (r *relation[T]) CascadeDelete() bool {
 
 func (r *relation[T]) WithoutCascadeDelete() {
 	r.withoutCascadeDelete = true
+}
+
+func (r *relation[T]) ReplaceOnUpsert() bool {
+	return r.replaceOnUpsert
+}
+
+func (r *relation[T]) WithReplaceOnUpsert() {
+	r.replaceOnUpsert = true
 }
 
 func (r *relation[T]) TableName() string {
@@ -92,6 +115,15 @@ func HasMany[T database.Entity](entities []T, options ...RelationOption) Relatio
 	}
 
 	return r
+}
+
+func (r *hasMany[T]) Entities() []database.Entity {
+	entities := make([]database.Entity, 0, len(r.entities))
+	for _, entity := range r.entities {
+		entities = append(entities, entity)
+	}
+
+	return entities
 }
 
 func (r *hasMany[T]) StreamInto(ctx context.Context, ch chan database.Entity) error {
@@ -128,6 +160,14 @@ func HasOne[T comparableEntity](entity T, options ...RelationOption) Relation {
 	}
 
 	return r
+}
+
+func (r *hasOne[T]) Entities() []database.Entity {
+	if r.entity == Zero[T]() {
+		return nil
+	}
+
+	return []database.Entity{r.entity}
 }
 
 func (r *hasOne[T]) StreamInto(ctx context.Context, ch chan database.Entity) error {
