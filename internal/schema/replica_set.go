@@ -62,6 +62,9 @@ func (r ReplicaSetOwner) ID() database.ID {
 	return compoundId{id: r.ReplicaSetUuid.String() + r.OwnerUuid.String()}
 }
 
+// ownerRef implements the ownerReference interface.
+func (r ReplicaSetOwner) ownerRef() (string, string) { return r.Kind, r.Name }
+
 func NewReplicaSet() Resource {
 	return &ReplicaSet{}
 }

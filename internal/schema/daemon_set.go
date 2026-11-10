@@ -64,6 +64,9 @@ func (d DaemonSetOwner) ID() database.ID {
 	return compoundId{id: d.DaemonSetUuid.String() + d.OwnerUuid.String()}
 }
 
+// ownerRef implements the ownerReference interface.
+func (d DaemonSetOwner) ownerRef() (string, string) { return d.Kind, d.Name }
+
 func NewDaemonSet() Resource {
 	return &DaemonSet{}
 }

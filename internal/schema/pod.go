@@ -88,6 +88,9 @@ func (p PodOwner) ID() database.ID {
 	return compoundId{id: p.PodUuid.String() + p.OwnerUuid.String()}
 }
 
+// ownerRef implements the ownerReference interface.
+func (p PodOwner) ownerRef() (string, string) { return p.Kind, p.Name }
+
 type PodVolume struct {
 	kdatabase.EntityStub
 	PodUuid    types.UUID

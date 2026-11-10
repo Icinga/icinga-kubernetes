@@ -68,6 +68,9 @@ func (s StatefulSetOwner) ID() database.ID {
 	return compoundId{id: s.StatefulSetUuid.String() + s.OwnerUuid.String()}
 }
 
+// ownerRef implements the ownerReference interface.
+func (s StatefulSetOwner) ownerRef() (string, string) { return s.Kind, s.Name }
+
 func NewStatefulSet() Resource {
 	return &StatefulSet{}
 }

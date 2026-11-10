@@ -88,39 +88,16 @@ func LabelsToMap(labels []Label) map[string]string {
 	return labelMap
 }
 
-// Owner is the constraint satisfied by all owner reference schema types.
-type Owner interface {
-	PodOwner | DeploymentOwner | ReplicaSetOwner | DaemonSetOwner | StatefulSetOwner | JobOwner
+// ownerReference is an interface that defines a method for retrieving the kind and name of an owner reference.
+type ownerReference interface {
+	ownerRef() (kind, name string)
 }
 
 // OwnersToRelation converts a slice of owner structs to a slice of maps containing the kind and name of each owner.
-func OwnersToRelation[T Owner](owners []T) []map[string]string {
+func OwnersToRelation[T ownerReference](owners []T) []map[string]string {
 	ownerSlice := make([]map[string]string, len(owners))
 	for i, owner := range owners {
-		var kind, name string
-		switch o := any(owner).(type) {
-		case PodOwner:
-			kind = o.Kind
-			name = o.Name
-		case DeploymentOwner:
-			kind = o.Kind
-			name = o.Name
-		case ReplicaSetOwner:
-			kind = o.Kind
-			name = o.Name
-		case DaemonSetOwner:
-			kind = o.Kind
-			name = o.Name
-		case StatefulSetOwner:
-			kind = o.Kind
-			name = o.Name
-		case JobOwner:
-			kind = o.Kind
-			name = o.Name
-		default:
-			panic("unreachable")
-		}
-
+		kind, name := owner.ownerRef()
 		ownerSlice[i] = map[string]string{
 			"kind": kind,
 			"name": name,

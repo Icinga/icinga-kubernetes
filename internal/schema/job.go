@@ -69,6 +69,9 @@ func (j JobOwner) ID() database.ID {
 	return compoundId{id: j.JobUuid.String() + j.OwnerUuid.String()}
 }
 
+// ownerRef implements the ownerReference interface.
+func (j JobOwner) ownerRef() (string, string) { return j.Kind, j.Name }
+
 func NewJob() Resource {
 	return &Job{}
 }

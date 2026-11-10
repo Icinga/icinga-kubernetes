@@ -67,6 +67,9 @@ func (d DeploymentOwner) ID() database.ID {
 	return compoundId{id: d.DeploymentUuid.String() + d.OwnerUuid.String()}
 }
 
+// ownerRef implements the ownerReference interface.
+func (d DeploymentOwner) ownerRef() (string, string) { return d.Kind, d.Name }
+
 func NewDeployment() Resource {
 	return &Deployment{}
 }
