@@ -114,7 +114,7 @@ func (n *Node) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	n.Architecture = node.Status.NodeInfo.Architecture
 	n.ContainerRuntimeVersion = node.Status.NodeInfo.ContainerRuntimeVersion
 	n.KubeletVersion = node.Status.NodeInfo.KubeletVersion
-	n.KubeProxyVersion = node.Status.NodeInfo.KubeProxyVersion
+	n.KubeProxyVersion = node.Status.NodeInfo.KubeProxyVersion //nolint:staticcheck // deprecated
 
 	var roles []string
 	for labelName, labelValue := range node.Labels {

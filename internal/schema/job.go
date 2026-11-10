@@ -247,7 +247,7 @@ func (j *Job) getIcingaState(job *kbatchv1.Job) (IcingaState, string) {
 		j.Namespace, j.Name, job.Status.StartTime, j.Active, j.Succeeded, j.Failed, completions, *job.Spec.BackoffLimit)
 
 	if job.Spec.ActiveDeadlineSeconds != nil {
-		reason += fmt.Sprintf(" Deadline for completion is %d.", job.Spec.ActiveDeadlineSeconds)
+		reason += fmt.Sprintf(" Deadline for completion is %d.", *job.Spec.ActiveDeadlineSeconds)
 	}
 
 	return Pending, reason

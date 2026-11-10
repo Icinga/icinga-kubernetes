@@ -37,9 +37,11 @@ func TestBasicAuthTransportSetsCredentials(t *testing.T) {
 	inner := &recordingTransport{}
 	req := newRequest(t)
 
-	if _, err := NewBasicAuthTransport(inner, testUsername, testPassword).RoundTrip(req); err != nil {
+	res, err := NewBasicAuthTransport(inner, testUsername, testPassword).RoundTrip(req)
+	if err != nil {
 		t.Fatalf("got error %v, want none", err)
 	}
+	_ = res.Body.Close()
 
 	gotUsername, gotPassword, ok := inner.req.BasicAuth()
 	if !ok {
@@ -57,9 +59,11 @@ func TestBasicAuthTransportDoesNotModifyRequest(t *testing.T) {
 	inner := &recordingTransport{}
 	req := newRequest(t)
 
-	if _, err := NewBasicAuthTransport(inner, testUsername, testPassword).RoundTrip(req); err != nil {
+	res, err := NewBasicAuthTransport(inner, testUsername, testPassword).RoundTrip(req)
+	if err != nil {
 		t.Fatalf("got error %v, want none", err)
 	}
+	_ = res.Body.Close()
 
 	if got := req.Header.Get("Authorization"); got != "" {
 		t.Errorf("got Authorization %q on the caller's request, want it untouched", got)

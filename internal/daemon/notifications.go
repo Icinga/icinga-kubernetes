@@ -77,10 +77,12 @@ func SyncNotificationsConfig(ctx context.Context, db *database.DB, config *notif
 				return errors.Wrap(err, "cannot delete Icinga Notifications config")
 			}
 
+			//nolint:sqlclosecheck // False positive, does not detect deferred close: https://github.com/ryanrolds/sqlclosecheck/issues/43
 			rows, err := tx.QueryxContext(ctx, db.BuildSelectStmt(&schema.Config{}, &schema.Config{}))
 			if err != nil {
 				return errors.Wrap(err, "cannot fetch Icinga Notifications config from DB")
 			}
+			defer func() { _ = rows.Close() }()
 
 			for rows.Next() {
 				var r schema.Config
@@ -100,7 +102,7 @@ func SyncNotificationsConfig(ctx context.Context, db *database.DB, config *notif
 				}
 			}
 
-			return nil
+			return errors.Wrap(rows.Err(), "cannot fetch Icinga Notifications config from DB")
 		}); err != nil {
 			return errors.Wrap(err, "cannot retrieve Icinga Notifications config")
 		}
