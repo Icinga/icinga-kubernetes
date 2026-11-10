@@ -203,6 +203,7 @@ func (c *Client) CloseOrphanedIncidents(ctx context.Context, clusterUuid types.U
 				return err
 			}
 
+			//nolint:sqlclosecheck // False positive, does not detect deferred close: https://github.com/ryanrolds/sqlclosecheck/issues/43
 			rows, err := c.db.QueryxContext(nctx, c.db.Rebind(q), args...)
 			if err != nil {
 				return err

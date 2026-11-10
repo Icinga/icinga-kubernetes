@@ -70,7 +70,7 @@ func (c *Cleanup) CleanupOlderThan(
 	defer c.db.Log(ctx, q, &counter).Stop()
 
 	for {
-		var rowsDeleted int64
+		var rowsDeleted uint64
 
 		err := retry.WithBackoff(
 			ctx,
@@ -82,7 +82,10 @@ func (c *Cleanup) CleanupOlderThan(
 					return database.CantPerformQuery(err, q)
 				}
 
-				rowsDeleted, err = rs.RowsAffected()
+				i, err := rs.RowsAffected()
+				if err == nil && i >= 0 {
+					rowsDeleted = uint64(i)
+				}
 
 				return err
 			},
@@ -94,7 +97,7 @@ func (c *Cleanup) CleanupOlderThan(
 			return 0, err
 		}
 
-		counter.Add(uint64(rowsDeleted))
+		counter.Add(rowsDeleted)
 
 		for _, onSuccess := range onSuccess {
 			if err := onSuccess(ctx, make([]struct{}, rowsDeleted)); err != nil {
@@ -102,7 +105,7 @@ func (c *Cleanup) CleanupOlderThan(
 			}
 		}
 
-		if rowsDeleted < int64(count) {
+		if rowsDeleted < count {
 			break
 		}
 	}
