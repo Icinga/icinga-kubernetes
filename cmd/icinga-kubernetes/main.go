@@ -368,6 +368,7 @@ func main() {
 						return err
 					}
 
+					//nolint:sqlclosecheck // False positive, does not detect deferred close: https://github.com/ryanrolds/sqlclosecheck/issues/43
 					rows, err := db.QueryxContext(nctx, q, args...)
 					if err != nil {
 						return err

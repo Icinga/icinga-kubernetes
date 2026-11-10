@@ -191,9 +191,10 @@ func (s *Service) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	for _, ipFamily := range service.Spec.IPFamilies {
 		s.IpFamilies.Valid = true
 
-		if ipFamily == kcorev1.IPv4Protocol {
+		switch ipFamily {
+		case kcorev1.IPv4Protocol:
 			ipv4 = true
-		} else if ipFamily == kcorev1.IPv6Protocol {
+		case kcorev1.IPv6Protocol:
 			ipv6 = true
 		}
 	}
