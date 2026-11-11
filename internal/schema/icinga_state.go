@@ -3,6 +3,8 @@ package schema
 import (
 	"database/sql/driver"
 	"fmt"
+
+	"github.com/icinga/icinga-go-library/notifications/event"
 )
 
 type IcingaState uint8
@@ -37,18 +39,17 @@ func (s IcingaState) Value() (driver.Value, error) {
 	return s.String(), nil
 }
 
-func (s IcingaState) ToSeverity() string {
+// ToSeverity converts the Icinga state to the corresponding Icinga Notifications severity.
+func (s IcingaState) ToSeverity() event.Severity {
 	switch s {
-	case Ok:
-		return "ok"
-	case Pending:
-		return "info"
+	case Ok, Pending:
+		return event.SeverityOK
 	case Unknown:
-		return "err"
+		return event.SeverityError
 	case Warning:
-		return "warning"
+		return event.SeverityWarning
 	case Critical:
-		return "crit"
+		return event.SeverityCritical
 	default:
 		panic(fmt.Sprintf("invalid Icinga state %d", s))
 	}

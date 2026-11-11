@@ -2,113 +2,58 @@ package notifications
 
 import (
 	"context"
-	"encoding/json"
-	"io"
-	"net/http"
-	"net/url"
+	"fmt"
+	"slices"
+	"strings"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/logging"
+	"github.com/icinga/icinga-go-library/notifications/event"
 	"github.com/icinga/icinga-go-library/notifications/source"
 	"github.com/icinga/icinga-go-library/types"
-	"github.com/icinga/icinga-kubernetes/internal/com"
+	"github.com/icinga/icinga-go-library/utils"
+	"github.com/icinga/icinga-kubernetes/internal/cluster"
+	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 type Client struct {
-	client    *source.Client
-	rawClient http.Client
-	webUrl    *url.URL
-	db        *database.DB
-	logger    *logging.Logger
-	mu        sync.Mutex
-	rulesInfo *source.RulesInfo
+	client *source.Client
+	config source.Config
+
+	db     *database.DB
+	logger *logging.Logger
+
+	clusterName string
 }
 
-func NewClient(name string, config Config, db *database.DB, logger *logging.Logger) (*Client, error) {
-	baseUrl, err := url.Parse(config.Url)
-	if err != nil {
-		return nil, errors.Wrap(err, "unable to parse url")
-	}
-
-	webUrl, err := url.Parse(config.KubernetesWebUrl)
-	if err != nil {
-		return nil, errors.Wrap(err, "unable to parse web url")
-	}
-
-	client, err := source.NewClient(source.Config{
-		Url:      baseUrl.String(),
-		Username: config.Username,
-		Password: config.Password,
-	}, name)
+func NewClient(name string, config source.Config, db *database.DB, logger *logging.Logger, cluster string) (*Client, error) {
+	client, err := source.NewClient(config, name)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to create notifications client")
 	}
 
-	transport := http.DefaultTransport
-	transport = com.NewUserAgentTransport(transport, name)
-	transport = com.NewBaseUrlTransport(transport, baseUrl)
-	transport = com.NewBasicAuthTransport(transport, config.Username, config.Password)
-
 	return &Client{
-		client:    client,
-		webUrl:    webUrl,
-		rulesInfo: &source.RulesInfo{},
-		db:        db,
-		logger:    logger,
-		rawClient: http.Client{Transport: transport},
+		client:      client,
+		config:      config,
+		db:          db,
+		logger:      logger,
+		clusterName: cluster,
 	}, nil
-}
-
-func (c *Client) ProcessEvent(ctx context.Context, event Event) error {
-	event.URL = c.webUrl.ResolveReference(event.URL)
-	ev := event.Carry()
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	for range 3 {
-		eventRuleIds, err := c.evaluateRulesForObject(
-			ctx,
-			event.Kind,
-			event.Uuid,
-			event.ClusterUuid)
-		if err != nil {
-			c.logger.Errorw("Cannot evaluate rules for event, assuming no rule matched", logging.Error(err))
-			eventRuleIds = []string{}
-		}
-
-		ev.RulesVersion = c.rulesInfo.Version
-		ev.RuleIds = eventRuleIds
-
-		newEventRules, err := c.client.ProcessEvent(ctx, ev)
-		if errors.Is(err, source.ErrRulesOutdated) {
-			c.logger.Infow(
-				"Received a rule update from Icinga Notifications, resubmitting event",
-				zap.String("old_rules_version", c.rulesInfo.Version),
-				zap.String("new_rules_version", newEventRules.Version),
-			)
-
-			c.rulesInfo = newEventRules
-
-			continue
-		} else if err != nil {
-			return errors.Wrapf(err, "cannot submit event to Icinga Notifications (matched_rules: %v, rules_version: %q)", eventRuleIds, c.rulesInfo.Version)
-		}
-
-		c.logger.Debugw("Successfully submitted event to Icinga Notifications", zap.Strings("matched_rules", eventRuleIds))
-
-		return nil
-	}
-
-	return errors.New("received three rule updates from Icinga Notifications in a row")
 }
 
 // Stream consumes the items from the given `entities` chan and triggers
 // a notifications event for each of them.
 func (c *Client) Stream(ctx context.Context, entities <-chan database.Entity) error {
+	clusterUuid := cluster.ClusterUuidFromContext(ctx)
+	if clusterUuid.IsZero() {
+		return errors.New("cannot get cluster UUID from context")
+	}
+
 	for {
 		select {
 		case entity, more := <-entities:
@@ -116,10 +61,87 @@ func (c *Client) Stream(ctx context.Context, entities <-chan database.Entity) er
 				return nil
 			}
 
-			event := entity.(Marshaler).MarshalEvent()
+			ev := entity.(Marshaler).MarshalEvent()
+			if ev.Severity == event.SeverityOK {
+				ev.Close = types.MakeBool(true)
+			}
 
-			if err := c.ProcessEvent(ctx, event); err != nil {
+			if c.config.Icingaweb2UrlParsed != nil {
+				evURL, err := c.config.Icingaweb2UrlParsed.Parse(strings.TrimLeft(ev.URL, "/"))
+				if err != nil {
+					c.logger.Errorw(
+						"BUG: generated notifications event has invalid URL, skipping",
+						zap.Any("event", ev),
+						zap.Any("entity", entity),
+						logging.Error(err),
+					)
+
+					continue
+				}
+				ev.URL = evURL.String()
+			} else {
+				ev.URL = "" // We can't resolve it to a full URL, so we don't send it to Icinga Notifications.
+			}
+
+			// We don't have extra information that we can re-send to Icinga Notifications,
+			// so mark all the relations as complete. This will ensure that Icinga Notifications
+			// doesn't request any additional attributes.
+			ev.CompleteRelations = []string{"object", "cluster", "owners", "node"}
+			ev.Relations["cluster"] = map[string]any{
+				"uuid": clusterUuid,
+				"name": c.clusterName,
+			}
+
+			if ev.Summary == "" {
+				// If the summary is empty, we take the first line of the message as the summary.
+				ev.Summary, _, _ = strings.Cut(strings.TrimLeft(ev.Message, "\n\t "), "\n")
+				ev.Summary = utils.EllipsizeRunes(strings.TrimSpace(ev.Summary), event.MaxSummaryLen)
+			}
+
+			if err := ev.Validate(); err != nil {
+				c.logger.Errorw(
+					"BUG: generated notifications event is invalid, skipping",
+					zap.Any("event", ev),
+					zap.Any("entity", entity),
+					logging.Error(err),
+				)
+
+				continue
+			}
+
+			if ev.CloseIncident() {
+				// Before sending a closing event, we need to first make sure there's
+				// an open incident for this entity in Icinga Notifications. Otherwise,
+				// we'll end up creating a new incident and immediately closing it,
+				// potentially causing a bunch of notifications to be sent out.
+				incidents, err := c.client.GetIncidents(ctx, ev.Tags)
+				if err != nil {
+					c.logger.Warnw(
+						"Unable to check for existing incidents in Icinga Notifications, skipping closing event",
+						zap.Any("event", ev),
+						zap.Any("entity", entity),
+						logging.Error(err),
+					)
+
+					continue
+				}
+
+				if len(incidents) == 0 {
+					continue // No open incidents, so we don't need to send a closing event.
+				}
+			}
+
+			attributes, err := c.client.ProcessEvent(ctx, ev, false)
+			if errors.Is(err, source.ErrAttrsNegotiation) {
+				c.logger.Errorw(
+					"Cannot complete requested missing attributes",
+					zap.Strings("attributes", attributes),
+					logging.Error(err),
+				)
+			} else if err != nil {
 				c.logger.Errorw("Cannot process event", logging.Error(err))
+			} else {
+				c.logger.Debugw("Successfully submitted event to Icinga Notifications")
 			}
 		case <-ctx.Done():
 			return ctx.Err()
@@ -127,79 +149,104 @@ func (c *Client) Stream(ctx context.Context, entities <-chan database.Entity) er
 	}
 }
 
-func (c *Client) Incidents(ctx context.Context) (io.ReadCloser, error) {
-	r, err := http.NewRequestWithContext(ctx, "GET", "incidents", nil)
-	if err != nil {
-		return nil, err
-	}
+// CloseOrphanedIncidents closes all incidents in Icinga Notifications that are
+// associated with the given clusterUuid but do not have a corresponding resource
+// in the database.
+func (c *Client) CloseOrphanedIncidents(ctx context.Context, clusterUuid types.UUID) {
+	incidentsCh, errCh := c.client.YieldIncidents(ctx, map[string]string{
+		"cluster_uuid": clusterUuid.String(),
+	})
 
-	res, err := c.rawClient.Do(r)
-	if err != nil {
-		return nil, err
-	}
+	var filter []map[string]string
+	uuidByResource := make(map[string][]types.UUID)
+	for incident := range incidentsCh {
+		id, err := uuid.Parse(incident.ObjectTags["uuid"])
+		if err != nil {
+			c.logger.Warnw(
+				"Invalid UUID in incident object tags, skipping",
+				zap.Any("incident", incident),
+				logging.Error(err),
+			)
 
-	return res.Body, nil
-}
-
-func (c *Client) evaluateRulesForObject(ctx context.Context, kind string, uuid, clusterUuid types.UUID) ([]string, error) {
-	const expectedRuleVersion = 1
-
-	outRuleIds := make([]string, 0, len(c.rulesInfo.Rules))
-
-	for id, filterExpr := range c.rulesInfo.Rules {
-		if filterExpr == "" {
-			// TODO(el): Why?
-			outRuleIds = append(outRuleIds, id)
 			continue
 		}
 
-		var r rule
-		if err := json.Unmarshal([]byte(filterExpr), &r); err != nil {
-			return nil, errors.Wrap(err, "cannot decode rule filter expression as JSON into struct")
-		}
-		if version := r.Version; version != expectedRuleVersion {
-			return nil, errors.Errorf("decoded rule filter expression .Version is %d, %d expected", version, expectedRuleVersion)
-		}
+		switch resource := incident.ObjectTags["resource"]; resource {
+		case "node", "pod", "deployment", "stateful_set", "daemon_set", "replica_set":
+			uuidByResource[resource] = append(uuidByResource[resource], types.MakeUUID(id))
+			filter = append(filter, incident.ObjectTags)
+		default:
+			c.logger.Warnw(
+				"Unknown resource type in incident object tags, skipping",
+				zap.Any("incident", incident),
+				zap.String("resource", resource),
+			)
 
-		if r.Kind != kind {
 			continue
 		}
+	}
 
-		args := make([]any, 0, len(r.Args))
-		for _, param := range r.Args {
-			switch param {
-			case ":uuid":
-				args = append(args, uuid)
-			case ":cluster_uuid":
-				args = append(args, clusterUuid)
-			default:
-				args = append(args, param)
-			}
-		}
+	if err := <-errCh; err != nil {
+		c.logger.Errorw("Error while fetching incidents from Icinga Notifications", logging.Error(err))
 
-		matches, err := func() (bool, error) {
-			rows, err := c.db.QueryContext(ctx, c.db.Rebind(r.Query), args...)
+		return
+	}
+
+	ng, nctx := errgroup.WithContext(ctx)
+
+	var mu sync.Mutex
+	live := make(map[string]struct{})
+	for kind, uuids := range uuidByResource {
+		ng.Go(func() error {
+			q, args, err := sqlx.In(fmt.Sprintf(`SELECT "uuid" FROM %q WHERE "uuid" IN (?)`, kind), uuids)
 			if err != nil {
-				return false, err
+				return err
+			}
+
+			rows, err := c.db.QueryxContext(nctx, c.db.Rebind(q), args...)
+			if err != nil {
+				return err
 			}
 			defer func() { _ = rows.Close() }()
 
-			return rows.Next(), nil
-		}()
-		if err != nil {
-			return nil, errors.Wrapf(err, "cannot fetch rule %q from %q", id, filterExpr)
-		} else if !matches {
-			continue
-		}
-		outRuleIds = append(outRuleIds, id)
+			for rows.Next() {
+				var id types.UUID
+				if err := rows.Scan(&id); err != nil {
+					return err
+				}
+
+				mu.Lock()
+				live[id.String()] = struct{}{}
+				mu.Unlock()
+			}
+
+			return rows.Err()
+		})
 	}
 
-	return outRuleIds, nil
-}
+	if err := ng.Wait(); err != nil {
+		c.logger.Errorw("Error while fetching live resources from database", logging.Error(err))
 
-type rule struct {
-	Version int    `json:"version"`
-	Kind    string `json:"kind"`
-	Query   string `json:"query"`
-	Args    []any  `json:"args"`
+		return
+	}
+
+	filter = slices.DeleteFunc(filter, func(tags map[string]string) bool {
+		_, ok := live[tags["uuid"]]
+
+		return ok
+	})
+	if len(filter) == 0 {
+		c.logger.Debugw("No orphaned incidents found to close in Icinga Notifications")
+
+		return
+	}
+
+	modifyAttrs := source.ModifiableIncidentAttrs{
+		Close:   types.MakeBool(true),
+		Message: types.MakeString("Resource no longer exists in Kubernetes cluster."),
+	}
+
+	if err := c.client.ModifyIncidents(ctx, modifyAttrs, filter); err != nil {
+		c.logger.Errorw("Error while closing orphaned incidents in Icinga Notifications", logging.Error(err))
+	}
 }

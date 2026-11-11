@@ -78,3 +78,31 @@ func MaxInt[T constraints.Integer](x, y T) T {
 
 	return y
 }
+
+// LabelsToMap converts a slice of Label structs to a map of label names to label values.
+func LabelsToMap(labels []Label) map[string]string {
+	labelMap := make(map[string]string, len(labels))
+	for _, label := range labels {
+		labelMap[label.Name] = label.Value
+	}
+	return labelMap
+}
+
+// ownerReference is an interface that defines a method for retrieving the kind and name of an owner reference.
+type ownerReference interface {
+	ownerRef() (kind, name string)
+}
+
+// OwnersToRelation converts a slice of owner structs to a slice of maps containing the kind and name of each owner.
+func OwnersToRelation[T ownerReference](owners []T) []map[string]string {
+	ownerSlice := make([]map[string]string, len(owners))
+	for i, owner := range owners {
+		kind, name := owner.ownerRef()
+		ownerSlice[i] = map[string]string{
+			"kind": kind,
+			"name": name,
+		}
+	}
+
+	return ownerSlice
+}

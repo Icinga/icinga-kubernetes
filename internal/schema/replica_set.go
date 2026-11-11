@@ -2,14 +2,13 @@ package schema
 
 import (
 	"fmt"
-	"net/url"
 	"strings"
 
 	"github.com/icinga/icinga-go-library/database"
+	"github.com/icinga/icinga-go-library/notifications/event"
 	"github.com/icinga/icinga-go-library/strcase"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/internal/kdatabase"
-	"github.com/icinga/icinga-kubernetes/internal/notifications"
 	kappsv1 "k8s.io/api/apps/v1"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -62,6 +61,9 @@ type ReplicaSetOwner struct {
 func (r ReplicaSetOwner) ID() database.ID {
 	return compoundId{id: r.ReplicaSetUuid.String() + r.OwnerUuid.String()}
 }
+
+// ownerRef implements the ownerReference interface.
+func (r ReplicaSetOwner) ownerRef() (string, string) { return r.Kind, r.Name }
 
 func NewReplicaSet() Resource {
 	return &ReplicaSet{}
@@ -143,21 +145,29 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	r.Yaml = MarshalYaml(replicaSet)
 }
 
-func (r *ReplicaSet) MarshalEvent() notifications.Event {
-	return notifications.Event{
-		Uuid:        r.Uuid,
-		ClusterUuid: r.ClusterUuid,
-		Kind:        "replica_set",
-		Name:        r.Namespace + "/" + r.Name,
-		Severity:    r.IcingaState.ToSeverity(),
-		Message:     r.IcingaStateReason,
-		URL:         &url.URL{Path: "/replicaset", RawQuery: fmt.Sprintf("id=%s", r.Uuid)},
+func (r *ReplicaSet) MarshalEvent() *event.Event {
+	return &event.Event{
+		Name: r.Namespace + ": " + r.Name,
+		URL:  fmt.Sprintf("kubernetes/replicaset?id=%s", r.Uuid),
 		Tags: map[string]string{
 			"uuid":         r.Uuid.String(),
 			"cluster_uuid": r.ClusterUuid.String(),
 			"name":         r.Name,
 			"namespace":    r.Namespace,
 			"resource":     "replica_set",
+		},
+		Severity: r.IcingaState.ToSeverity(),
+		Message:  r.IcingaStateReason,
+		Incident: types.MakeBool(true),
+		Relations: map[string]any{
+			"object": map[string]any{
+				"kind":      "replica_set",
+				"name":      r.Name,
+				"namespace": r.Namespace,
+				"labels":    LabelsToMap(r.Labels),
+			},
+			"owners": OwnersToRelation(r.Owners),
+			"node":   nil, // ReplicaSets don't have a node relation.
 		},
 	}
 }

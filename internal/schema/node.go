@@ -3,13 +3,12 @@ package schema
 import (
 	"fmt"
 	"net"
-	"net/url"
 	"strings"
 
 	"github.com/icinga/icinga-go-library/database"
+	"github.com/icinga/icinga-go-library/notifications/event"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/internal/kdatabase"
-	"github.com/icinga/icinga-kubernetes/internal/notifications"
 	"github.com/pkg/errors"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -183,21 +182,29 @@ func (n *Node) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	}
 }
 
-func (n *Node) MarshalEvent() notifications.Event {
-	return notifications.Event{
-		Uuid:        n.Uuid,
-		ClusterUuid: n.ClusterUuid,
-		Kind:        "node",
-		Name:        n.Namespace + "/" + n.Name,
-		Severity:    n.IcingaState.ToSeverity(),
-		Message:     n.IcingaStateReason,
-		URL:         &url.URL{Path: "/node", RawQuery: fmt.Sprintf("id=%s", n.Uuid)},
+func (n *Node) MarshalEvent() *event.Event {
+	return &event.Event{
+		Name: n.Name,
+		URL:  fmt.Sprintf("kubernetes/node?id=%s", n.Uuid),
 		Tags: map[string]string{
 			"uuid":         n.Uuid.String(),
 			"cluster_uuid": n.ClusterUuid.String(),
 			"name":         n.Name,
-			"namespace":    n.Namespace,
 			"resource":     "node",
+		},
+		Severity: n.IcingaState.ToSeverity(),
+		Message:  n.IcingaStateReason,
+		Incident: types.MakeBool(true),
+		Relations: map[string]any{
+			"object": map[string]any{
+				"kind":   "node",
+				"name":   n.Name,
+				"labels": LabelsToMap(n.Labels),
+			},
+			"owners": nil, // Nodes don't have any owners.
+			"node": map[string]any{
+				"name": n.Name,
+			},
 		},
 	}
 }

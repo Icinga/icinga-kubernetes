@@ -2,11 +2,9 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
 	"slices"
 	"strconv"
@@ -34,7 +32,6 @@ import (
 	"github.com/icinga/icinga-kubernetes/internal/schema"
 	"github.com/icinga/icinga-kubernetes/internal/sync"
 	k8sMysql "github.com/icinga/icinga-kubernetes/schema/mysql"
-	"github.com/jmoiron/sqlx"
 	"github.com/okzk/sdnotify"
 	"github.com/pkg/errors"
 	promapi "github.com/prometheus/client_golang/api"
@@ -287,7 +284,7 @@ func main() {
 		}
 
 		instance := schema.Instance{
-			Uuid:                types.UUID{UUID: instanceId},
+			Uuid:                types.MakeUUID(instanceId),
 			ClusterUuid:         clusterInstance.Uuid,
 			Version:             daemon.Version.Version,
 			KubernetesVersion:   schema.NewNullableString(kubernetesVersion),
@@ -319,105 +316,14 @@ func main() {
 			cfg.Notifications,
 			db.DB,
 			logs.GetChildLogger("notifications"),
+			clusterName,
 		)
 		if err != nil {
 			logger.Fatalw("Cannot create notifications client", logging.Error(err))
 		}
 
-		type objectTags struct {
-			UUID        string `json:"uuid"`
-			ClusterUUID string `json:"cluster_uuid"`
-			Resource    string `json:"resource"`
-			Name        string `json:"name"`
-			Namespace   string `json:"namespace"`
-		}
-
-		type incident struct {
-			// Incident   string `json:"incident"`
-			ObjectTags objectTags `json:"object_tags"`
-			// Severity string `json:"severity"`
-		}
-
 		defer periodic.Start(ctx, time.Hour, func(tick periodic.Tick) {
-			r, err := nclient.Incidents(ctx)
-			if err != nil {
-				logger.Errorw("Cannot fetch incidents", logging.Error(err))
-				return
-			}
-			defer func() { _ = r.Close() }()
-
-			var incidents []incident
-			if err := json.NewDecoder(r).Decode(&incidents); err != nil {
-				logger.Errorw("Cannot decode incidents", logging.Error(err))
-				return
-			}
-
-			objectTagMap := make(map[string]objectTags)
-			uuidMap := make(map[string][]types.UUID)
-			for _, inc := range incidents {
-				objectTagMap[inc.ObjectTags.UUID] = inc.ObjectTags
-				uuidMap[inc.ObjectTags.Resource] = append(uuidMap[inc.ObjectTags.Resource], types.UUID{UUID: uuid.MustParse(inc.ObjectTags.UUID)})
-			}
-
-			ng, nctx := errgroup.WithContext(ctx)
-
-			for kind, uuids := range uuidMap {
-				ng.Go(func() error {
-					q, args, err := sqlx.In(fmt.Sprintf(`SELECT "uuid" FROM %q WHERE "uuid" IN (?)`, kind), uuids)
-					if err != nil {
-						return err
-					}
-
-					rows, err := db.QueryxContext(nctx, q, args...)
-					if err != nil {
-						return err
-					}
-					defer func() { _ = rows.Close() }()
-					for rows.Next() {
-						var _uuid types.UUID
-						if err := rows.Scan(&_uuid); err != nil {
-							return err
-						}
-
-						delete(objectTagMap, _uuid.String())
-					}
-
-					return nil
-				})
-			}
-
-			if err := ng.Wait(); err != nil {
-				logger.Errorw("Cannot fetch orphaned incidents", logging.Error(err))
-			}
-
-			for _, tags := range objectTagMap {
-				var clusterUuid types.UUID
-				_tags := map[string]string{
-					"uuid":      tags.UUID,
-					"resource":  tags.Resource,
-					"name":      tags.Name,
-					"namespace": tags.Namespace,
-				}
-				if tags.ClusterUUID != "" {
-					clusterUuid = types.UUID{UUID: uuid.MustParse(tags.ClusterUUID)}
-					_tags["cluster_uuid"] = tags.ClusterUUID
-				}
-				ev := notifications.Event{
-					Uuid:        types.UUID{UUID: uuid.MustParse(tags.UUID)},
-					ClusterUuid: clusterUuid,
-					Kind:        tags.Resource,
-					Name:        kcache.NewObjectName(tags.Namespace, tags.Name).String(),
-					Severity:    "ok",
-					Message:     "Automatically resolving the incident because of an orphaned resource.",
-					URL:         &url.URL{Path: fmt.Sprintf("/%s", strings.ReplaceAll(tags.Resource, "_", "")), RawQuery: fmt.Sprintf("id=%s", tags.UUID)},
-					Tags:        _tags,
-					ExtraTags:   nil,
-				}
-				logger.Infow("Deleting orphaned incident", zap.String("name", ev.Name))
-				if err := nclient.ProcessEvent(ctx, ev); err != nil {
-					logger.Errorw("Cannot delete orphaned incident", logging.Error(err))
-				}
-			}
+			nclient.CloseOrphanedIncidents(ctx, clusterInstance.Uuid)
 		}, periodic.Immediate()).Stop()
 
 		g.Go(func() error {
@@ -929,7 +835,7 @@ func (s *uuidSliceValue) Set(val string) error {
 			return err
 		}
 
-		uu := types.UUID{UUID: u}
+		uu := types.MakeUUID(u)
 
 		if !slices.Contains(s.values, uu) {
 			s.values = append(s.values, uu)
