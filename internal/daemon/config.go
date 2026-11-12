@@ -1,11 +1,15 @@
 package daemon
 
 import (
+	"slices"
+	"strings"
+
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-go-library/notifications/source"
 	"github.com/icinga/icinga-kubernetes/internal/metrics"
 	"github.com/pkg/errors"
+	apivalidation "k8s.io/apimachinery/pkg/api/validation"
 )
 
 // DefaultConfigPath specifies the default location of Icinga for Kubernetes's
@@ -18,6 +22,46 @@ type Config struct {
 	Logging       LoggingConfig            `yaml:"logging" envPrefix:"LOGGING_"`
 	Notifications source.Config            `yaml:"notifications" envPrefix:"NOTIFICATIONS_"`
 	Prometheus    metrics.PrometheusConfig `yaml:"prometheus" envPrefix:"PROMETHEUS_"`
+	Namespaces    NamespacesConfig         `yaml:"namespaces" envPrefix:"NAMESPACES_"`
+}
+
+// NamespacesConfig selects the namespaces to synchronize, either the Include
+// ones or all but the Exclude ones. If both are empty, all namespaces are
+// synchronized.
+type NamespacesConfig struct {
+	Include []string `yaml:"include" env:"INCLUDE"`
+	Exclude []string `yaml:"exclude" env:"EXCLUDE"`
+}
+
+// Validate returns an error if both Include and Exclude are set, or if they
+// contain an invalid or duplicate namespace name.
+func (c *NamespacesConfig) Validate() error {
+	if len(c.Exclude) > 0 && len(c.Include) > 0 {
+		return errors.New("exclude and include cannot be set at the same time")
+	}
+
+	for _, namespace := range slices.Concat(c.Include, c.Exclude) {
+		if errs := apivalidation.ValidateNamespaceName(namespace, false); len(errs) > 0 {
+			return errors.Errorf("invalid namespace %q: %s", namespace, strings.Join(errs, ", "))
+		}
+	}
+
+	var found []string
+	for _, namespace := range c.Include {
+		if slices.Contains(found, namespace) {
+			return errors.Errorf("namespace %q cannot be included twice", namespace)
+		}
+		found = append(found, namespace)
+	}
+
+	for _, namespace := range c.Exclude {
+		if slices.Contains(found, namespace) {
+			return errors.Errorf("namespace %q cannot be excluded twice", namespace)
+		}
+		found = append(found, namespace)
+	}
+
+	return nil
 }
 
 // Validate checks constraints in the supplied configuration and returns
@@ -32,6 +76,10 @@ func (c *Config) Validate() error {
 	}
 
 	if err := c.Prometheus.Validate(); err != nil {
+		return err
+	}
+
+	if err := c.Namespaces.Validate(); err != nil {
 		return err
 	}
 

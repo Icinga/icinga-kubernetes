@@ -40,7 +40,6 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	kclientcmd "k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
@@ -348,7 +347,10 @@ func main() {
 		})
 	}
 
-	factory := informers.NewSharedInformerFactory(clientset, 0)
+	factory, err := sync.NewFactory(clientset, cfg.Namespaces.Include, cfg.Namespaces.Exclude)
+	if err != nil {
+		logger.Fatalw("Cannot create informer factories", logging.Error(err))
+	}
 
 	wg := stdsync.WaitGroup{}
 
@@ -363,8 +365,8 @@ func main() {
 
 		s := sync.NewServicePodSync(
 			db,
-			factory.Core().V1().Services(),
-			factory.Core().V1().Pods(),
+			factory.Services(),
+			factory.Pods(),
 			logs.GetChildLogger("service-pods"),
 			podEvents,
 			podDeletes,
@@ -401,26 +403,31 @@ func main() {
 		}
 
 		promApiClient := promv1.NewAPI(promClient)
-		promMetricSync := metrics.NewPromMetricSync(promApiClient, db.DB, logs.GetChildLogger("prometheus"))
+		promMetricSync := metrics.NewPromMetricSync(
+			promApiClient,
+			db.DB,
+			logs.GetChildLogger("prometheus"),
+			metrics.NamespaceMatcher(cfg.Namespaces.Include, cfg.Namespaces.Exclude),
+		)
 
 		g.Go(func() error {
-			return promMetricSync.Nodes(ctx, factory.Core().V1().Nodes().Informer())
+			return promMetricSync.Nodes(ctx, factory.Nodes())
 		})
 
 		g.Go(func() error {
-			return promMetricSync.Pods(ctx, factory.Core().V1().Pods().Informer())
+			return promMetricSync.Pods(ctx, factory.Pods())
 		})
 	}
 
 	g.Go(func() error {
-		s := sync.NewSync(db, factory.Core().V1().Namespaces().Informer(), logs.GetChildLogger("namespaces"), schema.NewNamespace)
+		s := sync.NewSync(db, factory.Namespaces(), logs.GetChildLogger("namespaces"), schema.NewNamespace)
 
 		return s.Run(ctx)
 	})
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := sync.NewSync(db, factory.Core().V1().Nodes().Informer(), logs.GetChildLogger("nodes"), schema.NewNode)
+		s := sync.NewSync(db, factory.Nodes(), logs.GetChildLogger("nodes"), schema.NewNode)
 
 		var forwardForNotifications []sync.Feature
 		if cfg.Notifications.Url != "" {
@@ -447,7 +454,7 @@ func main() {
 		)
 
 		f := schema.NewPodFactory(clientset)
-		s := sync.NewSync(db, factory.Core().V1().Pods().Informer(), logs.GetChildLogger("pods"), f.New)
+		s := sync.NewSync(db, factory.Pods(), logs.GetChildLogger("pods"), f.New)
 
 		wg.Done()
 
@@ -460,7 +467,7 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := sync.NewSync(db, factory.Apps().V1().Deployments().Informer(), logs.GetChildLogger("deployments"), schema.NewDeployment)
+		s := sync.NewSync(db, factory.Deployments(), logs.GetChildLogger("deployments"), schema.NewDeployment)
 
 		var forwardForNotifications []sync.Feature
 		if cfg.Notifications.Url != "" {
@@ -478,7 +485,7 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := sync.NewSync(db, factory.Apps().V1().DaemonSets().Informer(), logs.GetChildLogger("daemon-sets"), schema.NewDaemonSet)
+		s := sync.NewSync(db, factory.DaemonSets(), logs.GetChildLogger("daemon-sets"), schema.NewDaemonSet)
 
 		var forwardForNotifications []sync.Feature
 		if cfg.Notifications.Url != "" {
@@ -496,7 +503,7 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := sync.NewSync(db, factory.Apps().V1().ReplicaSets().Informer(), logs.GetChildLogger("replica-sets"), schema.NewReplicaSet)
+		s := sync.NewSync(db, factory.ReplicaSets(), logs.GetChildLogger("replica-sets"), schema.NewReplicaSet)
 
 		var forwardForNotifications []sync.Feature
 		if cfg.Notifications.Url != "" {
@@ -514,7 +521,7 @@ func main() {
 
 	wg.Add(1)
 	g.Go(func() error {
-		s := sync.NewSync(db, factory.Apps().V1().StatefulSets().Informer(), logs.GetChildLogger("stateful-sets"), schema.NewStatefulSet)
+		s := sync.NewSync(db, factory.StatefulSets(), logs.GetChildLogger("stateful-sets"), schema.NewStatefulSet)
 
 		var forwardForNotifications []sync.Feature
 		if cfg.Notifications.Url != "" {
@@ -532,7 +539,7 @@ func main() {
 
 	g.Go(func() error {
 		f := schema.NewServiceFactory(clientset)
-		s := sync.NewSync(db, factory.Core().V1().Services().Informer(), logs.GetChildLogger("services"), f.NewService)
+		s := sync.NewSync(db, factory.Services(), logs.GetChildLogger("services"), f.NewService)
 
 		return s.Run(
 			ctx,
@@ -542,54 +549,55 @@ func main() {
 	})
 
 	g.Go(func() error {
-		s := sync.NewSync(db, factory.Discovery().V1().EndpointSlices().Informer(), logs.GetChildLogger("endpoints"), schema.NewEndpointSlice)
+		s := sync.NewSync(db, factory.EndpointSlices(), logs.GetChildLogger("endpoints"), schema.NewEndpointSlice)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := sync.NewSync(db, factory.Core().V1().Secrets().Informer(), logs.GetChildLogger("secrets"), schema.NewSecret)
-		return s.Run(ctx)
-	})
-
-	g.Go(func() error {
-		s := sync.NewSync(db, factory.Core().V1().ConfigMaps().Informer(), logs.GetChildLogger("config-maps"), schema.NewConfigMap)
+		s := sync.NewSync(db, factory.Secrets(), logs.GetChildLogger("secrets"), schema.NewSecret)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := sync.NewSync(db, factory.Events().V1().Events().Informer(), logs.GetChildLogger("events"), schema.NewEvent)
+		s := sync.NewSync(db, factory.ConfigMaps(), logs.GetChildLogger("config-maps"), schema.NewConfigMap)
+
+		return s.Run(ctx)
+	})
+
+	g.Go(func() error {
+		s := sync.NewSync(db, factory.Events(), logs.GetChildLogger("events"), schema.NewEvent)
 
 		return s.Run(ctx, sync.WithNoDelete(), sync.WithNoWarmup())
 	})
 
 	g.Go(func() error {
-		s := sync.NewSync(db, factory.Core().V1().PersistentVolumeClaims().Informer(), logs.GetChildLogger("pvcs"), schema.NewPvc)
+		s := sync.NewSync(db, factory.PersistentVolumeClaims(), logs.GetChildLogger("pvcs"), schema.NewPvc)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := sync.NewSync(db, factory.Core().V1().PersistentVolumes().Informer(), logs.GetChildLogger("persistent-volumes"), schema.NewPersistentVolume)
+		s := sync.NewSync(db, factory.PersistentVolumes(), logs.GetChildLogger("persistent-volumes"), schema.NewPersistentVolume)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := sync.NewSync(db, factory.Batch().V1().Jobs().Informer(), logs.GetChildLogger("jobs"), schema.NewJob)
+		s := sync.NewSync(db, factory.Jobs(), logs.GetChildLogger("jobs"), schema.NewJob)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := sync.NewSync(db, factory.Batch().V1().CronJobs().Informer(), logs.GetChildLogger("cron-jobs"), schema.NewCronJob)
+		s := sync.NewSync(db, factory.CronJobs(), logs.GetChildLogger("cron-jobs"), schema.NewCronJob)
 
 		return s.Run(ctx)
 	})
 
 	g.Go(func() error {
-		s := sync.NewSync(db, factory.Networking().V1().Ingresses().Informer(), logs.GetChildLogger("ingresses"), schema.NewIngress)
+		s := sync.NewSync(db, factory.Ingresses(), logs.GetChildLogger("ingresses"), schema.NewIngress)
 
 		return s.Run(ctx)
 	})
