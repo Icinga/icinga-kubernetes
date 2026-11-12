@@ -15,23 +15,21 @@ import (
 	"github.com/jmoiron/sqlx"
 	"go.uber.org/zap"
 	kcorev1 "k8s.io/api/core/v1"
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	informerscorev1 "k8s.io/client-go/informers/core/v1"
 	kcache "k8s.io/client-go/tools/cache"
 )
 
 // ServicePodSync syncs the service_pod links between services and the pods
 // their selectors match.
 type ServicePodSync struct {
-	db              *kdatabase.DB
-	serviceInformer informerscorev1.ServiceInformer
-	podInformer     informerscorev1.PodInformer
-	log             *logging.Logger
-	podEvents       <-chan database.Entity
-	podDeletes      <-chan any
-	serviceEvents   <-chan database.Entity
-	serviceDeletes  <-chan any
+	db               *kdatabase.DB
+	serviceInformers Informers
+	podInformers     Informers
+	log              *logging.Logger
+	podEvents        <-chan database.Entity
+	podDeletes       <-chan any
+	serviceEvents    <-chan database.Entity
+	serviceDeletes   <-chan any
 }
 
 // NewServicePodSync returns a ServicePodSync that reads services and pods from
@@ -39,8 +37,8 @@ type ServicePodSync struct {
 // on the given channels.
 func NewServicePodSync(
 	db *kdatabase.DB,
-	serviceInformer informerscorev1.ServiceInformer,
-	podInformer informerscorev1.PodInformer,
+	serviceInformers Informers,
+	podInformers Informers,
 	log *logging.Logger,
 	podEvents <-chan database.Entity,
 	podDeletes <-chan any,
@@ -48,14 +46,14 @@ func NewServicePodSync(
 	serviceDeletes <-chan any,
 ) *ServicePodSync {
 	return &ServicePodSync{
-		db:              db,
-		serviceInformer: serviceInformer,
-		podInformer:     podInformer,
-		log:             log,
-		podEvents:       podEvents,
-		podDeletes:      podDeletes,
-		serviceEvents:   serviceEvents,
-		serviceDeletes:  serviceDeletes,
+		db:               db,
+		serviceInformers: serviceInformers,
+		podInformers:     podInformers,
+		log:              log,
+		podEvents:        podEvents,
+		podDeletes:       podDeletes,
+		serviceEvents:    serviceEvents,
+		serviceDeletes:   serviceDeletes,
 	}
 }
 
@@ -64,7 +62,7 @@ func NewServicePodSync(
 // of that service or pod, which also removes links that no longer match.
 // On each pod or service delete, it removes all links of that pod or service.
 func (s *ServicePodSync) Run(ctx context.Context) error {
-	if !kcache.WaitForCacheSync(ctx.Done(), s.serviceInformer.Informer().HasSynced, s.podInformer.Informer().HasSynced) {
+	if !kcache.WaitForCacheSync(ctx.Done(), s.serviceInformers.HasSynced, s.podInformers.HasSynced) {
 		return ctx.Err()
 	}
 
@@ -91,15 +89,16 @@ func (s *ServicePodSync) Run(ctx context.Context) error {
 			// carry outdated labels. Take them from the cache instead. A pod
 			// that is gone or was replaced is left to its delete, which removes
 			// its links. Linking it here would leave orphans behind.
-			k8sPod, err := s.podInformer.Lister().Pods(pod.Namespace).Get(pod.Name)
-			if kerrors.IsNotFound(err) {
+			obj, exists, err := s.podInformers.GetByKey(kcache.NewObjectName(pod.Namespace, pod.Name).String())
+			if err != nil {
+				return err
+			}
+			if !exists {
 				s.log.Debugw("Skipping links of pod missing from cache", podName)
 
 				continue
 			}
-			if err != nil {
-				return err
-			}
+			k8sPod := obj.(*kcorev1.Pod)
 			if k8sPod.UID != pod.Uid {
 				s.log.Debugw("Skipping links of recreated pod", podName)
 
@@ -113,13 +112,14 @@ func (s *ServicePodSync) Run(ctx context.Context) error {
 				continue
 			}
 
-			services, err := s.serviceInformer.Lister().Services(pod.Namespace).List(labels.NewSelector())
+			services, err := s.serviceInformers.ListByNamespace(pod.Namespace, labels.Everything())
 			if err != nil {
 				return err
 			}
 
 			var servicePods []schema.ServicePod
-			for _, service := range services {
+			for _, item := range services {
+				service := item.(*kcorev1.Service)
 				if !isSelectingService(service) {
 					continue
 				}
@@ -166,15 +166,16 @@ func (s *ServicePodSync) Run(ctx context.Context) error {
 			serviceName := zap.String("service", kcache.NewObjectName(service.Namespace, service.Name).String())
 
 			// As with pods, take the selector from the cache, not from the event.
-			k8sService, err := s.serviceInformer.Lister().Services(service.Namespace).Get(service.Name)
-			if kerrors.IsNotFound(err) {
+			obj, exists, err := s.serviceInformers.GetByKey(kcache.NewObjectName(service.Namespace, service.Name).String())
+			if err != nil {
+				return err
+			}
+			if !exists {
 				s.log.Debugw("Skipping links of service missing from cache", serviceName)
 
 				continue
 			}
-			if err != nil {
-				return err
-			}
+			k8sService := obj.(*kcorev1.Service)
 			if k8sService.UID != service.Uid {
 				s.log.Debugw("Skipping links of recreated service", serviceName)
 
@@ -185,12 +186,13 @@ func (s *ServicePodSync) Run(ctx context.Context) error {
 			// A service without selectors or of type ExternalName selects no pods,
 			// but its old links still have to go.
 			if isSelectingService(k8sService) {
-				pods, err := s.podInformer.Lister().Pods(service.Namespace).List(labels.ValidatedSetSelector(k8sService.Spec.Selector))
+				pods, err := s.podInformers.ListByNamespace(service.Namespace, labels.ValidatedSetSelector(k8sService.Spec.Selector))
 				if err != nil {
 					return err
 				}
 
-				for _, pod := range pods {
+				for _, item := range pods {
+					pod := item.(*kcorev1.Pod)
 					servicePods = append(servicePods, schema.ServicePod{
 						ServiceUuid: service.Uuid,
 						PodUuid:     schema.EnsureUUID(pod.UID),
