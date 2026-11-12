@@ -372,6 +372,7 @@ func main() {
 			db,
 			factory.Core().V1().Services(),
 			factory.Core().V1().Pods(),
+			logs.GetChildLogger("service-pods"),
 			podEvents,
 			podDeletes,
 			serviceEvents,
@@ -736,6 +737,7 @@ func SyncServicePods(
 	db *kdatabase.DB,
 	serviceInformer corev1.ServiceInformer,
 	podInformer corev1.PodInformer,
+	log *logging.Logger,
 	podEvents <-chan database.Entity,
 	podDeletes <-chan any,
 	serviceEvents <-chan database.Entity,
@@ -762,6 +764,7 @@ func SyncServicePods(
 			}
 
 			pod := entity.(*schema.Pod)
+			podName := zap.String("pod", kcache.NewObjectName(pod.Namespace, pod.Name).String())
 
 			// Upserts of the same pod can finish out of order, so the event may
 			// carry outdated labels. Take them from the cache instead. A pod
@@ -769,17 +772,23 @@ func SyncServicePods(
 			// its links. Linking it here would leave orphans behind.
 			k8sPod, err := podInformer.Lister().Pods(pod.Namespace).Get(pod.Name)
 			if kerrors.IsNotFound(err) {
+				log.Debugw("Skipping links of pod missing from cache", podName)
+
 				continue
 			}
 			if err != nil {
 				return err
 			}
 			if k8sPod.UID != pod.Uid {
+				log.Debugw("Skipping links of recreated pod", podName)
+
 				continue
 			}
 
 			podLabels := labels.Set(k8sPod.Labels)
 			if replaced, ok := replacedPodLabels[pod.Uuid]; ok && labels.Equals(replaced, podLabels) {
+				log.Debugw("Skipping links of pod with unchanged labels", podName)
+
 				continue
 			}
 
@@ -806,6 +815,8 @@ func SyncServicePods(
 				return err
 			}
 
+			log.Debugw("Replaced links of pod", podName, zap.Int("services", len(servicePods)))
+
 			replacedPodLabels[pod.Uuid] = podLabels
 		case id, more := <-podDeletes:
 			if !more {
@@ -821,6 +832,8 @@ func SyncServicePods(
 				return err
 			}
 
+			log.Debugw("Removed links of deleted pod", zap.String("uuid", podUuid.String()))
+
 			delete(replacedPodLabels, podUuid)
 		case entity, more := <-serviceEvents:
 			if !more {
@@ -829,16 +842,21 @@ func SyncServicePods(
 			}
 
 			service := entity.(*schema.Service)
+			serviceName := zap.String("service", kcache.NewObjectName(service.Namespace, service.Name).String())
 
 			// As with pods, take the selector from the cache, not from the event.
 			k8sService, err := serviceInformer.Lister().Services(service.Namespace).Get(service.Name)
 			if kerrors.IsNotFound(err) {
+				log.Debugw("Skipping links of service missing from cache", serviceName)
+
 				continue
 			}
 			if err != nil {
 				return err
 			}
 			if k8sService.UID != service.Uid {
+				log.Debugw("Skipping links of recreated service", serviceName)
+
 				continue
 			}
 
@@ -862,17 +880,23 @@ func SyncServicePods(
 			if err := replaceServicePods(ctx, db, "service_uuid", service.Uuid, servicePods); err != nil {
 				return err
 			}
+
+			log.Debugw("Replaced links of service", serviceName, zap.Int("pods", len(servicePods)))
 		case id, more := <-serviceDeletes:
 			if !more {
 				serviceDeletes = nil
 				continue
 			}
 
+			serviceUuid := id.(types.UUID)
+
 			// A pod replacement that listed the service before it left the cache
 			// can re-insert its links after the cascading delete removed them.
-			if err := replaceServicePods(ctx, db, "service_uuid", id.(types.UUID), nil); err != nil {
+			if err := replaceServicePods(ctx, db, "service_uuid", serviceUuid, nil); err != nil {
 				return err
 			}
+
+			log.Debugw("Removed links of deleted service", zap.String("uuid", serviceUuid.String()))
 		case <-ctx.Done():
 			return ctx.Err()
 		}
