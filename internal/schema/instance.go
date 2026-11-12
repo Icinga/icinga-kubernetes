@@ -10,14 +10,16 @@ import (
 
 type Instance struct {
 	kdatabase.EntityStub
-	Uuid                   types.UUID
-	ClusterUuid            types.UUID
-	Version                string
-	KubernetesVersion      sql.NullString
-	KubernetesHeartbeat    types.UnixMilli
-	KubernetesApiReachable types.Bool
-	Message                sql.NullString
-	Heartbeat              types.UnixMilli
+	Uuid                              types.UUID
+	ClusterUuid                       types.UUID
+	Version                           string
+	KubernetesVersion                 sql.NullString
+	KubernetesHeartbeat               types.UnixMilli
+	KubernetesApiReachable            types.Bool
+	Message                           sql.NullString
+	NotificationsDiscoveredSocketPath sql.NullString
+	KubernetesServiceUser             sql.NullString
+	Heartbeat                         types.UnixMilli
 }
 
 func (Instance) TableName() string {

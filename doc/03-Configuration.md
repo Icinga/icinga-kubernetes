@@ -41,6 +41,16 @@ Defined in the `notifications` section of the configuration file. If `url` is
 not set, the configuration stored in the database (e.g. set via Icinga for Kubernetes Web)
 is used, if any.
 
+Restart the Icinga for Kubernetes daemon after saving notification settings in
+Icinga for Kubernetes Web. The daemon reads these settings at startup.
+
+Set `ICINGA_NOTIFICATIONS_LISTENER_SOCKET` to the absolute listener socket path
+visible inside the daemon. This variable has no `ICINGA_FOR_KUBERNETES_` prefix.
+The path must be a Unix socket writable by the daemon user. Discovery checks
+at startup and every 55 seconds, so a socket created later can also be found.
+Icinga for Kubernetes Web uses the discovered path and OS username for assisted
+source setup. Discovery does not enable notifications by itself.
+
 Which authentication options are required depends on the scheme of `url`:
 
 * `http`: Unencrypted HTTP connection. `username` and `password` or
