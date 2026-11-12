@@ -359,7 +359,6 @@ func main() {
 		podEvents := cache.Multiplexers().Pods().UpsertEvents().Out()
 		podDeletes := cache.Multiplexers().Pods().DeleteEvents().Out()
 		serviceEvents := cache.Multiplexers().Services().UpsertEvents().Out()
-		serviceDeletes := cache.Multiplexers().Services().DeleteEvents().Out()
 
 		wg.Done()
 
@@ -371,7 +370,6 @@ func main() {
 			podEvents,
 			podDeletes,
 			serviceEvents,
-			serviceDeletes,
 		)
 
 		return s.Run(ctx)
@@ -544,7 +542,6 @@ func main() {
 		return s.Run(
 			ctx,
 			sync.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().Services().UpsertEvents().In())),
-			sync.WithOnDelete(database.OnSuccessSendTo(cache.Multiplexers().Services().DeleteEvents().In())),
 		)
 	})
 
