@@ -742,7 +742,8 @@ CREATE TABLE service_condition (
 CREATE TABLE service_pod (
   service_uuid binary(16) NOT NULL,
   pod_uuid binary(16) NOT NULL,
-  PRIMARY KEY (service_uuid, pod_uuid)
+  PRIMARY KEY (service_uuid, pod_uuid),
+  INDEX idx_service_pod_pod_uuid (pod_uuid) COMMENT 'Filter for links of a pod'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE service_port (
