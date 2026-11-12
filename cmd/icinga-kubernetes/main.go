@@ -734,14 +734,14 @@ func dbHasSchema(db *kdatabase.DB, dbName string) (bool, error) {
 func SyncServicePods(
 	ctx context.Context,
 	db *kdatabase.DB,
-	serviceList corev1.ServiceInformer,
-	podList corev1.PodInformer,
+	serviceInformer corev1.ServiceInformer,
+	podInformer corev1.PodInformer,
 	podEvents <-chan database.Entity,
 	podDeletes <-chan any,
 	serviceEvents <-chan database.Entity,
 	serviceDeletes <-chan any,
 ) error {
-	if !kcache.WaitForCacheSync(ctx.Done(), serviceList.Informer().HasSynced, podList.Informer().HasSynced) {
+	if !kcache.WaitForCacheSync(ctx.Done(), serviceInformer.Informer().HasSynced, podInformer.Informer().HasSynced) {
 		return ctx.Err()
 	}
 
@@ -767,7 +767,7 @@ func SyncServicePods(
 			// carry outdated labels. Take them from the cache instead. A pod
 			// that is gone or was replaced is left to its delete, which removes
 			// its links. Linking it here would leave orphans behind.
-			k8sPod, err := podList.Lister().Pods(pod.Namespace).Get(pod.Name)
+			k8sPod, err := podInformer.Lister().Pods(pod.Namespace).Get(pod.Name)
 			if kerrors.IsNotFound(err) {
 				continue
 			}
@@ -783,7 +783,7 @@ func SyncServicePods(
 				continue
 			}
 
-			services, err := serviceList.Lister().Services(pod.Namespace).List(labels.NewSelector())
+			services, err := serviceInformer.Lister().Services(pod.Namespace).List(labels.NewSelector())
 			if err != nil {
 				return err
 			}
@@ -831,7 +831,7 @@ func SyncServicePods(
 			service := entity.(*schema.Service)
 
 			// As with pods, take the selector from the cache, not from the event.
-			k8sService, err := serviceList.Lister().Services(service.Namespace).Get(service.Name)
+			k8sService, err := serviceInformer.Lister().Services(service.Namespace).Get(service.Name)
 			if kerrors.IsNotFound(err) {
 				continue
 			}
@@ -846,7 +846,7 @@ func SyncServicePods(
 			// A service without selectors or of type ExternalName selects no pods,
 			// but its old links still have to go.
 			if isSelectingService(k8sService) {
-				pods, err := podList.Lister().Pods(service.Namespace).List(labels.ValidatedSetSelector(k8sService.Spec.Selector))
+				pods, err := podInformer.Lister().Pods(service.Namespace).List(labels.ValidatedSetSelector(k8sService.Spec.Selector))
 				if err != nil {
 					return err
 				}
