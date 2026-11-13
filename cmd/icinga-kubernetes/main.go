@@ -272,6 +272,7 @@ func main() {
 	var kubernetesVersion string
 	var kubernetesHeartbeat time.Time
 	instanceId := uuid.New()
+	notificationsDiscovery := daemon.NewNotificationsDiscovery(logs.GetChildLogger("notifications"))
 	defer periodic.Start(ctx, 55*time.Second, func(tick periodic.Tick) {
 		version, err := clientset.Discovery().ServerVersion()
 		if err == nil {
@@ -279,12 +280,15 @@ func main() {
 			kubernetesHeartbeat = tick.Time
 		}
 
+		socketPath, serviceUser := notificationsDiscovery.Probe()
 		instance := schema.Instance{
-			Uuid:                types.MakeUUID(instanceId),
-			ClusterUuid:         clusterInstance.Uuid,
-			Version:             daemon.Version.Version,
-			KubernetesVersion:   schema.NewNullableString(kubernetesVersion),
-			KubernetesHeartbeat: types.UnixMilli(kubernetesHeartbeat),
+			NotificationsDiscoveredSocketPath: socketPath,
+			KubernetesServiceUser:             serviceUser,
+			Uuid:                              types.MakeUUID(instanceId),
+			ClusterUuid:                       clusterInstance.Uuid,
+			Version:                           daemon.Version.Version,
+			KubernetesVersion:                 schema.NewNullableString(kubernetesVersion),
+			KubernetesHeartbeat:               types.UnixMilli(kubernetesHeartbeat),
 			KubernetesApiReachable: types.Bool{
 				Bool:  err == nil,
 				Valid: true,

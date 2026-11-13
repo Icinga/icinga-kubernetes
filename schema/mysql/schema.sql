@@ -833,6 +833,8 @@ CREATE TABLE kubernetes_instance (
   kubernetes_api_reachable enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
   message text NULL DEFAULT NULL,
   heartbeat bigint unsigned NOT NULL,
+  notifications_discovered_socket_path text NULL DEFAULT NULL,
+  kubernetes_service_user varchar(255) NULL DEFAULT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin ROW_FORMAT=DYNAMIC;
 

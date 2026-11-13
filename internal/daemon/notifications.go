@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
 
 	baseConfig "github.com/icinga/icinga-go-library/config"
 	"github.com/icinga/icinga-go-library/database"
@@ -29,7 +30,8 @@ import (
 // and does not need the credentials. Only the Icinga Web 2 URL is loaded from
 // the database in that case, and only if it wasn't supplied. Otherwise, the
 // supplied username, password and Icinga Web 2 URL are persisted as locked,
-// and the URL and any missing values are loaded from unlocked rows.
+// and the URL and any missing values are loaded from unlocked rows. Unlocked
+// HTTP credentials are ignored when the database URL uses a Unix socket.
 //
 // The merged config is validated with PasswordFile cleared, because the
 // password has already been resolved at this point. config is only updated if
@@ -109,31 +111,22 @@ func SyncNotificationsConfig(ctx context.Context, db *database.DB, config *sourc
 			}
 			defer func() { _ = rows.Close() }()
 
+			var stored []schema.Config
 			for rows.Next() {
 				var r schema.Config
 				if err := rows.StructScan(&r); err != nil {
 					return errors.Wrap(err, "cannot fetch Icinga Notifications config from DB")
 				}
 
-				switch r.Key {
-				case schema.ConfigKeyNotificationsUrl:
-					tmpConfig.Url = r.Value
-				case schema.ConfigKeyNotificationsUsername:
-					if tmpConfig.Username == "" {
-						tmpConfig.Username = r.Value
-					}
-				case schema.ConfigKeyNotificationsPassword:
-					if tmpConfig.Password == "" {
-						tmpConfig.Password = r.Value
-					}
-				case schema.ConfigKeyNotificationsIcingaWeb2Url:
-					if tmpConfig.Icingaweb2Url == "" {
-						tmpConfig.Icingaweb2Url = r.Value
-					}
-				}
+				stored = append(stored, r)
+			}
+			if err := rows.Err(); err != nil {
+				return err
 			}
 
-			return rows.Err()
+			mergeNotificationsConfig(&tmpConfig, stored)
+
+			return nil
 		}); err != nil {
 			return errors.Wrap(err, "cannot retrieve Icinga Notifications config")
 		}
@@ -175,4 +168,37 @@ func SyncNotificationsConfig(ctx context.Context, db *database.DB, config *sourc
 	config.PasswordFile = pf
 
 	return nil
+}
+
+// mergeNotificationsConfig fills missing local values from unlocked database rows.
+// Unix URLs ignore stored HTTP credentials regardless of database row ordering.
+// Local credentials remain intact so validation can reject incompatible locks.
+func mergeNotificationsConfig(config *source.Config, stored []schema.Config) {
+	for _, row := range stored {
+		if row.Key == schema.ConfigKeyNotificationsUrl {
+			config.Url = row.Value
+		}
+	}
+
+	u, _ := url.Parse(config.Url)
+	unixSocket := u != nil && u.Scheme == "unix"
+	for _, row := range stored {
+		switch row.Key {
+		case schema.ConfigKeyNotificationsUrl, schema.ConfigKeyPrometheusUrl,
+			schema.ConfigKeyPrometheusInsecure, schema.ConfigKeyPrometheusUsername, schema.ConfigKeyPrometheusPassword:
+			continue
+		case schema.ConfigKeyNotificationsUsername:
+			if !unixSocket && config.Username == "" {
+				config.Username = row.Value
+			}
+		case schema.ConfigKeyNotificationsPassword:
+			if !unixSocket && config.Password == "" {
+				config.Password = row.Value
+			}
+		case schema.ConfigKeyNotificationsIcingaWeb2Url:
+			if config.Icingaweb2Url == "" {
+				config.Icingaweb2Url = row.Value
+			}
+		}
+	}
 }
