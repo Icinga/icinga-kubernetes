@@ -12,7 +12,7 @@ func TestNamespaceMatcher(t *testing.T) {
 	}{
 		"None":    {nil, nil, ""},
 		"Include": {[]string{"a", "b"}, nil, `namespace=~"a|b"`},
-		"Exclude": {nil, []string{"kube-system"}, `namespace!~"kube-system"`},
+		"Exclude": {nil, []string{"testing"}, `namespace!~"testing"`},
 		"Quoted":  {[]string{"a.b"}, nil, `namespace=~"a\\.b"`},
 	} {
 		t.Run(name, func(t *testing.T) {

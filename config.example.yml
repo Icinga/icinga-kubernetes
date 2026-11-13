@@ -52,7 +52,7 @@ namespaces:
 
   # Synchronize all namespaces except these.
 #  exclude:
-#    - kube-system
+#    - testing
 
 # Configuration for Prometheus metrics API.
 prometheus:

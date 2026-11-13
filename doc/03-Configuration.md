@@ -216,7 +216,7 @@ namespaces:
 ```yaml
 namespaces:
   exclude:
-    - kube-system
+    - testing
 ```
 
 Only the listed namespaces, or all but the listed ones, and their resources
