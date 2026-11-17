@@ -434,7 +434,6 @@ func main() {
 			forwardForNotifications = append(
 				forwardForNotifications,
 				sync.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().Nodes().UpsertEvents().In())),
-				sync.WithOnDelete(database.OnSuccessSendTo(cache.Multiplexers().Nodes().DeleteEvents().In())),
 			)
 		}
 
@@ -474,7 +473,6 @@ func main() {
 			forwardForNotifications = append(
 				forwardForNotifications,
 				sync.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().Deployments().UpsertEvents().In())),
-				sync.WithOnDelete(database.OnSuccessSendTo(cache.Multiplexers().Deployments().DeleteEvents().In())),
 			)
 		}
 
@@ -492,7 +490,6 @@ func main() {
 			forwardForNotifications = append(
 				forwardForNotifications,
 				sync.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().DaemonSets().UpsertEvents().In())),
-				sync.WithOnDelete(database.OnSuccessSendTo(cache.Multiplexers().DaemonSets().DeleteEvents().In())),
 			)
 		}
 
@@ -510,7 +507,6 @@ func main() {
 			forwardForNotifications = append(
 				forwardForNotifications,
 				sync.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().ReplicaSets().UpsertEvents().In())),
-				sync.WithOnDelete(database.OnSuccessSendTo(cache.Multiplexers().ReplicaSets().DeleteEvents().In())),
 			)
 		}
 
@@ -528,7 +524,6 @@ func main() {
 			forwardForNotifications = append(
 				forwardForNotifications,
 				sync.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().StatefulSets().UpsertEvents().In())),
-				sync.WithOnDelete(database.OnSuccessSendTo(cache.Multiplexers().StatefulSets().DeleteEvents().In())),
 			)
 		}
 
