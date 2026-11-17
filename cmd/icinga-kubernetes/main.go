@@ -14,12 +14,10 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/google/uuid"
-	"github.com/icinga/icinga-go-library/backoff"
 	"github.com/icinga/icinga-go-library/config"
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-go-library/periodic"
-	"github.com/icinga/icinga-go-library/retry"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-go-library/utils"
 	"github.com/icinga/icinga-kubernetes/internal/cache"
@@ -31,7 +29,6 @@ import (
 	"github.com/icinga/icinga-kubernetes/internal/notifications"
 	"github.com/icinga/icinga-kubernetes/internal/schema"
 	"github.com/icinga/icinga-kubernetes/internal/sync"
-	k8sMysql "github.com/icinga/icinga-kubernetes/schema/mysql"
 	"github.com/okzk/sdnotify"
 	"github.com/pkg/errors"
 	promapi "github.com/prometheus/client_golang/api"
@@ -44,8 +41,6 @@ import (
 	kclientcmd "k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 )
-
-const expectedSchemaVersion = "0.5.0"
 
 func main() {
 	var glue daemon.ConfigFlagGlue
@@ -155,87 +150,8 @@ func main() {
 
 	logger.Infow("Using Kubernetes API server", zap.String("host", kconfig.Host))
 
-	hasSchema, err := dbHasSchema(db, cfg.Database.Database)
-	if err != nil {
-		logger.Fatalw("Cannot query whether the database has a kubernetes_schema table", logging.Error(err))
-	}
-
-	g, ctx := errgroup.WithContext(context.Background())
-
-	if hasSchema {
-		var version string
-
-		if err := retry.WithBackoff(
-			ctx,
-			func(ctx context.Context) (err error) {
-				query := `SELECT "version" FROM "kubernetes_schema" ORDER BY "id" DESC LIMIT 1`
-				err = db.QueryRowxContext(ctx, query).Scan(&version)
-				if err != nil {
-					err = database.CantPerformQuery(err, query)
-				}
-				return
-			},
-			retry.Retryable,
-			backoff.DefaultBackoff,
-			db.GetDefaultRetrySettings(),
-		); err != nil {
-			logger.Fatalw("Cannot query schema version", logging.Error(err))
-		}
-
-		if version != expectedSchemaVersion {
-			if err := retry.WithBackoff(
-				ctx,
-				func(ctx context.Context) error {
-					query := db.Rebind(`SELECT "table_name" FROM "INFORMATION_SCHEMA"."TABLES" WHERE "TABLE_SCHEMA"=?`)
-					rows, err := db.QueryContext(ctx, query, cfg.Database.Database)
-					if err != nil {
-						return database.CantPerformQuery(err, query)
-					}
-					defer func() {
-						_ = rows.Close()
-					}()
-
-					dbLog.Info("Dropping schema")
-
-					for rows.Next() {
-						var tableName string
-						if err := rows.Scan(&tableName); err != nil {
-							return errors.Wrap(err, "cannot scan table name")
-						}
-
-						stmt := fmt.Sprintf(`DROP TABLE %q`, tableName)
-						if _, err := db.ExecContext(ctx, stmt); err != nil {
-							return database.CantPerformQuery(err, stmt)
-						}
-					}
-
-					if err := rows.Err(); err != nil {
-						return database.CantPerformQuery(err, query)
-					}
-
-					return nil
-				},
-				retry.Retryable,
-				backoff.DefaultBackoff,
-				db.GetDefaultRetrySettings(),
-			); err != nil {
-				logger.Fatalw("Cannot wipe outdated database tables", logging.Error(err))
-			}
-
-			hasSchema = false
-		}
-	}
-
-	if !hasSchema {
-		dbLog.Info("Importing schema")
-
-		for ddl := range strings.SplitSeq(k8sMysql.Schema, ";") {
-			if ddl = strings.TrimSpace(ddl); ddl != "" {
-				if _, err := db.Exec(ddl); err != nil {
-					logger.Fatalw("Cannot execute schema statement", logging.Error(err))
-				}
-			}
-		}
+	if err := daemon.ApplySchema(context.Background(), db.DB); err != nil {
+		logger.Fatalw("Cannot apply database schema", logging.Error(err))
 	}
 
 	if clusterName == "" {
@@ -258,7 +174,7 @@ func main() {
 		Name: schema.NewNullableString(clusterName),
 	}
 
-	ctx = cluster.NewClusterUuidContext(ctx, clusterInstance.Uuid)
+	g, ctx := errgroup.WithContext(cluster.NewClusterUuidContext(context.Background(), clusterInstance.Uuid))
 
 	stmt, _ := db.BuildUpsertStmt(clusterInstance)
 	if _, err := db.NamedExecContext(ctx, stmt, clusterInstance); err != nil {
@@ -708,21 +624,6 @@ func removeCluster(ctx context.Context, db *kdatabase.DB, logger *logging.Logger
 	logger.Infow("Removed cluster", zap.String("uuid", clusterUuid.String()))
 
 	return nil
-}
-
-// dbHasSchema queries via db whether the database dbName has a table named "kubernetes_schema".
-func dbHasSchema(db *kdatabase.DB, dbName string) (bool, error) {
-	rows, err := db.Query(
-		db.Rebind(`SELECT 1 FROM "INFORMATION_SCHEMA"."TABLES" WHERE "TABLE_SCHEMA"=? AND "TABLE_NAME"='kubernetes_schema'`),
-		dbName,
-	)
-	if err != nil {
-		return false, err
-	}
-
-	defer func() { _ = rows.Close() }()
-
-	return rows.Next(), rows.Err()
 }
 
 // uuidSliceValue is a pflag.Value that collects UUIDs from a flag that may be
