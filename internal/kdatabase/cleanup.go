@@ -110,7 +110,7 @@ type CascadeCleaner struct {
 // the entity are deleted as well.
 func (c *CascadeCleaner) cleanup(ctx context.Context, db *DB, retention time.Duration) error {
 	query := db.Rebind(db.BuildSelectStmt(c.Entity, &struct{ Uuid types.UUID }{}) + fmt.Sprintf(
-		` WHERE %q < UNIX_TIMESTAMP() * 1000 - ? AND "cluster_uuid" = ? LIMIT %d`, c.Column, batchSize,
+		` WHERE %q < %s - ? AND "cluster_uuid" = ? LIMIT %d`, c.Column, unixMilliNow(db.DriverName()), batchSize,
 	))
 
 	for {
