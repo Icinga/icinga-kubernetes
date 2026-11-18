@@ -55,12 +55,12 @@ func (i Informers) AddEventHandler(handler cache.ResourceEventHandler) error {
 // keeps retrying quietly, so it catches up once permitted, which is logged as
 // well. It must be called before Run.
 func (i Informers) SkipForbidden(log *logging.Logger) error {
-	return i.skipForbidden(log, permittedFor)
+	return i.skipForbidden(log, permittedFor, permittedInterval)
 }
 
-// skipForbidden is SkipForbidden with permittedFor passed in, so that tests
-// need not wait as long.
-func (i Informers) skipForbidden(log *logging.Logger, permittedFor time.Duration) error {
+// skipForbidden is SkipForbidden with permittedFor and permittedInterval passed
+// in, so that tests need not wait as long.
+func (i Informers) skipForbidden(log *logging.Logger, permittedFor, permittedInterval time.Duration) error {
 	for _, informer := range i {
 		if err := informer.SetWatchErrorHandlerWithContext(func(ctx context.Context, r *cache.Reflector, err error) {
 			if !kerrors.IsForbidden(err) {
@@ -77,7 +77,7 @@ func (i Informers) skipForbidden(log *logging.Logger, permittedFor time.Duration
 
 			log.Warnw("Cannot list and watch. Skipping until permitted", logging.Error(err))
 
-			go awaitPermitted(ctx, log, informer, err, permittedFor)
+			go awaitPermitted(ctx, log, informer, err, permittedFor, permittedInterval)
 		}); err != nil {
 			return err
 		}
@@ -92,7 +92,12 @@ func (i Informers) skipForbidden(log *logging.Logger, permittedFor time.Duration
 // is, so the lack of denials is the only sign. It then forgets the denial, so
 // that the next one is logged again.
 func awaitPermitted(
-	ctx context.Context, log *logging.Logger, informer cache.SharedIndexInformer, denial error, permittedFor time.Duration,
+	ctx context.Context,
+	log *logging.Logger,
+	informer cache.SharedIndexInformer,
+	denial error,
+	permittedFor time.Duration,
+	permittedInterval time.Duration,
 ) {
 	if err := wait.PollUntilContextCancel(ctx, permittedInterval, false, func(context.Context) (bool, error) {
 		v, ok := forbiddenInformers.Load(informer)
