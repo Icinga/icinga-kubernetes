@@ -222,8 +222,10 @@ namespaces:
 Only the listed namespaces, or all but the listed ones, and their resources
 are synchronized. Cluster-scoped resources, i.e. nodes and persistent volumes,
 are always synchronized completely. When the filter changes, the database is
-brought in line with it on the next start, except for events, which are kept
-until they expire.
+brought in line with it on the next start: objects of namespaces that are no
+longer synchronized are deleted, along with their favorites and container logs,
+which are not restored if the namespace is synchronized again. Events are kept
+until they expire
 
 ### Permissions
 
@@ -237,8 +239,8 @@ Resources that Icinga for Kubernetes may not read are skipped:
   may not be read. Skipped resources are picked up within about a minute as
   they are permitted, container logs within five minutes, without a restart.
 * Objects of skipped resources that are already in the database are deleted
-  on startup, as if they were gone. Events are not deleted, but kept until
-  they expire.
+  on startup, as if their namespaces were filtered out (see above).
+  Events are not deleted, but kept until they expire.
 
 Only getting the `kube-system` namespace itself is required, since its UID
 identifies the cluster. Without it, Icinga for Kubernetes does not start.
@@ -307,10 +309,13 @@ and needs read access to it, as in the example deployment.
 
 ### Limitations
 
-* Only run one instance of Icinga for Kubernetes per cluster and database.
+* Only run one instance of Icinga for Kubernetes per cluster.
   Instances with different namespace filters remove each other's data.
 * Kubernetes records events about nodes and persistent volumes in the `default`
   namespace, so they are not synchronized if the filter leaves out `default`.
+* Grant list and watch together. If a resource may be listed but not watched,
+  Icinga for Kubernetes lists it again about once a minute and writes all of
+  its objects to the database each time.
 
 ## Multi-Cluster Support using systemd Instantiated Services
 
