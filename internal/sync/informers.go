@@ -28,9 +28,11 @@ const (
 	// count as permitted. The reflector waits at most a minute between retries,
 	// i.e., up to 30 seconds plus as much jitter, as set by defaultBackoffMax
 	// and defaultBackoffJitter in k8s.io/client-go/tools/cache/reflector.go.
-	// If only the watch is denied, each retry lists first, and the remaining
-	// 30 seconds leave room for that.
-	permittedFor = 90 * time.Second
+	// If only the watch is denied, each retry lists first, which the API server
+	// lets take up to another minute by its default --request-timeout. The
+	// remaining 30 seconds leave room for the denied watch requests. A slower
+	// list still lets the informer count as permitted between two denials.
+	permittedFor = 150 * time.Second
 )
 
 // Informers combines informers of the same resource, e.g., one per watched
