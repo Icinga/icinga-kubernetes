@@ -29,12 +29,11 @@ type ServicePodSync struct {
 	podEvents        <-chan database.Entity
 	podDeletes       <-chan any
 	serviceEvents    <-chan database.Entity
-	serviceDeletes   <-chan any
 }
 
 // NewServicePodSync returns a ServicePodSync that reads services and pods from
-// the given informers and handles the pod and service upserts and deletes sent
-// on the given channels.
+// the given informers and handles the pod and service upserts and the pod
+// deletes sent on the given channels.
 func NewServicePodSync(
 	db *kdatabase.DB,
 	serviceInformers Informers,
@@ -43,7 +42,6 @@ func NewServicePodSync(
 	podEvents <-chan database.Entity,
 	podDeletes <-chan any,
 	serviceEvents <-chan database.Entity,
-	serviceDeletes <-chan any,
 ) *ServicePodSync {
 	return &ServicePodSync{
 		db:               db,
@@ -53,14 +51,14 @@ func NewServicePodSync(
 		podEvents:        podEvents,
 		podDeletes:       podDeletes,
 		serviceEvents:    serviceEvents,
-		serviceDeletes:   serviceDeletes,
 	}
 }
 
 // Run links services to the pods their selectors match. On each service upsert
 // and on each pod upsert that changes the pod's labels, it replaces all links
 // of that service or pod, which also removes links that no longer match.
-// On each pod or service delete, it removes all links of that pod or service.
+// Deletes leave the links in place, like every other relation of a soft-deleted
+// pod or service, until the purge of that pod or service removes them.
 func (s *ServicePodSync) Run(ctx context.Context) error {
 	if !kcache.WaitForCacheSync(ctx.Done(), s.serviceInformers.HasSynced, s.podInformers.HasSynced) {
 		return ctx.Err()
@@ -74,7 +72,7 @@ func (s *ServicePodSync) Run(ctx context.Context) error {
 
 	// Pod and service events share one loop so that their replacements cannot
 	// interleave and delete each other's links.
-	for s.podEvents != nil || s.podDeletes != nil || s.serviceEvents != nil || s.serviceDeletes != nil {
+	for s.podEvents != nil || s.podDeletes != nil || s.serviceEvents != nil {
 		select {
 		case entity, more := <-s.podEvents:
 			if !more {
@@ -87,8 +85,8 @@ func (s *ServicePodSync) Run(ctx context.Context) error {
 
 			// Upserts of the same pod can finish out of order, so the event may
 			// carry outdated labels. Take them from the cache instead. A pod
-			// that is gone or was replaced is left to its delete, which removes
-			// its links. Linking it here would leave orphans behind.
+			// that is gone or was replaced is not linked again, as the purge of
+			// its row removes its links.
 			obj, exists, err := s.podInformers.GetByKey(kcache.NewObjectName(pod.Namespace, pod.Name).String())
 			if err != nil {
 				return err
@@ -145,17 +143,9 @@ func (s *ServicePodSync) Run(ctx context.Context) error {
 				continue
 			}
 
-			podUuid := id.(types.UUID)
-
-			// A replacement racing the cascading delete, for example through a retry,
-			// can re-insert the pod's links after the cascading delete removed them.
-			if err := replaceServicePods(ctx, s.db, "pod_uuid", podUuid, nil); err != nil {
-				return err
-			}
-
-			s.log.Debugw("Removed links of deleted pod", zap.String("uuid", podUuid.String()))
-
-			delete(replacedPodLabels, podUuid)
+			// The links stay until the purge of the pod. Only forget its labels,
+			// so that the map does not grow with every deleted pod.
+			delete(replacedPodLabels, id.(types.UUID))
 		case entity, more := <-s.serviceEvents:
 			if !more {
 				s.serviceEvents = nil
@@ -205,21 +195,6 @@ func (s *ServicePodSync) Run(ctx context.Context) error {
 			}
 
 			s.log.Debugw("Replaced links of service", serviceName, zap.Int("pods", len(servicePods)))
-		case id, more := <-s.serviceDeletes:
-			if !more {
-				s.serviceDeletes = nil
-				continue
-			}
-
-			serviceUuid := id.(types.UUID)
-
-			// A pod replacement that listed the service before it left the cache
-			// can re-insert its links after the cascading delete removed them.
-			if err := replaceServicePods(ctx, s.db, "service_uuid", serviceUuid, nil); err != nil {
-				return err
-			}
-
-			s.log.Debugw("Removed links of deleted service", zap.String("uuid", serviceUuid.String()))
 		case <-ctx.Done():
 			return ctx.Err()
 		}

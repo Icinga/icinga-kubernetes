@@ -62,6 +62,16 @@ func (c *Client) Stream(ctx context.Context, entities <-chan database.Entity) er
 			}
 
 			ev := entity.(Marshaler).MarshalEvent()
+			if suppressWhileDeleting(entity, ev) {
+				c.logger.Debugw(
+					"Skipping non-OK event of an object that is being deleted",
+					zap.String("name", ev.Name),
+					zap.Stringer("severity", ev.Severity),
+				)
+
+				continue
+			}
+
 			if ev.Severity == event.SeverityOK {
 				ev.Close = types.MakeBool(true)
 			}
@@ -149,6 +159,18 @@ func (c *Client) Stream(ctx context.Context, entities <-chan database.Entity) er
 	}
 }
 
+// suppressWhileDeleting reports whether ev, the event of the given entity, must
+// not be sent because the object is being deleted. Of such objects, only OK
+// events are sent. Failures during shutdown, such as containers exiting
+// non-zero on SIGTERM, must not open or worsen an incident. An incident that
+// was already open before the deletion started stays open, so a deletion that
+// never finishes still shows up, and an OK event can still close it.
+func suppressWhileDeleting(entity any, ev *event.Event) bool {
+	d, ok := entity.(DeletionReporter)
+
+	return ok && d.IsDeleting() && ev.Severity != event.SeverityOK
+}
+
 // CloseOrphanedIncidents closes all incidents in Icinga Notifications that are
 // associated with the given clusterUuid but do not have a corresponding resource
 // in the database.
@@ -198,7 +220,7 @@ func (c *Client) CloseOrphanedIncidents(ctx context.Context, clusterUuid types.U
 	live := make(map[string]struct{})
 	for kind, uuids := range uuidByResource {
 		ng.Go(func() error {
-			q, args, err := sqlx.In(fmt.Sprintf(`SELECT "uuid" FROM %q WHERE "uuid" IN (?)`, kind), uuids)
+			q, args, err := sqlx.In(fmt.Sprintf(`SELECT "uuid" FROM %q WHERE "uuid" IN (?) AND "deleted" IS NULL`, kind), uuids)
 			if err != nil {
 				return err
 			}
