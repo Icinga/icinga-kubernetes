@@ -27,6 +27,13 @@ func NewController(informers Informers, log *logging.Logger) *Controller {
 }
 
 func (c *Controller) Stream(ctx context.Context, sink *Sink) error {
+	// Informers retry failed lists and watches forever, so a missing permission
+	// would keep the sync waiting for its initial list. Sync what is permitted
+	// instead.
+	if err := c.informers.SkipForbidden(c.log); err != nil {
+		return err
+	}
+
 	if err := c.informers.AddEventHandler(NewEventHandler(c.queue, c.log)); err != nil {
 		return err
 	}

@@ -14,11 +14,14 @@ import (
 	"github.com/go-co-op/gocron"
 	"github.com/icinga/icinga-go-library/com"
 	"github.com/icinga/icinga-go-library/database"
+	"github.com/icinga/icinga-go-library/logging"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/internal/cluster"
 	"github.com/icinga/icinga-kubernetes/internal/kdatabase"
+	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	kcorev1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -29,6 +32,10 @@ var (
 	containerLogsMu sync.Mutex
 
 	deletedPodIds = make(map[string]bool)
+
+	// forbiddenLogNamespaces holds the namespaces whose container logs were
+	// denied, to warn about each only once.
+	forbiddenLogNamespaces sync.Map
 )
 
 const (
@@ -302,7 +309,9 @@ func (cl *ContainerLog) Upsert() any {
 
 // syncContainerLogs fetches the logs from the kubernetes API for the given
 // container and syncs to the database.
-func (cl *ContainerLog) syncContainerLogs(ctx context.Context, clientset *kubernetes.Clientset, db *kdatabase.DB) error {
+func (cl *ContainerLog) syncContainerLogs(
+	ctx context.Context, clientset *kubernetes.Clientset, db *kdatabase.DB, log *logging.Logger,
+) error {
 	logOptions := &kcorev1.PodLogOptions{Container: cl.ContainerName}
 	if !cl.LastUpdate.Time().IsZero() {
 		sinceSeconds := int64(time.Since(cl.LastUpdate.Time()).Seconds())
@@ -312,6 +321,25 @@ func (cl *ContainerLog) syncContainerLogs(ctx context.Context, clientset *kubern
 	req := clientset.CoreV1().Pods(cl.Namespace).GetLogs(cl.PodName, logOptions)
 	body, err := req.Stream(ctx)
 	if err != nil {
+		if kerrors.IsForbidden(err) {
+			if _, warned := forbiddenLogNamespaces.LoadOrStore(cl.Namespace, struct{}{}); !warned {
+				log.Warnw(
+					"Cannot get container logs. Skipping until permitted",
+					zap.String("namespace", cl.Namespace),
+					logging.Error(err),
+				)
+			}
+		}
+
+		// The scheduler running the log sync discards its errors.
+		log.Debugw(
+			"Cannot get container logs",
+			zap.String("namespace", cl.Namespace),
+			zap.String("pod", cl.PodName),
+			zap.String("container", cl.ContainerName),
+			logging.Error(err),
+		)
+
 		return err
 	}
 	defer func() { _ = body.Close() }()
@@ -483,7 +511,12 @@ func GetContainerState(container kcorev1.Container, status kcorev1.ContainerStat
 // the database and initiates a container deletion stream that cleans up all
 // container-related resources.
 func SyncContainers(
-	ctx context.Context, db *kdatabase.DB, g *errgroup.Group, upsertPods <-chan database.Entity, deletePods <-chan any,
+	ctx context.Context,
+	db *kdatabase.DB,
+	g *errgroup.Group,
+	upsertPods <-chan database.Entity,
+	deletePods <-chan any,
+	log *logging.Logger,
 ) {
 	type containerFingerprint struct {
 		Uuid    types.UUID
@@ -593,7 +626,7 @@ func SyncContainers(
 						containerLogsMu.Unlock()
 
 						scheduler.Every(ScheduleInterval.String()).Tag(container.Uuid.String())
-						if _, err := scheduler.Do(containerLog.syncContainerLogs, ctx, pod.factory.clientset, db); err != nil {
+						if _, err := scheduler.Do(containerLog.syncContainerLogs, ctx, pod.factory.clientset, db, log); err != nil {
 							return err
 						}
 					} else if err == nil {
