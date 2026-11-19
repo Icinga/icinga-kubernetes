@@ -54,6 +54,14 @@ namespaces:
 #  exclude:
 #    - testing
 
+# Client-side rate limit of requests to the Kubernetes API.
+rate_limit:
+  # Sustained number of requests per second. A negative value disables the rate limit.
+#  qps: 5
+
+  # Maximum number of requests above qps for short periods.
+#  burst: 10
+
 # Configuration for Prometheus metrics API.
 prometheus:
   # Prometheus server URL.
