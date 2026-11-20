@@ -6,7 +6,7 @@ require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/creasty/defaults v1.11.0
 	github.com/go-co-op/gocron v1.37.0
-	github.com/go-sql-driver/mysql v1.10.1
+	github.com/go-sql-driver/mysql v1.10.2
 	github.com/google/uuid v1.6.0
 	github.com/icinga/icinga-go-library v0.10.0
 	github.com/jmoiron/sqlx v1.4.0
