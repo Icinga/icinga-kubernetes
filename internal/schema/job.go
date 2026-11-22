@@ -199,41 +199,52 @@ func (j *Job) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 }
 
 func (j *Job) getIcingaState(job *kbatchv1.Job) (IcingaState, string) {
+	conditions := make(map[kbatchv1.JobConditionType]kbatchv1.JobCondition, len(job.Status.Conditions))
 	for _, condition := range job.Status.Conditions {
-		if condition.Status != kcorev1.ConditionTrue {
-			continue
+		if condition.Status == kcorev1.ConditionTrue {
+			conditions[condition.Type] = condition
+		}
+	}
+
+	// The Job controller keeps the interim FailureTarget and SuccessCriteriaMet
+	// conditions after adding the terminal Failed or Complete condition.
+	// Terminal conditions therefore take precedence regardless of their order.
+	if condition, ok := conditions[kbatchv1.JobFailed]; ok {
+		return Critical, fmt.Sprintf(
+			"Job %s/%s has failed its execution. %s: %s.",
+			j.Namespace, j.Name, condition.Reason, condition.Message)
+	}
+
+	if _, ok := conditions[kbatchv1.JobComplete]; ok {
+		reason := fmt.Sprintf(
+			"Job %s/%s has completed its execution successfully with",
+			j.Namespace, j.Name)
+
+		if j.Completions.Valid {
+			reason += fmt.Sprintf(" %d necessary pod completions.", j.Completions.Int32)
+		} else {
+			reason += " any pod completion."
 		}
 
-		switch condition.Type {
-		case kbatchv1.JobSuccessCriteriaMet:
-			return Ok, fmt.Sprintf(
-				"Job %s/%s met its success criteria.",
-				j.Namespace, j.Name)
-		case kbatchv1.JobComplete:
-			reason := fmt.Sprintf(
-				"Job %s/%s has completed its execution successfully with",
-				j.Namespace, j.Name)
+		return Ok, reason
+	}
 
-			if j.Completions.Valid {
-				reason += fmt.Sprintf(" %d necessary pod completions.", j.Completions.Int32)
-			} else {
-				reason += " any pod completion."
-			}
+	if _, ok := conditions[kbatchv1.JobSuccessCriteriaMet]; ok {
+		return Ok, fmt.Sprintf(
+			"Job %s/%s met its success criteria.",
+			j.Namespace, j.Name)
+	}
 
-			return Ok, reason
-		case kbatchv1.JobFailed:
-			return Critical, fmt.Sprintf(
-				"Job %s/%s has failed its execution. %s: %s.",
-				j.Namespace, j.Name, condition.Reason, condition.Message)
-		case kbatchv1.JobFailureTarget:
-			return Warning, fmt.Sprintf(
-				"Job %s/%s is about to fail its execution. %s: %s.",
-				j.Namespace, j.Name, condition.Reason, condition.Message)
-		case kbatchv1.JobSuspended:
-			return Ok, fmt.Sprintf(
-				"Job %s/%s is suspended.",
-				j.Namespace, j.Name)
-		}
+	if condition, ok := conditions[kbatchv1.JobFailureTarget]; ok {
+		return Warning, fmt.Sprintf(
+			"Job %s/%s is about to fail its execution. %s: %s.",
+			j.Namespace, j.Name, condition.Reason, condition.Message)
+	}
+
+	if _, ok := conditions[kbatchv1.JobSuspended]; ok {
+		return Ok, fmt.Sprintf(
+			"Job %s/%s is suspended.",
+			j.Namespace, j.Name)
 	}
 
 	var completions string
