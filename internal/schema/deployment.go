@@ -95,7 +95,6 @@ func (d *Deployment) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	d.AvailableReplicas = deployment.Status.AvailableReplicas
 	d.ReadyReplicas = deployment.Status.ReadyReplicas
 	d.UnavailableReplicas = deployment.Status.UnavailableReplicas
-	d.IcingaState, d.IcingaStateReason = d.getIcingaState()
 
 	for _, condition := range deployment.Status.Conditions {
 		d.Conditions = append(d.Conditions, DeploymentCondition{
@@ -108,6 +107,8 @@ func (d *Deployment) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			Message:        condition.Message,
 		})
 	}
+
+	d.IcingaState, d.IcingaStateReason = d.getIcingaState()
 
 	for _, ownerReference := range deployment.OwnerReferences {
 		var blockOwnerDeletion, controller bool
@@ -191,7 +192,7 @@ func (d *Deployment) getIcingaState() (IcingaState, string) {
 
 			return Critical, reason
 		}
-		if condition.Type == string(kappsv1.ReplicaSetReplicaFailure) && condition.Status != string(kcorev1.ConditionTrue) {
+		if condition.Type == string(kappsv1.DeploymentReplicaFailure) && condition.Status == string(kcorev1.ConditionTrue) {
 			reason := fmt.Sprintf("Deployment %s/%s has replica failure: %s.", d.Namespace, d.Name, condition.Message)
 
 			return Critical, reason
