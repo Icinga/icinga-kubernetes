@@ -14,6 +14,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.25.0
 	github.com/prometheus/common v0.74.0
+	github.com/robfig/cron/v3 v3.0.1
 	github.com/spf13/pflag v1.1.0
 	go.uber.org/zap v1.28.0
 	golang.org/x/exp v0.0.0-20251113190631-e25ba8c21ef6
@@ -58,7 +59,6 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_model v0.6.3 // indirect
-	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/ssgreg/journald v1.0.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.uber.org/atomic v1.12.0 // indirect
