@@ -312,6 +312,10 @@ func main() {
 
 		if cfg.Prometheus.Username != "" {
 			transport = com.NewBasicAuthTransport(transport, cfg.Prometheus.Username, cfg.Prometheus.Password)
+		} else if cfg.Prometheus.Token != "" {
+			transport = com.NewBearerTokenTransport(transport, cfg.Prometheus.Token)
+		} else if cfg.Prometheus.TokenFile != "" {
+			transport = com.NewBearerTokenFileTransport(transport, cfg.Prometheus.TokenFile)
 		}
 
 		promClient, err := promapi.NewClient(promapi.Config{

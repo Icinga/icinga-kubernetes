@@ -1,8 +1,8 @@
 // Package com provides composable HTTP transports that modify outgoing requests.
 //
 // The package follows a layered transport pattern: each [http.RoundTripper]
-// wraps another and adds one concern (base URL resolution, basic auth, or a
-// User-Agent header) before delegating to the next layer.
+// wraps another and adds one concern (base URL resolution, basic auth, bearer
+// token auth, or a User-Agent header) before delegating to the next layer.
 //
 // The [http.RoundTripper] contract requires that a transport must not modify
 // the caller's request, so each layer clones the request before modifying

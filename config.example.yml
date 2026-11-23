@@ -67,6 +67,12 @@ prometheus:
   # Prometheus server URL.
 #  url: http://localhost:9090
 
+  # Bearer token for authenticating with Prometheus.
+#  token: token
+
+  # Path to a file containing the bearer token for authenticating with Prometheus.
+#  token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+
 # Configuration for Icinga Notifications daemon.
 notifications:
   # URL to the API root. Different URI schemes are possible.
