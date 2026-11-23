@@ -348,8 +348,6 @@ func main() {
 	multiplexWg := stdsync.WaitGroup{}
 	multiplexWg.Add(1)
 	g.Go(func() error {
-		s := sync.NewSync(db, factory.Nodes(), logs.GetChildLogger("nodes"), schema.NewNode)
-
 		var forwardForNotifications []sync.Feature
 		if cfg.Notifications.Url != "" {
 			forwardForNotifications = append(
@@ -360,6 +358,8 @@ func main() {
 
 		multiplexWg.Done()
 
+		s := sync.NewSync(db, factory.Nodes(), logs.GetChildLogger("nodes"), schema.NewNode)
+
 		return s.Run(ctx, forwardForNotifications...)
 	})
 
@@ -368,10 +368,6 @@ func main() {
 
 	multiplexWg.Add(1)
 	g.Go(func() error {
-		schema.SyncContainers(ctx, db, g, containerPodUpserts, containerPodDeletes)
-
-		f := schema.NewPodFactory(clientset)
-		s := sync.NewSync(db, factory.Pods(), logs.GetChildLogger("pods"), f.New)
 		forward := []sync.Feature{
 			sync.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().Pods().UpsertEvents().In())),
 			sync.WithOnDelete(database.OnSuccessSendTo(cache.Multiplexers().Pods().DeleteEvents().In())),
@@ -379,13 +375,16 @@ func main() {
 
 		multiplexWg.Done()
 
+		schema.SyncContainers(ctx, db, g, containerPodUpserts, containerPodDeletes)
+
+		f := schema.NewPodFactory(clientset)
+		s := sync.NewSync(db, factory.Pods(), logs.GetChildLogger("pods"), f.New)
+
 		return s.Run(ctx, forward...)
 	})
 
 	multiplexWg.Add(1)
 	g.Go(func() error {
-		s := sync.NewSync(db, factory.Deployments(), logs.GetChildLogger("deployments"), schema.NewDeployment)
-
 		var forwardForNotifications []sync.Feature
 		if cfg.Notifications.Url != "" {
 			forwardForNotifications = append(
@@ -396,13 +395,13 @@ func main() {
 
 		multiplexWg.Done()
 
+		s := sync.NewSync(db, factory.Deployments(), logs.GetChildLogger("deployments"), schema.NewDeployment)
+
 		return s.Run(ctx, forwardForNotifications...)
 	})
 
 	multiplexWg.Add(1)
 	g.Go(func() error {
-		s := sync.NewSync(db, factory.DaemonSets(), logs.GetChildLogger("daemon-sets"), schema.NewDaemonSet)
-
 		var forwardForNotifications []sync.Feature
 		if cfg.Notifications.Url != "" {
 			forwardForNotifications = append(
@@ -413,13 +412,13 @@ func main() {
 
 		multiplexWg.Done()
 
+		s := sync.NewSync(db, factory.DaemonSets(), logs.GetChildLogger("daemon-sets"), schema.NewDaemonSet)
+
 		return s.Run(ctx, forwardForNotifications...)
 	})
 
 	multiplexWg.Add(1)
 	g.Go(func() error {
-		s := sync.NewSync(db, factory.ReplicaSets(), logs.GetChildLogger("replica-sets"), schema.NewReplicaSet)
-
 		var forwardForNotifications []sync.Feature
 		if cfg.Notifications.Url != "" {
 			forwardForNotifications = append(
@@ -430,13 +429,13 @@ func main() {
 
 		multiplexWg.Done()
 
+		s := sync.NewSync(db, factory.ReplicaSets(), logs.GetChildLogger("replica-sets"), schema.NewReplicaSet)
+
 		return s.Run(ctx, forwardForNotifications...)
 	})
 
 	multiplexWg.Add(1)
 	g.Go(func() error {
-		s := sync.NewSync(db, factory.StatefulSets(), logs.GetChildLogger("stateful-sets"), schema.NewStatefulSet)
-
 		var forwardForNotifications []sync.Feature
 		if cfg.Notifications.Url != "" {
 			forwardForNotifications = append(
@@ -447,17 +446,20 @@ func main() {
 
 		multiplexWg.Done()
 
+		s := sync.NewSync(db, factory.StatefulSets(), logs.GetChildLogger("stateful-sets"), schema.NewStatefulSet)
+
 		return s.Run(ctx, forwardForNotifications...)
 	})
 
 	multiplexWg.Add(1)
 	g.Go(func() error {
-		s := sync.NewSync(db, factory.Services(), logs.GetChildLogger("services"), schema.NewService)
 		forward := []sync.Feature{
 			sync.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().Services().UpsertEvents().In())),
 		}
 
 		multiplexWg.Done()
+
+		s := sync.NewSync(db, factory.Services(), logs.GetChildLogger("services"), schema.NewService)
 
 		return s.Run(ctx, forward...)
 	})
