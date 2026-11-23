@@ -242,28 +242,35 @@ func main() {
 			nclient.CloseOrphanedIncidents(ctx, clusterInstance.Uuid)
 		}, periodic.Immediate()).Stop()
 
+		nodeUpserts := cache.Multiplexers().Nodes().UpsertEvents().Out()
+		daemonSetUpserts := cache.Multiplexers().DaemonSets().UpsertEvents().Out()
+		statefulSetUpserts := cache.Multiplexers().StatefulSets().UpsertEvents().Out()
+		deploymentUpserts := cache.Multiplexers().Deployments().UpsertEvents().Out()
+		replicaSetUpserts := cache.Multiplexers().ReplicaSets().UpsertEvents().Out()
+		podUpserts := cache.Multiplexers().Pods().UpsertEvents().Out()
+
 		g.Go(func() error {
-			return nclient.Stream(ctx, cache.Multiplexers().Nodes().UpsertEvents().Out())
+			return nclient.Stream(ctx, nodeUpserts)
 		})
 
 		g.Go(func() error {
-			return nclient.Stream(ctx, cache.Multiplexers().DaemonSets().UpsertEvents().Out())
+			return nclient.Stream(ctx, daemonSetUpserts)
 		})
 
 		g.Go(func() error {
-			return nclient.Stream(ctx, cache.Multiplexers().StatefulSets().UpsertEvents().Out())
+			return nclient.Stream(ctx, statefulSetUpserts)
 		})
 
 		g.Go(func() error {
-			return nclient.Stream(ctx, cache.Multiplexers().Deployments().UpsertEvents().Out())
+			return nclient.Stream(ctx, deploymentUpserts)
 		})
 
 		g.Go(func() error {
-			return nclient.Stream(ctx, cache.Multiplexers().ReplicaSets().UpsertEvents().Out())
+			return nclient.Stream(ctx, replicaSetUpserts)
 		})
 
 		g.Go(func() error {
-			return nclient.Stream(ctx, cache.Multiplexers().Pods().UpsertEvents().Out())
+			return nclient.Stream(ctx, podUpserts)
 		})
 	}
 
@@ -274,12 +281,11 @@ func main() {
 
 	wg := stdsync.WaitGroup{}
 
+	podEvents := cache.Multiplexers().Pods().UpsertEvents().Out()
+	podDeletes := cache.Multiplexers().Pods().DeleteEvents().Out()
+	serviceEvents := cache.Multiplexers().Services().UpsertEvents().Out()
 	wg.Add(1)
 	g.Go(func() error {
-		podEvents := cache.Multiplexers().Pods().UpsertEvents().Out()
-		podDeletes := cache.Multiplexers().Pods().DeleteEvents().Out()
-		serviceEvents := cache.Multiplexers().Services().UpsertEvents().Out()
-
 		wg.Done()
 
 		s := sync.NewServicePodSync(
@@ -360,26 +366,22 @@ func main() {
 		return s.Run(ctx, forwardForNotifications...)
 	})
 
+	containerPodUpserts := cache.Multiplexers().Pods().UpsertEvents().Out()
+	containerPodDeletes := cache.Multiplexers().Pods().DeleteEvents().Out()
 	wg.Add(1)
 	g.Go(func() error {
-		schema.SyncContainers(
-			ctx,
-			db,
-			g,
-			cache.Multiplexers().Pods().UpsertEvents().Out(),
-			cache.Multiplexers().Pods().DeleteEvents().Out(),
-		)
+		schema.SyncContainers(ctx, db, g, containerPodUpserts, containerPodDeletes)
 
 		f := schema.NewPodFactory(clientset)
 		s := sync.NewSync(db, factory.Pods(), logs.GetChildLogger("pods"), f.New)
+		forwardForPods := []sync.Feature{
+			sync.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().Pods().UpsertEvents().In())),
+			sync.WithOnDelete(database.OnSuccessSendTo(cache.Multiplexers().Pods().DeleteEvents().In())),
+		}
 
 		wg.Done()
 
-		return s.Run(
-			ctx,
-			sync.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().Pods().UpsertEvents().In())),
-			sync.WithOnDelete(database.OnSuccessSendTo(cache.Multiplexers().Pods().DeleteEvents().In())),
-		)
+		return s.Run(ctx, forwardForPods...)
 	})
 
 	wg.Add(1)
@@ -450,13 +452,16 @@ func main() {
 		return s.Run(ctx, forwardForNotifications...)
 	})
 
+	wg.Add(1)
 	g.Go(func() error {
 		s := sync.NewSync(db, factory.Services(), logs.GetChildLogger("services"), schema.NewService)
-
-		return s.Run(
-			ctx,
+		forwardForServices := []sync.Feature{
 			sync.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().Services().UpsertEvents().In())),
-		)
+		}
+
+		wg.Done()
+
+		return s.Run(ctx, forwardForServices...)
 	})
 
 	g.Go(func() error {
