@@ -36,7 +36,10 @@ func (e *EventHandler) OnAdd(obj any, _ bool) {
 	e.enqueue(EventAdd, obj, cache.MetaNamespaceKeyFunc)
 }
 
-func (e *EventHandler) OnUpdate(_, newObj any) {
+func (e *EventHandler) OnUpdate(oldObj, newObj any) {
+	if uidOf(oldObj) != uidOf(newObj) {
+		e.enqueue(EventDelete, oldObj, cache.MetaNamespaceKeyFunc)
+	}
 	e.enqueue(EventUpdate, newObj, cache.MetaNamespaceKeyFunc)
 }
 
@@ -52,19 +55,20 @@ func (e *EventHandler) enqueue(_type EventType, obj any, keyFunc cache.KeyFunc) 
 		return
 	}
 
-	var id types.UUID
+	e.queue.Add(EventHandlerItem{
+		Type: _type,
+		Id:   uidOf(obj),
+		KKey: key,
+	})
+}
+
+func uidOf(obj any) types.UUID {
 	switch v := obj.(type) {
 	case kmetav1.Object:
-		id = schema.EnsureUUID(v.GetUID())
+		return schema.EnsureUUID(v.GetUID())
 	case cache.DeletedFinalStateUnknown:
-		id = schema.EnsureUUID(v.Obj.(kmetav1.Object).GetUID())
+		return schema.EnsureUUID(v.Obj.(kmetav1.Object).GetUID())
 	default:
 		panic(fmt.Sprintf("unknown object type %#v", v))
 	}
-
-	e.queue.Add(EventHandlerItem{
-		Type: _type,
-		Id:   id,
-		KKey: key,
-	})
 }
