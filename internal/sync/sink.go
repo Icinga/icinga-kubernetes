@@ -45,7 +45,7 @@ func (s *Sink) DeleteCh() <-chan any {
 func (s *Sink) Upsert(ctx context.Context, item *Item) error {
 	if item.Item != nil {
 		deletionTimestamp := (*item.Item).GetDeletionTimestamp()
-		if !deletionTimestamp.IsZero() && deletionTimestamp.Time.Compare(time.Now().Add(30*time.Second)) <= 0 {
+		if !deletionTimestamp.IsZero() && deletionTimestamp.Compare(time.Now().Add(30*time.Second)) <= 0 {
 			// Don't process UPSERTs if the resource is about to be deleted in
 			// the next 30 seconds to prevent races between simultaneous UPSERT
 			// and DELETE statements for the same resource, where an UPSERT

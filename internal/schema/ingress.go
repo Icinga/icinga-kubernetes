@@ -124,11 +124,11 @@ func (i *Ingress) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	}
 
 	for _, rules := range ingress.Spec.Rules {
-		if rules.IngressRuleValue.HTTP == nil {
+		if rules.HTTP == nil {
 			continue
 		}
 
-		for _, ruleValue := range rules.IngressRuleValue.HTTP.Paths {
+		for _, ruleValue := range rules.HTTP.Paths {
 			// It is safe to use the pointer directly here.
 			pathType := string(*ruleValue.PathType)
 			if ruleValue.Backend.Service != nil {

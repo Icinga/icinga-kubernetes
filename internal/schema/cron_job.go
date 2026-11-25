@@ -59,7 +59,7 @@ func (c *CronJob) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	// as Kubernetes sets it to 1 if not configured.
 	c.FailedJobsHistoryLimit = *cronJob.Spec.FailedJobsHistoryLimit
 
-	c.Active = int32(len(cronJob.Status.Active))
+	c.Active = int32(len(cronJob.Status.Active)) // #nosec G115 -- more than MaxInt32 active jobs are unrealistic
 	if cronJob.Status.LastScheduleTime != nil {
 		c.LastScheduleTime = types.UnixMilli(cronJob.Status.LastScheduleTime.Time)
 	}

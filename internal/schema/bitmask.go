@@ -3,6 +3,7 @@ package schema
 import (
 	"database/sql"
 	"database/sql/driver"
+	"fmt"
 	"strconv"
 
 	"golang.org/x/exp/constraints"
@@ -20,12 +21,21 @@ func (b *Bitmask[T]) Toggle(flag T)  { b.bitmask ^= flag }
 
 // Scan implements the sql.Scanner interface.
 func (b *Bitmask[T]) Scan(src any) error {
-	i, err := strconv.ParseInt(string(src.([]byte)), 10, 64)
-	if err != nil {
-		return err
-	}
+	switch v := src.(type) {
+	case nil:
+		b.bitmask = 0
+	case int64:
+		b.bitmask = T(v)
+	case []byte:
+		i, err := strconv.ParseInt(string(v), 10, 64)
+		if err != nil {
+			return err
+		}
 
-	b.bitmask = T(i)
+		b.bitmask = T(i)
+	default:
+		return fmt.Errorf("cannot scan %T into Bitmask", src)
+	}
 
 	return nil
 }

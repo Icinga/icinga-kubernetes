@@ -3,6 +3,8 @@ package daemon
 import (
 	"context"
 	"fmt"
+	"net"
+	"strconv"
 	"strings"
 
 	"github.com/icinga/icinga-go-library/database"
@@ -78,10 +80,12 @@ func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *metrics.
 				return errors.Wrap(err, "cannot delete Prometheus config")
 			}
 
+			//nolint:sqlclosecheck // False positive, does not detect deferred close: https://github.com/ryanrolds/sqlclosecheck/issues/43
 			rows, err := tx.QueryxContext(ctx, db.BuildSelectStmt(&schema.Config{}, &schema.Config{}))
 			if err != nil {
 				return errors.Wrap(err, "cannot fetch Prometheus config from DB")
 			}
+			defer func() { _ = rows.Close() }()
 
 			for rows.Next() {
 				var r schema.Config
@@ -155,7 +159,7 @@ func AutoDetectPrometheus(ctx context.Context, clientset *kubernetes.Clientset, 
 		return errors.New("no Prometheus found")
 	}
 
-	config.Url = fmt.Sprintf("http://%s:%d", ip, port)
+	config.Url = "http://" + net.JoinHostPort(ip, strconv.FormatInt(int64(port), 10))
 
 	return nil
 }
