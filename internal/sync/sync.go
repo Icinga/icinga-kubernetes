@@ -10,6 +10,7 @@ import (
 	"github.com/icinga/icinga-kubernetes/internal/cluster"
 	"github.com/icinga/icinga-kubernetes/internal/kdatabase"
 	"github.com/icinga/icinga-kubernetes/internal/schema"
+	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
@@ -40,6 +41,16 @@ func (s *Sync) Run(ctx context.Context, features ...Feature) error {
 	controller := NewController(s.informers, s.log)
 
 	with := NewFeatures(features...)
+
+	// Rows left behind by deletes that lost a race against an upsert have no
+	// parent to cascade from, so only a sweep removes them. Run it before this
+	// daemon writes anything, as a child row may precede its parent row while
+	// both are being written. Kinds that never delete have no rows to sweep.
+	if !with.NoDelete() {
+		if err := s.db.DeleteOrphans(ctx, s.factory()); err != nil {
+			return errors.Wrap(err, "cannot delete orphaned rows")
+		}
+	}
 
 	var synced map[string]types.UUID
 	if !with.NoWarmup() {
