@@ -10,12 +10,7 @@ import (
 	"github.com/icinga/icinga-kubernetes/internal/kdatabase"
 	kcorev1 "k8s.io/api/core/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 )
-
-type ServiceFactory struct {
-	clientset *kubernetes.Clientset
-}
 
 type Service struct {
 	Meta
@@ -39,7 +34,6 @@ type Service struct {
 	Conditions                    []ServiceCondition `db:"-"`
 	Labels                        []Label            `db:"-"`
 	Annotations                   []Annotation       `db:"-"`
-	factory                       *ServiceFactory
 }
 
 type ServiceSelector struct {
@@ -94,14 +88,8 @@ func (s ServicePod) ID() database.ID {
 	return compoundId{id: s.ServiceUuid.String() + s.PodUuid.String()}
 }
 
-func NewServiceFactory(clientset *kubernetes.Clientset) *ServiceFactory {
-	return &ServiceFactory{
-		clientset: clientset,
-	}
-}
-
-func (f *ServiceFactory) NewService() Resource {
-	return &Service{factory: f}
+func NewService() Resource {
+	return &Service{}
 }
 
 func (s *Service) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
