@@ -39,7 +39,6 @@ type Service struct {
 	Conditions                    []ServiceCondition `db:"-"`
 	Labels                        []Label            `db:"-"`
 	Annotations                   []Annotation       `db:"-"`
-	ServicePods                   []ServicePod       `db:"-"`
 	factory                       *ServiceFactory
 }
 
@@ -235,9 +234,9 @@ func (s *Service) Relations() []kdatabase.Relation {
 		kdatabase.HasMany(s.Selectors, fk),
 		kdatabase.HasMany(s.Labels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(s.Annotations, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(s.ServicePods, fk),
 
 		// Delete-only relations.
 		kdatabase.HasMany([]Favorite(nil), kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany([]ServicePod(nil), fk),
 	}
 }
