@@ -8,6 +8,7 @@ import (
 
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/internal/kdatabase"
+	"github.com/robfig/cron/v3"
 	kbatchv1 "k8s.io/api/batch/v1"
 	kmetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -102,13 +103,22 @@ func (c *CronJob) getIcingaState() (IcingaState, string) {
 		return Critical, fmt.Sprintf("CronJob %s has never completed successfully.", c.Name)
 	}
 
-	if c.StartingDeadlineSeconds.Valid {
-		deadlineDuration := time.Duration(c.StartingDeadlineSeconds.Int64) * time.Second
-		deadline := c.LastScheduleTime.Time().Add(deadlineDuration)
+	if c.StartingDeadlineSeconds.Valid && !(c.Suspend.Valid && c.Suspend.Bool) {
+		spec := c.Schedule
+		if c.Timezone.Valid {
+			spec = "TZ=" + c.Timezone.String + " " + spec
+		}
 
-		if now.After(deadline) {
-			return Critical, fmt.Sprintf("CronJob %s missed its starting deadline. Last scheduled at %v, deadline was %v.",
-				c.Name, c.LastScheduleTime.Time().Format(time.RFC3339), deadline.Format(time.RFC3339))
+		// The CronJob controller parses schedules the same way. Without a time zone, it
+		// uses the local time zone of kube-controller-manager, which is assumed to be UTC.
+		if schedule, err := cron.ParseStandard(spec); err == nil {
+			due := schedule.Next(c.LastScheduleTime.Time().UTC())
+			deadline := due.Add(time.Duration(c.StartingDeadlineSeconds.Int64) * time.Second)
+
+			if now.After(deadline) {
+				return Critical, fmt.Sprintf("CronJob %s missed its starting deadline. Run was due at %v, deadline was %v.",
+					c.Name, due.Format(time.RFC3339), deadline.Format(time.RFC3339))
+			}
 		}
 	}
 
