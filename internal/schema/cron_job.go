@@ -29,7 +29,6 @@ type CronJob struct {
 	IcingaStateReason          string
 	Labels                     []Label      `db:"-"`
 	Annotations                []Annotation `db:"-"`
-	Favorites                  []Favorite   `db:"-"`
 }
 
 func NewCronJob() Resource {
@@ -130,6 +129,8 @@ func (c *CronJob) Relations() []kdatabase.Relation {
 	return []kdatabase.Relation{
 		kdatabase.HasMany(c.Labels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(c.Annotations, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(c.Favorites, kdatabase.WithForeignKey("resource_uuid")),
+
+		// Delete-only relations.
+		kdatabase.HasMany([]Favorite(nil), kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

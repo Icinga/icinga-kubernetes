@@ -36,7 +36,6 @@ type StatefulSet struct {
 	Owners                                          []StatefulSetOwner     `db:"-"`
 	Labels                                          []Label                `db:"-"`
 	Annotations                                     []Annotation           `db:"-"`
-	Favorites                                       []Favorite             `db:"-"`
 }
 
 type StatefulSetCondition struct {
@@ -222,6 +221,8 @@ func (s *StatefulSet) Relations() []kdatabase.Relation {
 		kdatabase.HasMany(s.Owners, fk),
 		kdatabase.HasMany(s.Labels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(s.Annotations, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(s.Favorites, kdatabase.WithForeignKey("resource_uuid")),
+
+		// Delete-only relations.
+		kdatabase.HasMany([]Favorite(nil), kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

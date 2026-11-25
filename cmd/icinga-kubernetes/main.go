@@ -449,8 +449,7 @@ func main() {
 	})
 
 	g.Go(func() error {
-		f := schema.NewServiceFactory(clientset)
-		s := sync.NewSync(db, factory.Services(), logs.GetChildLogger("services"), f.NewService)
+		s := sync.NewSync(db, factory.Services(), logs.GetChildLogger("services"), schema.NewService)
 
 		return s.Run(
 			ctx,
