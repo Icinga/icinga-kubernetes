@@ -475,6 +475,9 @@ func removeTrailingWhitespaceAndFullStop(input string) string {
 	return trimmed
 }
 
+// collectContainerStates returns the highest state of all containers of the given pod,
+// one reason line per container, and the number of app and sidecar containers that are
+// not OK.
 func collectContainerStates(pod *Pod) (IcingaState, string, int) {
 	state := Ok
 	reasons := make([]string, 0, len(pod.Containers)+len(pod.SidecarContainers)+len(pod.InitContainers))
@@ -483,7 +486,6 @@ func collectContainerStates(pod *Pod) (IcingaState, string, int) {
 	for _, c := range pod.InitContainers {
 		if c.IcingaState != Ok {
 			state = max(state, c.IcingaState)
-			notRunning++
 		}
 
 		reasons = append(reasons, fmt.Sprintf(
