@@ -20,7 +20,6 @@ type Ingress struct {
 	IngressRule            []IngressRule            `db:"-"`
 	Labels                 []Label                  `db:"-"`
 	Annotations            []Annotation             `db:"-"`
-	Favorites              []Favorite               `db:"-"`
 }
 
 type IngressTls struct {
@@ -212,6 +211,8 @@ func (i *Ingress) Relations() []kdatabase.Relation {
 		kdatabase.HasMany(i.IngressRule, fk),
 		kdatabase.HasMany(i.Labels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(i.Annotations, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(i.Favorites, kdatabase.WithForeignKey("resource_uuid")),
+
+		// Delete-only relations.
+		kdatabase.HasMany([]Favorite(nil), kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

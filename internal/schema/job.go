@@ -36,7 +36,6 @@ type Job struct {
 	Labels                  []Label        `db:"-"`
 	Annotations             []Annotation   `db:"-"`
 	Owners                  []JobOwner     `db:"-"`
-	Favorites               []Favorite     `db:"-"`
 }
 
 type JobCondition struct {
@@ -264,6 +263,8 @@ func (j *Job) Relations() []kdatabase.Relation {
 		kdatabase.HasMany(j.Labels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(j.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(j.Owners, fk),
-		kdatabase.HasMany(j.Favorites, kdatabase.WithForeignKey("resource_uuid")),
+
+		// Delete-only relations.
+		kdatabase.HasMany([]Favorite(nil), kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

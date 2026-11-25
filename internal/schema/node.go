@@ -44,7 +44,6 @@ type Node struct {
 	Volumes                 []NodeVolume    `db:"-"`
 	Labels                  []Label         `db:"-"`
 	Annotations             []Annotation    `db:"-"`
-	Favorites               []Favorite      `db:"-"`
 }
 
 type NodeCondition struct {
@@ -270,9 +269,9 @@ func (n *Node) Relations() []kdatabase.Relation {
 		kdatabase.HasMany(n.Volumes, fk),
 		kdatabase.HasMany(n.Labels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(n.Annotations, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(n.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 
 		// Delete-only relations.
+		kdatabase.HasMany([]Favorite(nil), kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany([]PrometheusNodeMetric(nil), fk),
 	}
 }

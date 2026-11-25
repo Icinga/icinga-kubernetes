@@ -47,7 +47,6 @@ type Pod struct {
 	Annotations       []Annotation        `db:"-"`
 	Pvcs              []PodPvc            `db:"-"`
 	Volumes           []PodVolume         `db:"-"`
-	Favorites         []Favorite          `db:"-"`
 	factory           *PodFactory
 }
 
@@ -426,9 +425,9 @@ func (p *Pod) Relations() []kdatabase.Relation {
 		kdatabase.HasMany(p.Annotations, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(p.Pvcs, fk),
 		kdatabase.HasMany(p.Volumes, fk),
-		kdatabase.HasMany(p.Favorites, kdatabase.WithForeignKey("resource_uuid")),
 
 		// Delete-only relations.
+		kdatabase.HasMany([]Favorite(nil), kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany([]PrometheusPodMetric(nil), fk),
 		kdatabase.HasMany([]ServicePod(nil), fk),
 	}

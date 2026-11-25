@@ -47,7 +47,6 @@ type Pvc struct {
 	Conditions         []PvcCondition `db:"-"`
 	Labels             []Label        `db:"-"`
 	Annotations        []Annotation   `db:"-"`
-	Favorites          []Favorite     `db:"-"`
 }
 
 type PvcCondition struct {
@@ -141,6 +140,8 @@ func (p *Pvc) Relations() []kdatabase.Relation {
 		kdatabase.HasMany(p.Conditions, fk),
 		kdatabase.HasMany(p.Labels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(p.Annotations, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(p.Favorites, kdatabase.WithForeignKey("resource_uuid")),
+
+		// Delete-only relations.
+		kdatabase.HasMany([]Favorite(nil), kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

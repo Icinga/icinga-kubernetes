@@ -30,7 +30,6 @@ type ReplicaSet struct {
 	Owners               []ReplicaSetOwner     `db:"-"`
 	Labels               []Label               `db:"-"`
 	Annotations          []Annotation          `db:"-"`
-	Favorites            []Favorite            `db:"-"`
 }
 
 type ReplicaSetCondition struct {
@@ -205,6 +204,8 @@ func (r *ReplicaSet) Relations() []kdatabase.Relation {
 		kdatabase.HasMany(r.Owners, fk),
 		kdatabase.HasMany(r.Labels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(r.Annotations, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(r.Favorites, kdatabase.WithForeignKey("resource_uuid")),
+
+		// Delete-only relations.
+		kdatabase.HasMany([]Favorite(nil), kdatabase.WithForeignKey("resource_uuid")),
 	}
 }

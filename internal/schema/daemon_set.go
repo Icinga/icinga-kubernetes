@@ -32,7 +32,6 @@ type DaemonSet struct {
 	Owners                 []DaemonSetOwner     `db:"-"`
 	Labels                 []Label              `db:"-"`
 	Annotations            []Annotation         `db:"-"`
-	Favorites              []Favorite           `db:"-"`
 }
 
 type DaemonSetCondition struct {
@@ -204,6 +203,8 @@ func (d *DaemonSet) Relations() []kdatabase.Relation {
 		kdatabase.HasMany(d.Owners, fk),
 		kdatabase.HasMany(d.Labels, kdatabase.WithForeignKey("resource_uuid")),
 		kdatabase.HasMany(d.Annotations, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(d.Favorites, kdatabase.WithForeignKey("resource_uuid")),
+
+		// Delete-only relations.
+		kdatabase.HasMany([]Favorite(nil), kdatabase.WithForeignKey("resource_uuid")),
 	}
 }
