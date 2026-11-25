@@ -107,15 +107,17 @@ func (i *Ingress) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		}
 		if ingress.Spec.DefaultBackend.Resource != nil {
 			resourceUuid := NewUUID(i.Uuid, ingress.Spec.DefaultBackend.Resource.Kind+ingress.Spec.DefaultBackend.Resource.Name)
+			var apiGroup types.String
 			if ingress.Spec.DefaultBackend.Resource.APIGroup != nil {
-				i.IngressBackendResource = append(i.IngressBackendResource, IngressBackendResource{
-					ResourceUuid: resourceUuid,
-					IngressUuid:  i.Uuid,
-					ApiGroup:     types.MakeString(*ingress.Spec.DefaultBackend.Resource.APIGroup),
-					Kind:         ingress.Spec.DefaultBackend.Resource.Kind,
-					Name:         ingress.Spec.DefaultBackend.Resource.Name,
-				})
+				apiGroup = types.MakeString(*ingress.Spec.DefaultBackend.Resource.APIGroup)
 			}
+			i.IngressBackendResource = append(i.IngressBackendResource, IngressBackendResource{
+				ResourceUuid: resourceUuid,
+				IngressUuid:  i.Uuid,
+				ApiGroup:     apiGroup,
+				Kind:         ingress.Spec.DefaultBackend.Resource.Kind,
+				Name:         ingress.Spec.DefaultBackend.Resource.Name,
+			})
 		}
 	}
 
