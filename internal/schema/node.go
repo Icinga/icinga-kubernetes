@@ -248,7 +248,7 @@ func (n *Node) getIcingaState(node *kcorev1.Node) (IcingaState, string) {
 				state = Critical
 				reason = append(reason, fmt.Sprintf("Node %s has 'NodeReady' condition 'false'", node.Name))
 			case kcorev1.ConditionUnknown:
-				state = Unknown
+				state = max(state, Unknown)
 				reason = append(reason, fmt.Sprintf("Node %s has 'NodeReady' condition 'unknown'", node.Name))
 			}
 		}
