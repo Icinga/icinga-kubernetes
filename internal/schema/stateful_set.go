@@ -198,7 +198,7 @@ func (s *StatefulSet) MarshalEvent() *event.Event {
 
 func (s *StatefulSet) getIcingaState() (IcingaState, string) {
 	switch {
-	case s.AvailableReplicas == 0:
+	case s.AvailableReplicas < 1 && s.DesiredReplicas > 0:
 		reason := fmt.Sprintf("StatefulSet %s/%s has no replica available from %d desired.", s.Namespace, s.Name, s.DesiredReplicas)
 
 		return Critical, reason
