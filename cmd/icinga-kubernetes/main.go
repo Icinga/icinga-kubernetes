@@ -348,19 +348,12 @@ func main() {
 	multiplexWg := stdsync.WaitGroup{}
 	multiplexWg.Add(1)
 	g.Go(func() error {
-		s := sync.NewSync(db, factory.Nodes(), logs.GetChildLogger("nodes"), schema.NewNode)
-
-		var forwardForNotifications []sync.Feature
-		if cfg.Notifications.Url != "" {
-			forwardForNotifications = append(
-				forwardForNotifications,
-				sync.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().Nodes().UpsertEvents().In())),
-			)
-		}
-
+		forward := forwardUpsertsForNotifications(cache.Multiplexers().Nodes(), cfg.Notifications.Url)
 		multiplexWg.Done()
 
-		return s.Run(ctx, forwardForNotifications...)
+		s := sync.NewSync(db, factory.Nodes(), logs.GetChildLogger("nodes"), schema.NewNode)
+
+		return s.Run(ctx, forward...)
 	})
 
 	containerPodUpserts := cache.Multiplexers().Pods().UpsertEvents().Out()
@@ -368,96 +361,68 @@ func main() {
 
 	multiplexWg.Add(1)
 	g.Go(func() error {
-		schema.SyncContainers(ctx, db, g, containerPodUpserts, containerPodDeletes)
-
-		f := schema.NewPodFactory(clientset)
-		s := sync.NewSync(db, factory.Pods(), logs.GetChildLogger("pods"), f.New)
 		forward := []sync.Feature{
 			sync.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().Pods().UpsertEvents().In())),
 			sync.WithOnDelete(database.OnSuccessSendTo(cache.Multiplexers().Pods().DeleteEvents().In())),
 		}
-
 		multiplexWg.Done()
+
+		schema.SyncContainers(ctx, db, g, containerPodUpserts, containerPodDeletes)
+
+		f := schema.NewPodFactory(clientset)
+		s := sync.NewSync(db, factory.Pods(), logs.GetChildLogger("pods"), f.New)
 
 		return s.Run(ctx, forward...)
 	})
 
 	multiplexWg.Add(1)
 	g.Go(func() error {
+		forward := forwardUpsertsForNotifications(cache.Multiplexers().Deployments(), cfg.Notifications.Url)
+		multiplexWg.Done()
+
 		s := sync.NewSync(db, factory.Deployments(), logs.GetChildLogger("deployments"), schema.NewDeployment)
 
-		var forwardForNotifications []sync.Feature
-		if cfg.Notifications.Url != "" {
-			forwardForNotifications = append(
-				forwardForNotifications,
-				sync.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().Deployments().UpsertEvents().In())),
-			)
-		}
-
-		multiplexWg.Done()
-
-		return s.Run(ctx, forwardForNotifications...)
+		return s.Run(ctx, forward...)
 	})
 
 	multiplexWg.Add(1)
 	g.Go(func() error {
+		forward := forwardUpsertsForNotifications(cache.Multiplexers().DaemonSets(), cfg.Notifications.Url)
+		multiplexWg.Done()
+
 		s := sync.NewSync(db, factory.DaemonSets(), logs.GetChildLogger("daemon-sets"), schema.NewDaemonSet)
 
-		var forwardForNotifications []sync.Feature
-		if cfg.Notifications.Url != "" {
-			forwardForNotifications = append(
-				forwardForNotifications,
-				sync.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().DaemonSets().UpsertEvents().In())),
-			)
-		}
-
-		multiplexWg.Done()
-
-		return s.Run(ctx, forwardForNotifications...)
+		return s.Run(ctx, forward...)
 	})
 
 	multiplexWg.Add(1)
 	g.Go(func() error {
+		forward := forwardUpsertsForNotifications(cache.Multiplexers().ReplicaSets(), cfg.Notifications.Url)
+		multiplexWg.Done()
+
 		s := sync.NewSync(db, factory.ReplicaSets(), logs.GetChildLogger("replica-sets"), schema.NewReplicaSet)
 
-		var forwardForNotifications []sync.Feature
-		if cfg.Notifications.Url != "" {
-			forwardForNotifications = append(
-				forwardForNotifications,
-				sync.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().ReplicaSets().UpsertEvents().In())),
-			)
-		}
-
-		multiplexWg.Done()
-
-		return s.Run(ctx, forwardForNotifications...)
+		return s.Run(ctx, forward...)
 	})
 
 	multiplexWg.Add(1)
 	g.Go(func() error {
+		forward := forwardUpsertsForNotifications(cache.Multiplexers().StatefulSets(), cfg.Notifications.Url)
+		multiplexWg.Done()
+
 		s := sync.NewSync(db, factory.StatefulSets(), logs.GetChildLogger("stateful-sets"), schema.NewStatefulSet)
 
-		var forwardForNotifications []sync.Feature
-		if cfg.Notifications.Url != "" {
-			forwardForNotifications = append(
-				forwardForNotifications,
-				sync.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().StatefulSets().UpsertEvents().In())),
-			)
-		}
-
-		multiplexWg.Done()
-
-		return s.Run(ctx, forwardForNotifications...)
+		return s.Run(ctx, forward...)
 	})
 
 	multiplexWg.Add(1)
 	g.Go(func() error {
-		s := sync.NewSync(db, factory.Services(), logs.GetChildLogger("services"), schema.NewService)
 		forward := []sync.Feature{
 			sync.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().Services().UpsertEvents().In())),
 		}
-
 		multiplexWg.Done()
+
+		s := sync.NewSync(db, factory.Services(), logs.GetChildLogger("services"), schema.NewService)
 
 		return s.Run(ctx, forward...)
 	})
@@ -694,4 +659,15 @@ func (s *uuidSliceValue) String() string {
 // Value returns a copy of the parsed UUIDs.
 func (s *uuidSliceValue) Value() []types.UUID {
 	return slices.Clone(s.values)
+}
+
+// forwardUpsertsForNotifications returns sync features that forward upserted
+// entities to mux for Icinga Notifications, or nil if url is empty.
+// It registers an input channel on mux, so call it before mux starts.
+func forwardUpsertsForNotifications(mux cache.EventsMultiplexer, url string) []sync.Feature {
+	if url == "" {
+		return nil
+	}
+
+	return []sync.Feature{sync.WithOnUpsert(database.OnSuccessSendTo(mux.UpsertEvents().In()))}
 }
