@@ -279,15 +279,11 @@ func main() {
 		logger.Fatalw("Cannot create informer factories", logging.Error(err))
 	}
 
-	wg := stdsync.WaitGroup{}
-
 	podEvents := cache.Multiplexers().Pods().UpsertEvents().Out()
 	podDeletes := cache.Multiplexers().Pods().DeleteEvents().Out()
 	serviceEvents := cache.Multiplexers().Services().UpsertEvents().Out()
-	wg.Add(1)
-	g.Go(func() error {
-		wg.Done()
 
+	g.Go(func() error {
 		s := sync.NewServicePodSync(
 			db,
 			factory.Services(),
@@ -349,7 +345,8 @@ func main() {
 		return s.Run(ctx)
 	})
 
-	wg.Add(1)
+	multiplexWg := stdsync.WaitGroup{}
+	multiplexWg.Add(1)
 	g.Go(func() error {
 		s := sync.NewSync(db, factory.Nodes(), logs.GetChildLogger("nodes"), schema.NewNode)
 
@@ -361,30 +358,31 @@ func main() {
 			)
 		}
 
-		wg.Done()
+		multiplexWg.Done()
 
 		return s.Run(ctx, forwardForNotifications...)
 	})
 
 	containerPodUpserts := cache.Multiplexers().Pods().UpsertEvents().Out()
 	containerPodDeletes := cache.Multiplexers().Pods().DeleteEvents().Out()
-	wg.Add(1)
+
+	multiplexWg.Add(1)
 	g.Go(func() error {
 		schema.SyncContainers(ctx, db, g, containerPodUpserts, containerPodDeletes)
 
 		f := schema.NewPodFactory(clientset)
 		s := sync.NewSync(db, factory.Pods(), logs.GetChildLogger("pods"), f.New)
-		forwardForPods := []sync.Feature{
+		forward := []sync.Feature{
 			sync.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().Pods().UpsertEvents().In())),
 			sync.WithOnDelete(database.OnSuccessSendTo(cache.Multiplexers().Pods().DeleteEvents().In())),
 		}
 
-		wg.Done()
+		multiplexWg.Done()
 
-		return s.Run(ctx, forwardForPods...)
+		return s.Run(ctx, forward...)
 	})
 
-	wg.Add(1)
+	multiplexWg.Add(1)
 	g.Go(func() error {
 		s := sync.NewSync(db, factory.Deployments(), logs.GetChildLogger("deployments"), schema.NewDeployment)
 
@@ -396,12 +394,12 @@ func main() {
 			)
 		}
 
-		wg.Done()
+		multiplexWg.Done()
 
 		return s.Run(ctx, forwardForNotifications...)
 	})
 
-	wg.Add(1)
+	multiplexWg.Add(1)
 	g.Go(func() error {
 		s := sync.NewSync(db, factory.DaemonSets(), logs.GetChildLogger("daemon-sets"), schema.NewDaemonSet)
 
@@ -413,12 +411,12 @@ func main() {
 			)
 		}
 
-		wg.Done()
+		multiplexWg.Done()
 
 		return s.Run(ctx, forwardForNotifications...)
 	})
 
-	wg.Add(1)
+	multiplexWg.Add(1)
 	g.Go(func() error {
 		s := sync.NewSync(db, factory.ReplicaSets(), logs.GetChildLogger("replica-sets"), schema.NewReplicaSet)
 
@@ -430,12 +428,12 @@ func main() {
 			)
 		}
 
-		wg.Done()
+		multiplexWg.Done()
 
 		return s.Run(ctx, forwardForNotifications...)
 	})
 
-	wg.Add(1)
+	multiplexWg.Add(1)
 	g.Go(func() error {
 		s := sync.NewSync(db, factory.StatefulSets(), logs.GetChildLogger("stateful-sets"), schema.NewStatefulSet)
 
@@ -447,21 +445,21 @@ func main() {
 			)
 		}
 
-		wg.Done()
+		multiplexWg.Done()
 
 		return s.Run(ctx, forwardForNotifications...)
 	})
 
-	wg.Add(1)
+	multiplexWg.Add(1)
 	g.Go(func() error {
 		s := sync.NewSync(db, factory.Services(), logs.GetChildLogger("services"), schema.NewService)
-		forwardForServices := []sync.Feature{
+		forward := []sync.Feature{
 			sync.WithOnUpsert(database.OnSuccessSendTo(cache.Multiplexers().Services().UpsertEvents().In())),
 		}
 
-		wg.Done()
+		multiplexWg.Done()
 
-		return s.Run(ctx, forwardForServices...)
+		return s.Run(ctx, forward...)
 	})
 
 	g.Go(func() error {
@@ -519,7 +517,7 @@ func main() {
 	})
 
 	g.Go(func() error {
-		wg.Wait()
+		multiplexWg.Wait()
 
 		logger.Debug("Starting multiplexers")
 
