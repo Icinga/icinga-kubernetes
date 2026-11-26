@@ -12,6 +12,12 @@ import (
 	"k8s.io/client-go/util/workqueue"
 )
 
+// NumRequeues is the number of requeues before an item is dropped from queue.
+const NumRequeues = 5
+
+// ErrShutdown is returned by processNextChange once the queue is shut down.
+var ErrShutdown = errors.New("worker was shut down")
+
 type Controller struct {
 	informers Informers
 	log       *logging.Logger
@@ -44,7 +50,7 @@ func (c *Controller) Stream(ctx context.Context, sink *Sink) error {
 		return errors.New("timed out waiting for caches to sync")
 	}
 
-	return c.stream(ctx, sink)
+	return c.runWorker(ctx, sink)
 }
 
 // enqueue takes an object and creates a KChange out of it which is then added
@@ -101,43 +107,74 @@ func (c *Controller) eventHandler() cache.ResourceEventHandler {
 	}
 }
 
-func (c *Controller) stream(ctx context.Context, sink *Sink) error {
-	var change KChange
-	var key string
-	var shutdown bool
+// runWorker calls processNextChange to process the next change from the queue.
+func (c *Controller) runWorker(ctx context.Context, sink *Sink) error {
 	for {
-		c.queue.Done(change)
-
-		change, shutdown = c.queue.Get()
-		if shutdown {
-			return ctx.Err()
-		}
-
-		key = change.KKey()
-
-		obj, exists, err := c.informers.GetByKey(key)
-		if err != nil {
-			if c.queue.NumRequeues(change) < 5 {
-				c.log.Errorw("Cannot fetch key. Retrying", zap.String("key", key), logging.Error(err))
-				c.queue.AddRateLimited(change)
-			} else {
-				c.log.Errorw("Cannot fetch key. Stopped retrying", zap.String("key", key), logging.Error(err))
-				c.queue.Forget(change)
+		if err := c.processNextChange(ctx, sink); err != nil {
+			if errors.Is(err, ErrShutdown) {
+				return nil
 			}
 
-			continue
-		}
-
-		c.queue.Forget(change)
-
-		if !exists || change.ChangeType() == KChangeDelete {
-			if err := sink.Delete(ctx, change.Uuid()); err != nil {
-				return err
-			}
-		} else {
-			if err := sink.Upsert(ctx, &Item{Key: key, Item: &obj}); err != nil {
-				return err
-			}
+			return err
 		}
 	}
+}
+
+// processNextChange takes the next change from the queue and hands it to
+// processChange. It returns ErrShutdown once the queue is shut down, and
+// nil after processing a change, so that runWorker can call it in a loop.
+//
+// Note that queue.Get() does not observe ctx: cancellation only unblocks it
+// through the goroutine in Stream that shuts the queue down. ctx does abort
+// a change waiting to be sent to the sink, which returns ctx.Err().
+func (c *Controller) processNextChange(ctx context.Context, sink *Sink) error {
+	// Set item to processing state.
+	change, shutdown := c.queue.Get()
+	if shutdown {
+		return ErrShutdown
+	}
+
+	// Must be called after queue.Get() to remove item from processing state.
+	defer c.queue.Done(change)
+
+	obj, exists, err := c.informers.GetByKey(change.KKey())
+	if err != nil {
+		if c.queue.NumRequeues(change) < NumRequeues {
+			// Requeue the change if an error occurred while fetching the
+			// key from the store and the number of requeues did not
+			// exceed the limit. Then process the next change.
+			c.queue.AddRateLimited(change)
+			c.log.Errorw("Cannot fetch key. Retrying", zap.String("key", change.KKey()), logging.Error(err))
+		} else {
+			// Stop retrying the change if an error occurred while fetching
+			// the key from the store and the number of requeues did exceed
+			// the limit. Then process the next change.
+			c.queue.Forget(change)
+			c.log.Errorw("Cannot fetch key. Stopped retrying", zap.String("key", change.KKey()), logging.Error(err))
+		}
+
+		return nil
+	}
+
+	// Stop retrying the change now that the store lookup succeeded.
+	// Forget() only resets the rate limiter; the deferred Done() is what
+	// ends the processing state.
+	c.queue.Forget(change)
+
+	return c.processChange(ctx, sink, change, obj, exists)
+}
+
+// processChange processes a single change from the queue and sends the change
+// to the appropriate sink method.
+func (c *Controller) processChange(
+	ctx context.Context, sink *Sink, change KChange, obj kmetav1.Object, exists bool,
+) error {
+	// The store has priority over the queue. So if the object
+	// is not in the store it gets deleted. Every other change
+	// is an upsert.
+	if !exists || change.ChangeType() == KChangeDelete {
+		return sink.Delete(ctx, change.Uuid())
+	}
+
+	return sink.Upsert(ctx, &Item{Key: change.KKey(), Item: &obj})
 }
