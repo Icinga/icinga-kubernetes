@@ -191,9 +191,10 @@ func checkSchemaVersion(ctx context.Context, db *database.DB, expectedSchemaVers
 		return "", errors.New("'kubernetes_schema' table exists but no schema version found")
 	}
 
-	haveSchemaVersion := dbResult[0]
+	// Released schemas before v0.5.0 recorded versions without the semver prefix.
+	haveSchemaVersion := "v" + strings.TrimPrefix(dbResult[0], "v")
 	if !semver.IsValid(haveSchemaVersion) {
-		return "", errors.Errorf("database schema version %q is not a valid semantic version", haveSchemaVersion)
+		return "", errors.Errorf("database schema version %q is not a valid semantic version", dbResult[0])
 	}
 
 	if result := semver.Compare(haveSchemaVersion, expectedSchemaVersion); result == 0 {
