@@ -1,7 +1,6 @@
 package schema
 
 import (
-	"database/sql"
 	"fmt"
 	"strings"
 	"time"
@@ -23,19 +22,19 @@ type PodFactory struct {
 
 type Pod struct {
 	Meta
-	NodeName          sql.NullString
-	NominatedNodeName sql.NullString
-	Ip                sql.NullString
+	NodeName          types.String
+	NominatedNodeName types.String
+	Ip                types.String
 	Phase             string
 	IcingaState       IcingaState
 	IcingaStateReason string
-	CpuLimits         sql.NullInt64
-	CpuRequests       sql.NullInt64
-	MemoryLimits      sql.NullInt64
-	MemoryRequests    sql.NullInt64
-	Reason            sql.NullString
-	Message           sql.NullString
-	Qos               sql.NullString
+	CpuLimits         types.Int
+	CpuRequests       types.Int
+	MemoryLimits      types.Int
+	MemoryRequests    types.Int
+	Reason            types.String
+	Message           types.String
+	Qos               types.String
 	RestartPolicy     string
 	Yaml              string
 	Conditions        []PodCondition      `db:"-"`
@@ -129,14 +128,14 @@ func (p *Pod) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 
 	pod := k8s.(*kcorev1.Pod)
 
-	p.NodeName = NewNullableString(pod.Spec.NodeName)
-	p.NominatedNodeName = NewNullableString(pod.Status.NominatedNodeName)
-	p.Ip = NewNullableString(pod.Status.PodIP)
+	p.NodeName = types.MakeString(pod.Spec.NodeName, types.TransformEmptyStringToNull)
+	p.NominatedNodeName = types.MakeString(pod.Status.NominatedNodeName, types.TransformEmptyStringToNull)
+	p.Ip = types.MakeString(pod.Status.PodIP, types.TransformEmptyStringToNull)
 	p.Phase = string(pod.Status.Phase)
-	p.Reason = NewNullableString(pod.Status.Reason)
-	p.Message = NewNullableString(pod.Status.Message)
+	p.Reason = types.MakeString(pod.Status.Reason, types.TransformEmptyStringToNull)
+	p.Message = types.MakeString(pod.Status.Message, types.TransformEmptyStringToNull)
 	p.RestartPolicy = string(pod.Spec.RestartPolicy)
-	p.Qos = NewNullableString(string(pod.Status.QOSClass))
+	p.Qos = types.MakeString(string(pod.Status.QOSClass), types.TransformEmptyStringToNull)
 
 	for _, condition := range pod.Status.Conditions {
 		p.Conditions = append(p.Conditions, PodCondition{
@@ -158,23 +157,19 @@ func (p *Pod) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 
 	for _, container := range pod.Spec.Containers {
 		if !container.Resources.Limits.Cpu().IsZero() {
-			p.CpuLimits.Int64 += container.Resources.Limits.Cpu().MilliValue()
-			p.CpuLimits.Valid = true
+			p.CpuLimits = types.MakeInt(p.CpuLimits.Int64 + container.Resources.Limits.Cpu().MilliValue())
 		}
 
 		if !container.Resources.Requests.Cpu().IsZero() {
-			p.CpuRequests.Int64 += container.Resources.Requests.Cpu().MilliValue()
-			p.CpuRequests.Valid = true
+			p.CpuRequests = types.MakeInt(p.CpuRequests.Int64 + container.Resources.Requests.Cpu().MilliValue())
 		}
 
 		if !container.Resources.Limits.Memory().IsZero() {
-			p.MemoryLimits.Int64 += container.Resources.Limits.Memory().MilliValue()
-			p.MemoryLimits.Valid = true
+			p.MemoryLimits = types.MakeInt(p.MemoryLimits.Int64 + container.Resources.Limits.Memory().MilliValue())
 		}
 
 		if !container.Resources.Requests.Memory().IsZero() {
-			p.MemoryRequests.Int64 += container.Resources.Requests.Memory().MilliValue()
-			p.MemoryRequests.Valid = true
+			p.MemoryRequests = types.MakeInt(p.MemoryRequests.Int64 + container.Resources.Requests.Memory().MilliValue())
 		}
 	}
 
@@ -183,23 +178,19 @@ func (p *Pod) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		// Init container must complete successfully before the next one starts,
 		// so we don't have to sum their resources.
 		if !container.Resources.Limits.Cpu().IsZero() {
-			p.CpuLimits.Int64 = MaxInt(p.CpuLimits.Int64, container.Resources.Limits.Cpu().MilliValue())
-			p.CpuLimits.Valid = true
+			p.CpuLimits = types.MakeInt(MaxInt(p.CpuLimits.Int64, container.Resources.Limits.Cpu().MilliValue()))
 		}
 
 		if !container.Resources.Requests.Cpu().IsZero() {
-			p.CpuRequests.Int64 = MaxInt(p.CpuRequests.Int64, container.Resources.Requests.Cpu().MilliValue())
-			p.CpuRequests.Valid = true
+			p.CpuRequests = types.MakeInt(MaxInt(p.CpuRequests.Int64, container.Resources.Requests.Cpu().MilliValue()))
 		}
 
 		if !container.Resources.Limits.Memory().IsZero() {
-			p.MemoryLimits.Int64 = MaxInt(p.MemoryLimits.Int64, container.Resources.Limits.Memory().MilliValue())
-			p.MemoryLimits.Valid = true
+			p.MemoryLimits = types.MakeInt(MaxInt(p.MemoryLimits.Int64, container.Resources.Limits.Memory().MilliValue()))
 		}
 
 		if !container.Resources.Requests.Memory().IsZero() {
-			p.MemoryRequests.Int64 = MaxInt(p.MemoryRequests.Int64, container.Resources.Requests.Memory().MilliValue())
-			p.MemoryRequests.Valid = true
+			p.MemoryRequests = types.MakeInt(MaxInt(p.MemoryRequests.Int64, container.Resources.Requests.Memory().MilliValue()))
 		}
 	}
 
@@ -232,19 +223,13 @@ func (p *Pod) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			controller = *ownerReference.Controller
 		}
 		p.Owners = append(p.Owners, PodOwner{
-			PodUuid:   p.Uuid,
-			OwnerUuid: EnsureUUID(ownerReference.UID),
-			Kind:      strcase.Snake(ownerReference.Kind),
-			Name:      ownerReference.Name,
-			Uid:       ownerReference.UID,
-			BlockOwnerDeletion: types.Bool{
-				Bool:  blockOwnerDeletion,
-				Valid: true,
-			},
-			Controller: types.Bool{
-				Bool:  controller,
-				Valid: true,
-			},
+			PodUuid:            p.Uuid,
+			OwnerUuid:          EnsureUUID(ownerReference.UID),
+			Kind:               strcase.Snake(ownerReference.Kind),
+			Name:               ownerReference.Name,
+			Uid:                ownerReference.UID,
+			BlockOwnerDeletion: types.MakeBool(blockOwnerDeletion),
+			Controller:         types.MakeBool(controller),
 		})
 	}
 
@@ -254,10 +239,7 @@ func (p *Pod) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 				PodUuid:    p.Uuid,
 				VolumeName: volume.Name,
 				ClaimName:  volume.PersistentVolumeClaim.ClaimName,
-				ReadOnly: types.Bool{
-					Bool:  volume.PersistentVolumeClaim.ReadOnly,
-					Valid: true,
-				},
+				ReadOnly:   types.MakeBool(volume.PersistentVolumeClaim.ReadOnly),
 			})
 		} else {
 			t, source, err := MarshalFirstNonNilStructFieldToJSON(volume.VolumeSource)

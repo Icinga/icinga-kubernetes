@@ -2,7 +2,6 @@ package schema
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"io"
@@ -52,8 +51,8 @@ type ContainerCommon struct {
 	Name              string
 	Image             string
 	ImagePullPolicy   string
-	State             sql.NullString
-	StateDetails      sql.NullString
+	State             types.String
+	StateDetails      types.String
 	IcingaState       IcingaState
 	IcingaStateReason string
 	Devices           []ContainerDevice `db:"-"`
@@ -76,13 +75,8 @@ func (c *ContainerCommon) Obtain(podUuid types.UUID, container kcorev1.Container
 		panic(err)
 	}
 
-	if state != "" {
-		c.State.String = state
-		c.State.Valid = true
-		c.StateDetails.String = stateDetails
-		c.StateDetails.Valid = true
-	}
-
+	c.State = types.MakeString(state, types.TransformEmptyStringToNull)
+	c.StateDetails = types.MakeString(stateDetails, types.TransformEmptyStringToNull)
 	c.IcingaState, c.IcingaStateReason = GetContainerState(container, status)
 
 	for _, device := range container.VolumeDevices {
@@ -95,23 +89,14 @@ func (c *ContainerCommon) Obtain(podUuid types.UUID, container kcorev1.Container
 	}
 
 	for _, mount := range container.VolumeMounts {
-		m := ContainerMount{
+		c.Mounts = append(c.Mounts, ContainerMount{
 			ContainerUuid: c.Uuid,
 			PodUuid:       c.PodUuid,
 			VolumeName:    mount.Name,
 			Path:          mount.MountPath,
-			ReadOnly: types.Bool{
-				Bool:  mount.ReadOnly,
-				Valid: true,
-			},
-		}
-
-		if mount.SubPath != "" {
-			m.SubPath.String = mount.SubPath
-			m.SubPath.Valid = true
-		}
-
-		c.Mounts = append(c.Mounts, m)
+			SubPath:       types.MakeString(mount.SubPath, types.TransformEmptyStringToNull),
+			ReadOnly:      types.MakeBool(mount.ReadOnly),
+		})
 	}
 }
 
@@ -133,31 +118,27 @@ func (c *ContainerCommon) Relations() []kdatabase.Relation {
 }
 
 type ContainerResources struct {
-	CpuLimits      sql.NullInt64
-	CpuRequests    sql.NullInt64
-	MemoryLimits   sql.NullInt64
-	MemoryRequests sql.NullInt64
+	CpuLimits      types.Int
+	CpuRequests    types.Int
+	MemoryLimits   types.Int
+	MemoryRequests types.Int
 }
 
 func (c *ContainerResources) Obtain(container kcorev1.Container) {
 	if !container.Resources.Limits.Cpu().IsZero() {
-		c.CpuLimits.Int64 = container.Resources.Limits.Cpu().MilliValue()
-		c.CpuLimits.Valid = true
+		c.CpuLimits = types.MakeInt(container.Resources.Limits.Cpu().MilliValue())
 	}
 
 	if !container.Resources.Requests.Cpu().IsZero() {
-		c.CpuRequests.Int64 = container.Resources.Requests.Cpu().MilliValue()
-		c.CpuRequests.Valid = true
+		c.CpuRequests = types.MakeInt(container.Resources.Requests.Cpu().MilliValue())
 	}
 
 	if !container.Resources.Limits.Memory().IsZero() {
-		c.MemoryLimits.Int64 = container.Resources.Limits.Memory().MilliValue()
-		c.MemoryLimits.Valid = true
+		c.MemoryLimits = types.MakeInt(container.Resources.Limits.Memory().MilliValue())
 	}
 
 	if !container.Resources.Requests.Memory().IsZero() {
-		c.MemoryRequests.Int64 = container.Resources.Requests.Memory().MilliValue()
-		c.MemoryRequests.Valid = true
+		c.MemoryRequests = types.MakeInt(container.Resources.Requests.Memory().MilliValue())
 	}
 }
 
@@ -173,14 +154,8 @@ func (c *ContainerRestartable) Obtain(status kcorev1.ContainerStatus) {
 		started = *status.Started
 	}
 
-	c.Ready = types.Bool{
-		Bool:  status.Ready,
-		Valid: true,
-	}
-	c.Started = types.Bool{
-		Bool:  started,
-		Valid: true,
-	}
+	c.Ready = types.MakeBool(status.Ready)
+	c.Started = types.MakeBool(started)
 	c.RestartCount = status.RestartCount
 }
 
@@ -255,7 +230,7 @@ type ContainerMount struct {
 	PodUuid       types.UUID
 	VolumeName    string
 	Path          string
-	SubPath       sql.NullString
+	SubPath       types.String
 	ReadOnly      types.Bool
 }
 

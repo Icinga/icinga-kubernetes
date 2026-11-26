@@ -1,7 +1,6 @@
 package schema
 
 import (
-	"database/sql"
 	"strings"
 
 	"github.com/icinga/icinga-go-library/database"
@@ -17,16 +16,16 @@ type Service struct {
 	ClusterIP                     string
 	ClusterIPs                    string
 	Type                          string
-	ExternalIPs                   sql.NullString
+	ExternalIPs                   types.String
 	SessionAffinity               string
-	ExternalName                  sql.NullString
-	ExternalTrafficPolicy         sql.NullString
-	HealthCheckNodePort           sql.NullInt32
+	ExternalName                  types.String
+	ExternalTrafficPolicy         types.String
+	HealthCheckNodePort           types.Int
 	PublishNotReadyAddresses      types.Bool
-	IpFamilies                    sql.NullString
-	IpFamilyPolicy                sql.NullString
+	IpFamilies                    types.String
+	IpFamilyPolicy                types.String
 	AllocateLoadBalancerNodePorts types.Bool
-	LoadBalancerClass             sql.NullString
+	LoadBalancerClass             types.String
 	InternalTrafficPolicy         string
 	Yaml                          string
 	Selectors                     []ServiceSelector  `db:"-"`
@@ -158,25 +157,17 @@ func (s *Service) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	s.ClusterIP = service.Spec.ClusterIP
 	s.ClusterIPs = strings.Join(service.Spec.ClusterIPs, ", ")
 	s.Type = string(service.Spec.Type)
-	s.ExternalIPs = NewNullableString(strings.Join(service.Spec.ExternalIPs, ", "))
+	s.ExternalIPs = types.MakeString(strings.Join(service.Spec.ExternalIPs, ", "), types.TransformEmptyStringToNull)
 	s.SessionAffinity = string(service.Spec.SessionAffinity)
 	// TODO(el): Support LoadBalancerSourceRanges?
-	s.ExternalName = NewNullableString(service.Spec.ExternalName)
-	s.ExternalTrafficPolicy = NewNullableString(string(service.Spec.ExternalTrafficPolicy))
-	s.HealthCheckNodePort = sql.NullInt32{
-		Int32: service.Spec.HealthCheckNodePort,
-		Valid: service.Spec.HealthCheckNodePort != 0,
-	}
-	s.PublishNotReadyAddresses = types.Bool{
-		Bool:  service.Spec.PublishNotReadyAddresses,
-		Valid: true,
-	}
+	s.ExternalName = types.MakeString(service.Spec.ExternalName, types.TransformEmptyStringToNull)
+	s.ExternalTrafficPolicy = types.MakeString(string(service.Spec.ExternalTrafficPolicy), types.TransformEmptyStringToNull)
+	s.HealthCheckNodePort = types.MakeInt(int64(service.Spec.HealthCheckNodePort), types.TransformZeroIntToNull)
+	s.PublishNotReadyAddresses = types.MakeBool(service.Spec.PublishNotReadyAddresses)
 	// TODO(el): Support SessionAffinityConfig?
 	var ipv4 bool
 	var ipv6 bool
 	for _, ipFamily := range service.Spec.IPFamilies {
-		s.IpFamilies.Valid = true
-
 		switch ipFamily {
 		case kcorev1.IPv4Protocol:
 			ipv4 = true
@@ -184,26 +175,29 @@ func (s *Service) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			ipv6 = true
 		}
 	}
-	switch {
-	case ipv4 && ipv6:
-		s.IpFamilies.String = "DualStack"
-	case ipv4:
-		s.IpFamilies.String = "IPv4"
-	case ipv6:
-		s.IpFamilies.String = "IPv6"
-	default:
-		s.IpFamilies.String = "Unknown"
+	if len(service.Spec.IPFamilies) > 0 {
+		switch {
+		case ipv4 && ipv6:
+			s.IpFamilies = types.MakeString("DualStack")
+		case ipv4:
+			s.IpFamilies = types.MakeString("IPv4")
+		case ipv6:
+			s.IpFamilies = types.MakeString("IPv6")
+		default:
+			s.IpFamilies = types.MakeString("Unknown")
+		}
 	}
-	s.IpFamilyPolicy = NewNullableString(service.Spec.IPFamilyPolicy)
+	if service.Spec.IPFamilyPolicy != nil {
+		s.IpFamilyPolicy = types.MakeString(string(*service.Spec.IPFamilyPolicy), types.TransformEmptyStringToNull)
+	}
 	allocateLoadBalancerNodePorts := true
 	if service.Spec.AllocateLoadBalancerNodePorts != nil {
 		allocateLoadBalancerNodePorts = *service.Spec.AllocateLoadBalancerNodePorts
 	}
-	s.AllocateLoadBalancerNodePorts = types.Bool{
-		Bool:  allocateLoadBalancerNodePorts,
-		Valid: true,
+	s.AllocateLoadBalancerNodePorts = types.MakeBool(allocateLoadBalancerNodePorts)
+	if service.Spec.LoadBalancerClass != nil {
+		s.LoadBalancerClass = types.MakeString(*service.Spec.LoadBalancerClass)
 	}
-	s.LoadBalancerClass = NewNullableString(service.Spec.LoadBalancerClass)
 	var internalTrafficPolicy string
 	if service.Spec.InternalTrafficPolicy == nil {
 		internalTrafficPolicy = string(kcorev1.ServiceInternalTrafficPolicyCluster)

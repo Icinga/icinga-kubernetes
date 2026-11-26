@@ -1,8 +1,6 @@
 package schema
 
 import (
-	"database/sql"
-
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/types"
 	"github.com/icinga/icinga-kubernetes/internal/kdatabase"
@@ -11,7 +9,7 @@ import (
 type Cluster struct {
 	kdatabase.EntityStub
 	Uuid types.UUID
-	Name sql.NullString
+	Name types.String
 }
 
 func (c Cluster) ID() database.ID {

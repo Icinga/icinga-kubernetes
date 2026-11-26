@@ -1,7 +1,6 @@
 package schema
 
 import (
-	"database/sql"
 	"fmt"
 	"strings"
 	"time"
@@ -15,8 +14,8 @@ import (
 type CronJob struct {
 	Meta
 	Schedule                   string
-	Timezone                   sql.NullString
-	StartingDeadlineSeconds    sql.NullInt64
+	Timezone                   types.String
+	StartingDeadlineSeconds    types.Int
 	ConcurrencyPolicy          string
 	Suspend                    types.Bool
 	SuccessfulJobsHistoryLimit int32
@@ -41,16 +40,16 @@ func (c *CronJob) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	cronJob := k8s.(*kbatchv1.CronJob)
 
 	c.Schedule = cronJob.Spec.Schedule
-	c.Timezone = NewNullableString(cronJob.Spec.TimeZone)
+	if cronJob.Spec.TimeZone != nil {
+		c.Timezone = types.MakeString(*cronJob.Spec.TimeZone)
+	}
 	if cronJob.Spec.StartingDeadlineSeconds != nil {
-		c.StartingDeadlineSeconds.Int64 = *cronJob.Spec.StartingDeadlineSeconds
-		c.StartingDeadlineSeconds.Valid = true
+		c.StartingDeadlineSeconds = types.MakeInt(*cronJob.Spec.StartingDeadlineSeconds)
 	}
 	c.ConcurrencyPolicy = string(cronJob.Spec.ConcurrencyPolicy)
 	// It is safe to use the pointer directly here,
 	// as Kubernetes sets it to false by default.
-	c.Suspend.Bool = *cronJob.Spec.Suspend
-	c.Suspend.Valid = true
+	c.Suspend = types.MakeBool(*cronJob.Spec.Suspend)
 	// It is safe to use the pointer directly here,
 	// as Kubernetes sets it to 3 if not configured.
 	c.SuccessfulJobsHistoryLimit = *cronJob.Spec.SuccessfulJobsHistoryLimit

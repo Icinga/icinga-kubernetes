@@ -1,7 +1,6 @@
 package schema
 
 import (
-	"database/sql"
 	"fmt"
 	"strings"
 
@@ -17,12 +16,12 @@ import (
 
 type Job struct {
 	Meta
-	Parallelism             sql.NullInt32
-	Completions             sql.NullInt32
-	ActiveDeadlineSeconds   sql.NullInt64
-	BackoffLimit            sql.NullInt32
-	TtlSecondsAfterFinished sql.NullInt32
-	CompletionMode          sql.NullString
+	Parallelism             types.Int
+	Completions             types.Int
+	ActiveDeadlineSeconds   types.Int
+	BackoffLimit            types.Int
+	TtlSecondsAfterFinished types.Int
+	CompletionMode          types.String
 	Suspend                 types.Bool
 	StartTime               types.UnixMilli
 	CompletionTime          types.UnixMilli
@@ -80,40 +79,29 @@ func (j *Job) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 
 	job := k8s.(*kbatchv1.Job)
 
-	var parallelism sql.NullInt32
+	var parallelism types.Int
 	if job.Spec.Parallelism != nil {
-		parallelism.Int32 = *job.Spec.Parallelism
-		parallelism.Valid = true
+		parallelism = types.MakeInt(int64(*job.Spec.Parallelism))
 	}
-	var completions sql.NullInt32
+	var completions types.Int
 	if job.Spec.Completions != nil {
-		completions.Int32 = *job.Spec.Completions
-		completions.Valid = true
+		completions = types.MakeInt(int64(*job.Spec.Completions))
 	}
-	var activeDeadlineSeconds sql.NullInt64
+	var activeDeadlineSeconds types.Int
 	if job.Spec.ActiveDeadlineSeconds != nil {
-		activeDeadlineSeconds.Int64 = *job.Spec.ActiveDeadlineSeconds
-		activeDeadlineSeconds.Valid = true
+		activeDeadlineSeconds = types.MakeInt(*job.Spec.ActiveDeadlineSeconds)
 	}
-	var backoffLimit sql.NullInt32
+	var backoffLimit types.Int
 	if job.Spec.BackoffLimit != nil {
-		backoffLimit.Int32 = *job.Spec.BackoffLimit
-		backoffLimit.Valid = true
+		backoffLimit = types.MakeInt(int64(*job.Spec.BackoffLimit))
 	}
-	var ttlSecondsAfterFinished sql.NullInt32
+	var ttlSecondsAfterFinished types.Int
 	if job.Spec.TTLSecondsAfterFinished != nil {
-		ttlSecondsAfterFinished.Int32 = *job.Spec.TTLSecondsAfterFinished
-		ttlSecondsAfterFinished.Valid = true
+		ttlSecondsAfterFinished = types.MakeInt(int64(*job.Spec.TTLSecondsAfterFinished))
 	}
 	var suspend types.Bool
 	if job.Spec.Suspend != nil {
-		suspend.Bool = *job.Spec.Suspend
-		suspend.Valid = true
-	}
-	var completionMode sql.NullString
-	if job.Spec.CompletionMode != nil {
-		completionMode.String = string(*job.Spec.CompletionMode)
-		completionMode.Valid = true
+		suspend = types.MakeBool(*job.Spec.Suspend)
 	}
 	var startTime kmetav1.Time
 	if job.Status.StartTime != nil {
@@ -130,7 +118,9 @@ func (j *Job) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	j.BackoffLimit = backoffLimit
 	j.TtlSecondsAfterFinished = ttlSecondsAfterFinished
 	j.Suspend = suspend
-	j.CompletionMode = completionMode
+	if job.Spec.CompletionMode != nil {
+		j.CompletionMode = types.MakeString(string(*job.Spec.CompletionMode))
+	}
 	j.StartTime = types.UnixMilli(startTime.Time)
 	j.CompletionTime = types.UnixMilli(completionTime.Time)
 	j.Active = job.Status.Active
@@ -179,19 +169,13 @@ func (j *Job) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			controller = *ownerReference.Controller
 		}
 		j.Owners = append(j.Owners, JobOwner{
-			JobUuid:   j.Uuid,
-			OwnerUuid: EnsureUUID(ownerReference.UID),
-			Kind:      strcase.Snake(ownerReference.Kind),
-			Name:      ownerReference.Name,
-			Uid:       ownerReference.UID,
-			BlockOwnerDeletion: types.Bool{
-				Bool:  blockOwnerDeletion,
-				Valid: true,
-			},
-			Controller: types.Bool{
-				Bool:  controller,
-				Valid: true,
-			},
+			JobUuid:            j.Uuid,
+			OwnerUuid:          EnsureUUID(ownerReference.UID),
+			Kind:               strcase.Snake(ownerReference.Kind),
+			Name:               ownerReference.Name,
+			Uid:                ownerReference.UID,
+			BlockOwnerDeletion: types.MakeBool(blockOwnerDeletion),
+			Controller:         types.MakeBool(controller),
 		})
 	}
 
@@ -215,7 +199,7 @@ func (j *Job) getIcingaState(job *kbatchv1.Job) (IcingaState, string) {
 				j.Namespace, j.Name)
 
 			if j.Completions.Valid {
-				reason += fmt.Sprintf(" %d necessary pod completions.", j.Completions.Int32)
+				reason += fmt.Sprintf(" %d necessary pod completions.", j.Completions.Int64)
 			} else {
 				reason += " any pod completion."
 			}
@@ -238,7 +222,7 @@ func (j *Job) getIcingaState(job *kbatchv1.Job) (IcingaState, string) {
 
 	var completions string
 	if j.Completions.Valid {
-		completions = fmt.Sprintf("%d pod completions", j.Completions.Int32)
+		completions = fmt.Sprintf("%d pod completions", j.Completions.Int64)
 	} else {
 		completions = "any pod completion"
 	}

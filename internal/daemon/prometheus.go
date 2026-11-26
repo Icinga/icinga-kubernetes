@@ -20,25 +20,23 @@ import (
 )
 
 func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *metrics.PrometheusConfig, clusterUuid types.UUID) error {
-	_true := types.Bool{Bool: true, Valid: true}
-
 	if config.Url != "" {
 		toDb := []schema.Config{
-			{ClusterUuid: clusterUuid, Key: schema.ConfigKeyPrometheusUrl, Value: config.Url, Locked: _true},
+			{ClusterUuid: clusterUuid, Key: schema.ConfigKeyPrometheusUrl, Value: config.Url, Locked: types.MakeBool(true)},
 		}
 
 		if config.Insecure != "" {
 			toDb = append(
 				toDb,
-				schema.Config{ClusterUuid: clusterUuid, Key: schema.ConfigKeyPrometheusInsecure, Value: config.Insecure, Locked: _true},
+				schema.Config{ClusterUuid: clusterUuid, Key: schema.ConfigKeyPrometheusInsecure, Value: config.Insecure, Locked: types.MakeBool(true)},
 			)
 		}
 
 		if config.Username != "" {
 			toDb = append(
 				toDb,
-				schema.Config{ClusterUuid: clusterUuid, Key: schema.ConfigKeyPrometheusUsername, Value: config.Username, Locked: _true},
-				schema.Config{ClusterUuid: clusterUuid, Key: schema.ConfigKeyPrometheusPassword, Value: config.Password, Locked: _true},
+				schema.Config{ClusterUuid: clusterUuid, Key: schema.ConfigKeyPrometheusUsername, Value: config.Username, Locked: types.MakeBool(true)},
+				schema.Config{ClusterUuid: clusterUuid, Key: schema.ConfigKeyPrometheusPassword, Value: config.Password, Locked: types.MakeBool(true)},
 			)
 		}
 
@@ -51,7 +49,7 @@ func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *metrics.
 				),
 				clusterUuid,
 				`prometheus.%`,
-				_true,
+				types.MakeBool(true),
 			); err != nil {
 				return errors.Wrap(err, "cannot delete Prometheus config")
 			}
@@ -75,7 +73,7 @@ func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *metrics.
 				),
 				clusterUuid,
 				`prometheus.%`,
-				_true,
+				types.MakeBool(true),
 			); err != nil {
 				return errors.Wrap(err, "cannot delete Prometheus config")
 			}

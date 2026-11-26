@@ -1,7 +1,6 @@
 package schema
 
 import (
-	"database/sql"
 	"strings"
 
 	"github.com/icinga/icinga-go-library/database"
@@ -44,7 +43,7 @@ func (e Endpoint) ID() database.ID {
 type EndpointTargetRef struct {
 	kdatabase.EntityStub
 	EndpointSliceUuid types.UUID
-	Kind              sql.NullString
+	Kind              types.String
 	Namespace         string
 	Name              string
 	Uid               ktypes.UID
@@ -87,16 +86,13 @@ func (e *EndpointSlice) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		}
 		var ready, serving, terminating types.Bool
 		if endpoint.Conditions.Ready != nil {
-			ready.Bool = *endpoint.Conditions.Ready
-			ready.Valid = true
+			ready = types.MakeBool(*endpoint.Conditions.Ready)
 		}
 		if endpoint.Conditions.Serving != nil {
-			serving.Bool = *endpoint.Conditions.Serving
-			serving.Valid = true
+			serving = types.MakeBool(*endpoint.Conditions.Serving)
 		}
 		if endpoint.Conditions.Terminating != nil {
-			terminating.Bool = *endpoint.Conditions.Terminating
-			terminating.Valid = true
+			terminating = types.MakeBool(*endpoint.Conditions.Terminating)
 		}
 		for _, endpointPort := range endpointSlice.Ports {
 			var name, protocol, appProtocol string
@@ -135,14 +131,9 @@ func (e *EndpointSlice) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 		if endpoint.TargetRef != nil {
 			targetRef = *endpoint.TargetRef
 		}
-		var kind sql.NullString
-		if targetRef.Kind != "" {
-			kind.String = targetRef.Kind
-			kind.Valid = true
-		}
 		e.EndpointTargetRefs = append(e.EndpointTargetRefs, EndpointTargetRef{
 			EndpointSliceUuid: e.Uuid,
-			Kind:              kind,
+			Kind:              types.MakeString(targetRef.Kind, types.TransformEmptyStringToNull),
 			Namespace:         targetRef.Namespace,
 			Name:              targetRef.Name,
 			Uid:               targetRef.UID,
