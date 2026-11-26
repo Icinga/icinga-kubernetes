@@ -200,12 +200,12 @@ func (i *Ingress) Relations() []kdatabase.Relation {
 	fk := kdatabase.WithForeignKey("ingress_uuid")
 
 	return []kdatabase.Relation{
-		kdatabase.HasMany(i.IngressTls, fk),
+		kdatabase.HasMany(i.IngressTls, fk, kdatabase.WithReplaceOnUpsert()),
 		kdatabase.HasMany(i.IngressBackendService, fk),
 		kdatabase.HasMany(i.IngressBackendResource, fk),
 		kdatabase.HasMany(i.IngressRule, fk),
-		kdatabase.HasMany(i.Labels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(i.Annotations, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(i.Labels, kdatabase.WithForeignKey("resource_uuid"), kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(i.Annotations, kdatabase.WithForeignKey("resource_uuid"), kdatabase.WithReplaceOnUpsert()),
 
 		// Delete-only relations.
 		kdatabase.HasMany([]Favorite(nil), kdatabase.WithForeignKey("resource_uuid")),

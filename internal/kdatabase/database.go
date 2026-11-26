@@ -3,6 +3,7 @@ package kdatabase
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 
 	"github.com/icinga/icinga-go-library/backoff"
@@ -199,7 +200,8 @@ func (db *DB) DeleteStreamedCascading(
 // UpsertStreamedCascading upserts entities and, recursively, the entities of
 // their relations. All tables are upserted concurrently and in no particular
 // order, each with a statement built from its first entity, so a stream must
-// carry a single type.
+// carry a single type. The rows of relations WithReplaceOnUpsert are replaced
+// rather than upserted.
 //
 // onSuccess receives only the entities from entities.
 func (db *DB) UpsertStreamedCascading(
@@ -217,12 +219,36 @@ func (db *DB) UpsertStreamedCascading(
 		return db.UpsertStreamed(ctx, forward, forwardOnSuccess...)
 	}
 
+	// Relations that replace their rows, keyed by table. Their rows are deleted
+	// by foreign key, so no other relation may write to the same table that way.
+	replaced := make(map[string]Relation)
+	for _, rel := range relations.Relations() {
+		if !rel.ReplaceOnUpsert() {
+			continue
+		}
+
+		table := database.TableName(rel)
+		if _, ok := rel.NewEntity().(HasRelations); ok {
+			return errors.Errorf("cannot replace rows of %q, as they have relations of their own", table)
+		}
+		if other, exists := replaced[table]; exists && other.ForeignKey() != rel.ForeignKey() {
+			return errors.Errorf("cannot replace rows of %q by different foreign keys", table)
+		}
+
+		replaced[table] = rel
+	}
+	for _, rel := range relations.Relations() {
+		if _, exists := replaced[database.TableName(rel)]; exists && !rel.ReplaceOnUpsert() {
+			return errors.Errorf("cannot both replace and upsert rows of %q", database.TableName(rel))
+		}
+	}
+
 	g, ctx := errgroup.WithContext(ctx)
 	streams := make(map[string]chan database.Entity, len(relations.Relations()))
 	for _, rel := range relations.Relations() {
 		// Relations to the same table share its stream,
 		// as the entities are looked up by table name.
-		if _, exists := streams[database.TableName(rel)]; exists {
+		if _, exists := streams[database.TableName(rel)]; exists || rel.ReplaceOnUpsert() {
 			continue
 		}
 
@@ -255,6 +281,10 @@ func (db *DB) UpsertStreamedCascading(
 				}
 
 				for _, rel := range entity.(HasRelations).Relations() {
+					if rel.ReplaceOnUpsert() {
+						continue
+					}
+
 					senders.Add(1)
 					g.Go(func() error {
 						defer senders.Done()
@@ -272,11 +302,96 @@ func (db *DB) UpsertStreamedCascading(
 		return db.UpsertStreamed(ctx, parents, forwardOnSuccess...)
 	})
 
+	if len(replaced) > 0 {
+		replacing := mux.Out()
+		g.Go(func() error {
+			return db.replaceRelationsStreamed(ctx, replaced, replacing)
+		})
+	}
+
 	g.Go(func() error {
 		return mux.Run(ctx)
 	})
 
 	return g.Wait()
+}
+
+// replaceRelationsStreamed replaces the rows of each relation in relations,
+// keyed by table, that reference one of entities with the related entities of
+// these. It replaces the rows of a bulk of entities in one transaction per
+// table, so readers never see them missing in between. It handles one bulk
+// after the other, so the rows of a later version of an entity are never
+// replaced by those of an earlier one.
+func (db *DB) replaceRelationsStreamed(
+	ctx context.Context, relations map[string]Relation, entities <-chan database.Entity,
+) error {
+	for bulk := range com.Bulk(ctx, entities, db.Options.MaxPlaceholdersPerStatement, com.NeverSplit[database.Entity]) {
+		// A bulk can hold several versions of an entity. Only the last one
+		// counts, as the rows only earlier versions have would be kept otherwise.
+		latest := make(map[string]database.Entity, len(bulk))
+		var keys []string
+		var ids []any
+		for _, entity := range bulk {
+			key := entity.ID().String()
+			if _, exists := latest[key]; !exists {
+				keys = append(keys, key)
+				ids = append(ids, entity.ID())
+			}
+			latest[key] = entity
+		}
+
+		for table, rel := range relations {
+			var rows []database.Entity
+			for _, key := range keys {
+				for _, r := range latest[key].(HasRelations).Relations() {
+					if r.ReplaceOnUpsert() && database.TableName(r) == table {
+						rows = append(rows, r.Entities()...)
+					}
+				}
+			}
+
+			if err := db.replaceRows(ctx, rel, ids, rows); err != nil {
+				return err
+			}
+		}
+	}
+
+	return ctx.Err()
+}
+
+// replaceRows deletes the rows of rel whose foreign key is one of ids and
+// upserts rows in their place, in one transaction.
+func (db *DB) replaceRows(ctx context.Context, rel Relation, ids []any, rows []database.Entity) error {
+	query := db.BuildDeleteStmt(rel)
+	deleteStmt, args, err := sqlx.In(query, ids)
+	if err != nil {
+		return errors.Wrapf(err, "cannot build placeholders for %q", query)
+	}
+	deleteStmt = db.Rebind(deleteStmt)
+
+	upsertStmt, placeholders := db.BuildUpsertStmt(rel.NewEntity())
+
+	return retry.WithBackoff(
+		ctx,
+		func(ctx context.Context) error {
+			return db.ExecTx(ctx, nil, func(ctx context.Context, tx *sqlx.Tx) error {
+				if _, err := tx.ExecContext(ctx, deleteStmt, args...); err != nil {
+					return database.CantPerformQuery(err, query)
+				}
+
+				for chunk := range slices.Chunk(rows, db.BatchSizeByPlaceholders(placeholders)) {
+					if _, err := tx.NamedExecContext(ctx, upsertStmt, chunk); err != nil {
+						return database.CantPerformQuery(err, upsertStmt)
+					}
+				}
+
+				return nil
+			})
+		},
+		retry.Retryable,
+		backoff.DefaultBackoff,
+		db.GetDefaultRetrySettings(),
+	)
 }
 
 // withoutNil returns fns without nil callbacks, which the library would call nevertheless.

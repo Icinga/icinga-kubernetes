@@ -209,10 +209,10 @@ func (d *Deployment) Relations() []kdatabase.Relation {
 	fk := kdatabase.WithForeignKey("deployment_uuid")
 
 	return []kdatabase.Relation{
-		kdatabase.HasMany(d.Conditions, fk),
-		kdatabase.HasMany(d.Owners, fk),
-		kdatabase.HasMany(d.Labels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(d.Annotations, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(d.Conditions, fk, kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(d.Owners, fk, kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(d.Labels, kdatabase.WithForeignKey("resource_uuid"), kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(d.Annotations, kdatabase.WithForeignKey("resource_uuid"), kdatabase.WithReplaceOnUpsert()),
 
 		// Delete-only relations.
 		kdatabase.HasMany([]Favorite(nil), kdatabase.WithForeignKey("resource_uuid")),

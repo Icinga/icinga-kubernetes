@@ -212,11 +212,11 @@ func (s *Service) Relations() []kdatabase.Relation {
 	fk := kdatabase.WithForeignKey("service_uuid")
 
 	return []kdatabase.Relation{
-		kdatabase.HasMany(s.Conditions, fk),
-		kdatabase.HasMany(s.Ports, fk),
-		kdatabase.HasMany(s.Selectors, fk),
-		kdatabase.HasMany(s.Labels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(s.Annotations, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(s.Conditions, fk, kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(s.Ports, fk, kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(s.Selectors, fk, kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(s.Labels, kdatabase.WithForeignKey("resource_uuid"), kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(s.Annotations, kdatabase.WithForeignKey("resource_uuid"), kdatabase.WithReplaceOnUpsert()),
 
 		// Delete-only relations.
 		kdatabase.HasMany([]Favorite(nil), kdatabase.WithForeignKey("resource_uuid")),

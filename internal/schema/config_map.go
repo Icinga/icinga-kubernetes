@@ -54,7 +54,7 @@ func (c *ConfigMap) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 
 func (c *ConfigMap) Relations() []kdatabase.Relation {
 	return []kdatabase.Relation{
-		kdatabase.HasMany(c.Labels, kdatabase.WithForeignKey("resource_uuid")),
-		kdatabase.HasMany(c.Annotations, kdatabase.WithForeignKey("resource_uuid")),
+		kdatabase.HasMany(c.Labels, kdatabase.WithForeignKey("resource_uuid"), kdatabase.WithReplaceOnUpsert()),
+		kdatabase.HasMany(c.Annotations, kdatabase.WithForeignKey("resource_uuid"), kdatabase.WithReplaceOnUpsert()),
 	}
 }
