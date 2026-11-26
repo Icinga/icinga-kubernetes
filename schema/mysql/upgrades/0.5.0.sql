@@ -68,6 +68,15 @@ CREATE TABLE service_selector (
 ALTER TABLE service_pod
     ADD INDEX idx_service_pod_pod_uuid (pod_uuid) COMMENT 'Filter for links of a pod';
 
+ALTER TABLE container
+    ADD INDEX idx_container_pod_uuid (pod_uuid) COMMENT 'Filter for containers of a pod';
+
+ALTER TABLE init_container
+    ADD INDEX idx_init_container_pod_uuid (pod_uuid) COMMENT 'Filter for init containers of a pod';
+
+ALTER TABLE sidecar_container
+    ADD INDEX idx_sidecar_container_pod_uuid (pod_uuid) COMMENT 'Filter for sidecar containers of a pod';
+
 ALTER TABLE config
     MODIFY COLUMN `key` enum(
         'notifications.url',
@@ -99,6 +108,70 @@ ALTER TABLE config
         'prometheus.username',
         'prometheus.password'
     ) COLLATE utf8mb4_unicode_ci NOT NULL;
+
+ALTER TABLE config_map
+    ADD COLUMN deleted bigint unsigned NULL DEFAULT NULL,
+    ADD INDEX idx_config_map_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted config maps';
+
+ALTER TABLE cron_job
+    ADD COLUMN deleted bigint unsigned NULL DEFAULT NULL,
+    ADD INDEX idx_cron_job_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted cron jobs';
+
+ALTER TABLE daemon_set
+    ADD COLUMN deleted bigint unsigned NULL DEFAULT NULL,
+    ADD INDEX idx_daemon_set_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted daemon sets';
+
+ALTER TABLE deployment
+    ADD COLUMN deleted bigint unsigned NULL DEFAULT NULL,
+    ADD INDEX idx_deployment_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted deployments';
+
+ALTER TABLE endpoint_slice
+    ADD COLUMN deleted bigint unsigned NULL DEFAULT NULL,
+    ADD INDEX idx_endpoint_slice_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted endpoint slices';
+
+ALTER TABLE ingress
+    ADD COLUMN deleted bigint unsigned NULL DEFAULT NULL,
+    ADD INDEX idx_ingress_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted ingresses';
+
+ALTER TABLE job
+    ADD COLUMN deleted bigint unsigned NULL DEFAULT NULL,
+    ADD INDEX idx_job_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted jobs';
+
+ALTER TABLE namespace
+    ADD COLUMN deleted bigint unsigned NULL DEFAULT NULL,
+    ADD INDEX idx_namespace_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted namespaces';
+
+ALTER TABLE node
+    ADD COLUMN deleted bigint unsigned NULL DEFAULT NULL,
+    ADD INDEX idx_node_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted nodes';
+
+ALTER TABLE persistent_volume
+    ADD COLUMN deleted bigint unsigned NULL DEFAULT NULL,
+    ADD INDEX idx_persistent_volume_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted persistent volumes';
+
+ALTER TABLE pod
+    ADD COLUMN deleted bigint unsigned NULL DEFAULT NULL,
+    ADD INDEX idx_pod_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted pods';
+
+ALTER TABLE pvc
+    ADD COLUMN deleted bigint unsigned NULL DEFAULT NULL,
+    ADD INDEX idx_pvc_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted PVCs';
+
+ALTER TABLE replica_set
+    ADD COLUMN deleted bigint unsigned NULL DEFAULT NULL,
+    ADD INDEX idx_replica_set_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted replica sets';
+
+ALTER TABLE secret
+    ADD COLUMN deleted bigint unsigned NULL DEFAULT NULL,
+    ADD INDEX idx_secret_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted secrets';
+
+ALTER TABLE service
+    ADD COLUMN deleted bigint unsigned NULL DEFAULT NULL,
+    ADD INDEX idx_service_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted services';
+
+ALTER TABLE stateful_set
+    ADD COLUMN deleted bigint unsigned NULL DEFAULT NULL,
+    ADD INDEX idx_stateful_set_deleted (cluster_uuid, deleted) COMMENT 'Filter for purging soft-deleted stateful sets';
 
 INSERT INTO kubernetes_schema (version, timestamp, success, reason)
     VALUES ('v0.5.0', UNIX_TIMESTAMP() * 1000, 'y', NULL);

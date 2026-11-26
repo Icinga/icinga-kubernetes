@@ -36,6 +36,31 @@ func NewFromConfig(cfg *database.Config, log *logging.Logger) (*DB, error) {
 	return &DB{DB: db}, nil
 }
 
+// BuildSoftDeleteStmt returns an UPDATE statement that marks rows as deleted
+// at the current time of the database clock.
+func (db *DB) BuildSoftDeleteStmt(from any) string {
+	return fmt.Sprintf(
+		`UPDATE %q SET "deleted" = %s WHERE "uuid" IN (?) AND "deleted" IS NULL`,
+		database.TableName(from),
+		unixMilliNow(db.DriverName()),
+	)
+}
+
+// unixMilliNow returns an SQL expression for the current time of the database
+// clock in Unix milliseconds for the specified database driver.
+func unixMilliNow(driverName string) string {
+	switch driverName {
+	case database.MySQL:
+		return `UNIX_TIMESTAMP() * 1000`
+	case database.PostgreSQL:
+		// EXTRACT returns a numeric. Comparing the bigint "deleted" column with
+		// a numeric converts the column, which rules out its index.
+		return `(EXTRACT(EPOCH FROM NOW()) * 1000)::bigint`
+	default:
+		panic(fmt.Sprintf("invalid database driver %s", driverName))
+	}
+}
+
 // BuildDeleteStmt returns a DELETE statement for the given struct.
 func (db *DB) BuildDeleteStmt(from any) string {
 	var column string
@@ -49,6 +74,20 @@ func (db *DB) BuildDeleteStmt(from any) string {
 		`DELETE FROM %q WHERE %q IN (?)`,
 		database.TableName(from),
 		column,
+	)
+}
+
+// SoftDeleteStreamed marks the specified ids as deleted via BulkExec.
+// The deleted timestamp is intentionally not part of the entity structs,
+// so later upserts cannot clear a previously recorded logical deletion.
+func (db *DB) SoftDeleteStreamed(ctx context.Context, from any, ids <-chan any, onSuccess ...database.OnSuccess[any]) error {
+	return db.BulkExec(
+		ctx,
+		db.BuildSoftDeleteStmt(from),
+		db.Options.MaxPlaceholdersPerStatement,
+		db.GetSemaphoreForTable(database.TableName(from)),
+		ids,
+		withoutNil(onSuccess)...,
 	)
 }
 
