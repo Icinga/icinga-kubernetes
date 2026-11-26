@@ -143,6 +143,8 @@ func main() {
 		kconfig.Host = serverName
 	}
 
+	kconfig.QPS, kconfig.Burst = cfg.RateLimit.QPS, cfg.RateLimit.Burst
+
 	clientset, err := kubernetes.NewForConfig(kconfig)
 	if err != nil {
 		logger.Fatalw("Cannot create Kubernetes clientset", logging.Error(err))

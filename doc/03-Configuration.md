@@ -46,6 +46,16 @@ See [Namespace Filtering](#namespace-filtering).
 | include | **Optional.** List of namespaces to synchronize exclusively.   |
 | exclude | **Optional.** List of namespaces not to synchronize.           |
 
+## Rate Limit Configuration
+
+Client-side rate limit of the requests to the Kubernetes API, shared by all of them.
+Defined in the `rate_limit` section of the configuration file.
+
+| Option | Description                                                                                                                                                    |
+|--------|----------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| qps    | **Optional.** Sustained number of requests per second. Must not be `0`. A negative value disables the rate limit. Defaults to `5`.                             |
+| burst  | **Optional.** How many requests may be sent at once before being throttled to `qps`. Must be greater than `0`. Ignored if `qps` is negative. Defaults to `10`. |
+
 ## Icinga Notifications Configuration
 
 Connection configuration for the [Icinga Notifications API](https://icinga.com/docs/icinga-notifications/latest/doc/20-HTTP-API/#http-api).
@@ -123,6 +133,13 @@ The configurations set by environment variables override the ones set by YAML.
 |--------------------|------------------------------------------------------------------------------|
 | NAMESPACES_INCLUDE | **Optional.** Comma-separated list of namespaces to synchronize exclusively. |
 | NAMESPACES_EXCLUDE | **Optional.** Comma-separated list of namespaces not to synchronize.         |
+
+## Rate Limit Configuration
+
+| Env              | Description                                                                                                                                                    |
+|------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| RATE_LIMIT_QPS   | **Optional.** Sustained number of requests per second. Must not be `0`. A negative value disables the rate limit. Defaults to `5`.                             |
+| RATE_LIMIT_BURST | **Optional.** How many requests may be sent at once before being throttled to `qps`. Must be greater than `0`. Ignored if `qps` is negative. Defaults to `10`. |
 
 ## Icinga Notifications Configuration <a id="icinga-notifications-env-vars"></a>
 

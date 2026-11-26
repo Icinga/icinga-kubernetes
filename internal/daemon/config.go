@@ -23,6 +23,32 @@ type Config struct {
 	Notifications source.Config            `yaml:"notifications" envPrefix:"NOTIFICATIONS_"`
 	Prometheus    metrics.PrometheusConfig `yaml:"prometheus" envPrefix:"PROMETHEUS_"`
 	Namespaces    NamespacesConfig         `yaml:"namespaces" envPrefix:"NAMESPACES_"`
+	RateLimit     RateLimitConfig          `yaml:"rate_limit" envPrefix:"RATE_LIMIT_"`
+}
+
+// RateLimitConfig configures the client-side rate limit of the Kubernetes API client,
+// a token bucket shared by all requests to the Kubernetes API.
+type RateLimitConfig struct {
+	// QPS is the sustained number of requests per second. A negative value
+	// disables the rate limit.
+	QPS float32 `yaml:"qps" env:"QPS" default:"5"`
+	// How many requests may be sent at once before being throttled to QPS.
+	// Ignored if QPS is negative.
+	Burst int `yaml:"burst" env:"BURST" default:"10"`
+}
+
+// Validate returns an error if QPS is 0 or Burst is not positive.
+func (c *RateLimitConfig) Validate() error {
+	// client-go would silently replace 0 with its default.
+	if c.QPS == 0 {
+		return errors.New("rate_limit.qps must not be 0, set a negative value to disable the rate limit")
+	}
+
+	if c.Burst <= 0 {
+		return errors.New("rate_limit.burst must be greater than 0")
+	}
+
+	return nil
 }
 
 // NamespacesConfig selects the namespaces to synchronize, either the Include
@@ -80,6 +106,10 @@ func (c *Config) Validate() error {
 	}
 
 	if err := c.Namespaces.Validate(); err != nil {
+		return err
+	}
+
+	if err := c.RateLimit.Validate(); err != nil {
 		return err
 	}
 
