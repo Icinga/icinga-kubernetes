@@ -47,9 +47,6 @@ func NewController(db *kdatabase.DB, informers Informers, log *logging.Logger, f
 		factory:   factory,
 		upserts:   make(chan database.Entity),
 		deletes:   make(chan any),
-		queue: workqueue.NewTypedRateLimitingQueue[KChange](
-			workqueue.DefaultTypedControllerRateLimiter[KChange](),
-		),
 	}
 }
 
@@ -58,7 +55,8 @@ func NewController(db *kdatabase.DB, informers Informers, log *logging.Logger, f
 // WithNoWarmup() is given, then registers the event handlers, starts the
 // informers and waits for their caches to sync. From there it streams
 // changes from the queue into the database, and deletes the entities that
-// vanished while the daemon was not running.
+// vanished while the daemon was not running. It shuts the queue down on
+// return, discarding whatever is still queued.
 func (c *Controller) Run(ctx context.Context, features ...Feature) error {
 	with := NewFeatures(features...)
 
@@ -69,6 +67,15 @@ func (c *Controller) Run(ctx context.Context, features ...Feature) error {
 			return err
 		}
 	}
+
+	// Creating the queue starts background goroutines that only ShutDown()
+	// stops, so it is created here instead of in NewController to bind its
+	// lifetime to Run. c.queue is therefore nil until this line, which is
+	// why the event handlers and the worker are only started below it.
+	c.queue = workqueue.NewTypedRateLimitingQueue[KChange](workqueue.DefaultTypedControllerRateLimiter[KChange]())
+
+	// Ensure the queue is shut down when Run exits.
+	defer c.queue.ShutDown()
 
 	g, ctx := errgroup.WithContext(ctx)
 
