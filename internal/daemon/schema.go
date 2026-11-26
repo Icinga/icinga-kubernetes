@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/icinga/icinga-go-library/backoff"
 	"github.com/icinga/icinga-go-library/database"
 	"github.com/icinga/icinga-go-library/logging"
@@ -21,7 +22,7 @@ import (
 
 const (
 	// The expected schema versions for MySQL and PostgreSQL.
-	expectedMySQLSchemaVersion    = "v0.5.0"
+	expectedMySQLSchemaVersion    = "v0.5.1"
 	expectedPostgresSchemaVersion = "TODO: add version"
 )
 
@@ -152,12 +153,40 @@ func applySchemaFile(ctx context.Context, db *database.DB, dir embed.FS, file st
 		// the schema import in a single transaction.
 		for _, query := range database.MysqlSplitStatements(string(schema)) {
 			if _, err := db.ExecContext(ctx, query); err != nil {
+				var mysqlErr *mysql.MySQLError
+				if file == "mysql/upgrades/0.5.1.sql" && strings.HasPrefix(query, "ALTER TABLE kubernetes_instance\n") &&
+					errors.As(err, &mysqlErr) && mysqlErr.Number == 1060 {
+					// ER_DUP_FIELDNAME can mean a previous attempt or another daemon
+					// already added the two columns without recording this upgrade yet.
+					applied, checkErr := hasSocketDiscoveryColumns(ctx, db)
+					if checkErr != nil {
+						return errors.Wrap(checkErr, "cannot verify existing socket discovery columns")
+					}
+					if applied {
+						continue
+					}
+				}
 				return errors.Wrap(database.CantPerformQuery(err, query), "cannot execute schema query")
 			}
 		}
 	}
 
 	return nil
+}
+
+// hasSocketDiscoveryColumns checks whether the v0.5.1 ALTER TABLE completed.
+func hasSocketDiscoveryColumns(ctx context.Context, db *database.DB) (bool, error) {
+	const query = `SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'kubernetes_instance'
+		  AND IS_NULLABLE = 'YES' AND (COLUMN_DEFAULT IS NULL OR COLUMN_DEFAULT = 'NULL')
+		  AND COLLATION_NAME = 'utf8mb4_bin' AND EXTRA = ''
+		  AND ((COLUMN_NAME = 'notifications_discovered_socket_path' AND COLUMN_TYPE = 'text')
+		    OR (COLUMN_NAME = 'kubernetes_service_user' AND COLUMN_TYPE = 'varchar(255)'))`
+	var count int
+	if err := db.GetContext(ctx, &count, query); err != nil {
+		return false, database.CantPerformQuery(err, query)
+	}
+	return count == 2, nil
 }
 
 // checkSchemaVersion checks if the database schema version is compatible with
