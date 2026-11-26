@@ -12,59 +12,43 @@ import (
 )
 
 type EventHandler struct {
-	queue workqueue.TypedInterface[EventHandlerItem]
+	queue workqueue.TypedInterface[KChange]
 	log   *logging.Logger
 }
 
-type EventHandlerItem struct {
-	Type EventType
-	Id   types.UUID
-	KKey string
-}
-
-type EventType string
-
-const EventAdd EventType = "ADDED"
-const EventUpdate EventType = "UPDATED"
-const EventDelete EventType = "DELETED"
-
-func NewEventHandler(queue workqueue.TypedInterface[EventHandlerItem], log *logging.Logger) cache.ResourceEventHandler {
+func NewEventHandler(queue workqueue.TypedInterface[KChange], log *logging.Logger) cache.ResourceEventHandler {
 	return &EventHandler{queue: queue, log: log}
 }
 
 func (e *EventHandler) OnAdd(obj any, _ bool) {
-	e.enqueue(EventAdd, obj, cache.MetaNamespaceKeyFunc)
+	e.enqueue(KChangeUpsert, obj, cache.MetaNamespaceKeyFunc)
 }
 
 func (e *EventHandler) OnUpdate(_, newObj any) {
-	e.enqueue(EventUpdate, newObj, cache.MetaNamespaceKeyFunc)
+	e.enqueue(KChangeUpsert, newObj, cache.MetaNamespaceKeyFunc)
 }
 
 func (e *EventHandler) OnDelete(obj any) {
-	e.enqueue(EventDelete, obj, cache.DeletionHandlingMetaNamespaceKeyFunc)
+	e.enqueue(KChangeDelete, obj, cache.DeletionHandlingMetaNamespaceKeyFunc)
 }
 
-func (e *EventHandler) enqueue(_type EventType, obj any, keyFunc cache.KeyFunc) {
-	key, err := keyFunc(obj)
+func (e *EventHandler) enqueue(changeType KChangeType, obj any, keyFunc cache.KeyFunc) {
+	kkey, err := keyFunc(obj)
 	if err != nil {
 		e.log.Errorw("Cannot make key", logging.Error(err))
 
 		return
 	}
 
-	var id types.UUID
+	var uuid types.UUID
 	switch v := obj.(type) {
 	case kmetav1.Object:
-		id = schema.EnsureUUID(v.GetUID())
+		uuid = schema.EnsureUUID(v.GetUID())
 	case cache.DeletedFinalStateUnknown:
-		id = schema.EnsureUUID(v.Obj.(kmetav1.Object).GetUID())
+		uuid = schema.EnsureUUID(v.Obj.(kmetav1.Object).GetUID())
 	default:
 		panic(fmt.Sprintf("unknown object type %#v", v))
 	}
 
-	e.queue.Add(EventHandlerItem{
-		Type: _type,
-		Id:   id,
-		KKey: key,
-	})
+	e.queue.Add(NewKChange(changeType, uuid, kkey))
 }

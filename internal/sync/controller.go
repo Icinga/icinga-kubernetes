@@ -13,15 +13,15 @@ import (
 type Controller struct {
 	informers Informers
 	log       *logging.Logger
-	queue     workqueue.TypedRateLimitingInterface[EventHandlerItem]
+	queue     workqueue.TypedRateLimitingInterface[KChange]
 }
 
 func NewController(informers Informers, log *logging.Logger) *Controller {
 	return &Controller{
 		informers: informers,
 		log:       log,
-		queue: workqueue.NewTypedRateLimitingQueue[EventHandlerItem](
-			workqueue.DefaultTypedControllerRateLimiter[EventHandlerItem](),
+		queue: workqueue.NewTypedRateLimitingQueue[KChange](
+			workqueue.DefaultTypedControllerRateLimiter[KChange](),
 		),
 	}
 }
@@ -46,36 +46,36 @@ func (c *Controller) Stream(ctx context.Context, sink *Sink) error {
 }
 
 func (c *Controller) stream(ctx context.Context, sink *Sink) error {
-	var eventHandlerItem EventHandlerItem
+	var change KChange
 	var key string
 	var shutdown bool
 	for {
-		c.queue.Done(eventHandlerItem)
+		c.queue.Done(change)
 
-		eventHandlerItem, shutdown = c.queue.Get()
+		change, shutdown = c.queue.Get()
 		if shutdown {
 			return ctx.Err()
 		}
 
-		key = eventHandlerItem.KKey
+		key = change.KKey()
 
 		obj, exists, err := c.informers.GetByKey(key)
 		if err != nil {
-			if c.queue.NumRequeues(eventHandlerItem) < 5 {
+			if c.queue.NumRequeues(change) < 5 {
 				c.log.Errorw("Cannot fetch key. Retrying", zap.String("key", key), logging.Error(err))
-				c.queue.AddRateLimited(eventHandlerItem)
+				c.queue.AddRateLimited(change)
 			} else {
 				c.log.Errorw("Cannot fetch key. Stopped retrying", zap.String("key", key), logging.Error(err))
-				c.queue.Forget(eventHandlerItem)
+				c.queue.Forget(change)
 			}
 
 			continue
 		}
 
-		c.queue.Forget(eventHandlerItem)
+		c.queue.Forget(change)
 
-		if !exists || eventHandlerItem.Type == EventDelete {
-			if err := sink.Delete(ctx, eventHandlerItem.Id); err != nil {
+		if !exists || change.ChangeType() == KChangeDelete {
+			if err := sink.Delete(ctx, change.Uuid()); err != nil {
 				return err
 			}
 		} else {
