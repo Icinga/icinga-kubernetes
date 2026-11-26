@@ -33,6 +33,8 @@ type Controller struct {
 	log       *logging.Logger
 	queue     workqueue.TypedRateLimitingInterface[KChange]
 	factory   func() schema.Resource
+	upserts   chan database.Entity
+	deletes   chan any
 }
 
 // NewController returns a new Controller for the resource that
@@ -43,6 +45,8 @@ func NewController(db *kdatabase.DB, informers Informers, log *logging.Logger, f
 		informers: informers,
 		log:       log,
 		factory:   factory,
+		upserts:   make(chan database.Entity),
+		deletes:   make(chan any),
 		queue: workqueue.NewTypedRateLimitingQueue[KChange](
 			workqueue.DefaultTypedControllerRateLimiter[KChange](),
 		),
@@ -65,15 +69,6 @@ func (c *Controller) Run(ctx context.Context, features ...Feature) error {
 			return err
 		}
 	}
-
-	sink := NewSink(func(i *Item) database.Entity {
-		entity := c.factory()
-		entity.Obtain(*i.Item, cluster.ClusterUuidFromContext(ctx))
-
-		return entity
-	}, func(k any) any {
-		return k
-	})
 
 	g, ctx := errgroup.WithContext(ctx)
 
@@ -110,11 +105,11 @@ func (c *Controller) Run(ctx context.Context, features ...Feature) error {
 
 	g.Go(func() error {
 		// Run the worker to process events from the queue.
-		return c.runWorker(ctx, sink)
+		return c.runWorker(ctx)
 	})
 
 	g.Go(func() error {
-		return c.deleteVanished(ctx, sink, synced)
+		return c.deleteVanished(ctx, synced)
 	})
 
 	onUpsert := with.OnUpsert()
@@ -150,8 +145,10 @@ func (c *Controller) Run(ctx context.Context, features ...Feature) error {
 				// semaphore, which the delete needs as well.
 				g.Go(func() error {
 					for _, id := range ids {
-						if err := sink.Delete(ctx, id); err != nil {
-							return err
+						select {
+						case c.deletes <- id:
+						case <-ctx.Done():
+							return ctx.Err()
 						}
 					}
 
@@ -164,14 +161,14 @@ func (c *Controller) Run(ctx context.Context, features ...Feature) error {
 	}
 
 	g.Go(func() error {
-		return c.db.UpsertStreamedCascading(ctx, sink.UpsertCh(), onUpsert)
+		return c.db.UpsertStreamedCascading(ctx, c.upserts, onUpsert)
 	})
 
 	g.Go(func() error {
 		if with.NoDelete() {
 			for {
 				select {
-				case _, more := <-sink.DeleteCh():
+				case _, more := <-c.deletes:
 					if !more {
 						return nil
 					}
@@ -180,7 +177,7 @@ func (c *Controller) Run(ctx context.Context, features ...Feature) error {
 				}
 			}
 		} else {
-			return c.db.SoftDeleteStreamed(ctx, c.factory(), sink.DeleteCh(), with.OnDelete())
+			return c.db.SoftDeleteStreamed(ctx, c.factory(), c.deletes, with.OnDelete())
 		}
 	})
 
@@ -238,7 +235,7 @@ func (c *Controller) warmup(ctx context.Context) (map[string]types.UUID, error) 
 // not running, and no event will ever report it. A key the list does deliver
 // under a different UID counts as gone as well, its object having been
 // replaced by another one of the same name.
-func (c *Controller) deleteVanished(ctx context.Context, sink *Sink, synced map[string]types.UUID) error {
+func (c *Controller) deleteVanished(ctx context.Context, synced map[string]types.UUID) error {
 	if len(synced) == 0 {
 		return nil
 	}
@@ -253,8 +250,10 @@ func (c *Controller) deleteVanished(ctx context.Context, sink *Sink, synced map[
 			continue
 		}
 
-		if err := sink.Delete(ctx, uuid); err != nil {
-			return err
+		select {
+		case c.deletes <- uuid:
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 	}
 
@@ -342,9 +341,9 @@ func (c *Controller) eventHandler() cache.ResourceEventHandler {
 }
 
 // runWorker calls processNextChange to process the next change from the queue.
-func (c *Controller) runWorker(ctx context.Context, sink *Sink) error {
+func (c *Controller) runWorker(ctx context.Context) error {
 	for {
-		if err := c.processNextChange(ctx, sink); err != nil {
+		if err := c.processNextChange(ctx); err != nil {
 			if errors.Is(err, ErrShutdown) {
 				return nil
 			}
@@ -360,8 +359,8 @@ func (c *Controller) runWorker(ctx context.Context, sink *Sink) error {
 //
 // Note that queue.Get() does not observe ctx: cancellation only unblocks it
 // through the error group in Run that shuts the queue down. ctx does abort
-// a change waiting to be sent to the sink, which returns ctx.Err().
-func (c *Controller) processNextChange(ctx context.Context, sink *Sink) error {
+// a change waiting to be sent to an output channel, which returns ctx.Err().
+func (c *Controller) processNextChange(ctx context.Context) error {
 	// Set item to processing state.
 	change, shutdown := c.queue.Get()
 	if shutdown {
@@ -395,20 +394,33 @@ func (c *Controller) processNextChange(ctx context.Context, sink *Sink) error {
 	// ends the processing state.
 	c.queue.Forget(change)
 
-	return c.processChange(ctx, sink, change, obj, exists)
+	return c.processChange(ctx, change, obj, exists)
 }
 
 // processChange processes a single change from the queue and sends the change
-// to the appropriate sink method.
-func (c *Controller) processChange(
-	ctx context.Context, sink *Sink, change KChange, obj kmetav1.Object, exists bool,
-) error {
+// to the appropriate channel.
+func (c *Controller) processChange(ctx context.Context, change KChange, obj kmetav1.Object, exists bool) error {
 	// The store has priority over the queue. So if the object
-	// is not in the store it gets deleted. Every other change
-	// is an upsert.
+	// is not in the store it gets sent to the deletes channel.
+	// Every other change is an upsert and goes to the upserts channel.
 	if !exists || change.ChangeType() == KChangeDelete {
-		return sink.Delete(ctx, change.Uuid())
+		select {
+		case c.deletes <- change.Uuid():
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	} else {
+		entity := c.factory()
+		entity.Obtain(obj, cluster.ClusterUuidFromContext(ctx))
+
+		select {
+		case c.upserts <- entity:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 
-	return sink.Upsert(ctx, &Item{Key: change.KKey(), Item: &obj})
+	c.log.Debugw("Forwarded change from queue to channel", zap.Inline(change))
+
+	return nil
 }

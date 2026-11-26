@@ -35,10 +35,11 @@ func TestControllerDeleteVanished(t *testing.T) {
 		t.Fatal("timed out waiting for cache sync")
 	}
 
-	c := &Controller{informers: Informers{informer}}
+	// deleteVanished() sends into deletes, which NewController() would create.
+	c := &Controller{informers: Informers{informer}, deletes: make(chan any)}
 
 	t.Run("NothingSynced", func(t *testing.T) {
-		if err := c.deleteVanished(ctx, NewSink(nil, nil), nil); err != nil {
+		if err := c.deleteVanished(ctx, nil); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -50,16 +51,14 @@ func TestControllerDeleteVanished(t *testing.T) {
 			"default/vanished": vanished,
 		}
 
-		sink := NewSink(nil, func(k any) any { return k })
-
 		errs := make(chan error, 1)
-		go func() { errs <- c.deleteVanished(ctx, sink, synced) }()
+		go func() { errs <- c.deleteVanished(ctx, synced) }()
 
 		var deleted []any
 		for done := false; !done; {
 			select {
-			case id := <-sink.DeleteCh():
-				deleted = append(deleted, id)
+			case uuid := <-c.deletes:
+				deleted = append(deleted, uuid)
 			case err := <-errs:
 				if err != nil {
 					t.Error(err)
