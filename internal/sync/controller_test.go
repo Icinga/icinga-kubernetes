@@ -14,10 +14,10 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-// TestSyncDeleteVanished covers the cleanup that used to run on the informer's
-// store, where it made listers panic on the entities warmup() had announced,
-// see https://github.com/Icinga/icinga-kubernetes/issues/208.
-func TestSyncDeleteVanished(t *testing.T) {
+// TestControllerDeleteVanished covers the cleanup that used to run on the
+// informer's store, where it made listers panic on the entities warmup() had
+// announced, see https://github.com/Icinga/icinga-kubernetes/issues/208.
+func TestControllerDeleteVanished(t *testing.T) {
 	existing := &kcorev1.Pod{
 		Namespace: "default",
 		Name:      "existing",
@@ -35,10 +35,11 @@ func TestSyncDeleteVanished(t *testing.T) {
 		t.Fatal("timed out waiting for cache sync")
 	}
 
-	sync := &Sync{informers: Informers{informer}}
+	// deleteVanished() sends into deletes, which NewController() would create.
+	c := &Controller{informers: Informers{informer}, deletes: make(chan any)}
 
 	t.Run("NothingSynced", func(t *testing.T) {
-		if err := sync.deleteVanished(ctx, NewSink(nil, nil), nil); err != nil {
+		if err := c.deleteVanished(ctx, nil); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -50,16 +51,14 @@ func TestSyncDeleteVanished(t *testing.T) {
 			"default/vanished": vanished,
 		}
 
-		sink := NewSink(nil, func(k any) any { return k })
-
 		errs := make(chan error, 1)
-		go func() { errs <- sync.deleteVanished(ctx, sink, synced) }()
+		go func() { errs <- c.deleteVanished(ctx, synced) }()
 
 		var deleted []any
 		for done := false; !done; {
 			select {
-			case id := <-sink.DeleteCh():
-				deleted = append(deleted, id)
+			case uuid := <-c.deletes:
+				deleted = append(deleted, uuid)
 			case err := <-errs:
 				if err != nil {
 					t.Error(err)
@@ -75,7 +74,7 @@ func TestSyncDeleteVanished(t *testing.T) {
 	})
 }
 
-func TestSyncVanished(t *testing.T) {
+func TestControllerVanished(t *testing.T) {
 	existing := &kcorev1.Pod{
 		Namespace: "default",
 		Name:      "existing",
@@ -93,7 +92,7 @@ func TestSyncVanished(t *testing.T) {
 		t.Fatal("timed out waiting for cache sync")
 	}
 
-	sync := &Sync{informers: Informers{informer}}
+	c := &Controller{informers: Informers{informer}}
 
 	vanished := &kcorev1.Pod{
 		Namespace: "default",
@@ -106,7 +105,7 @@ func TestSyncVanished(t *testing.T) {
 		UID:       "9f1c6a4e-0e0a-4e2b-9a5f-000000000003",
 	}
 
-	ids, err := sync.vanished([]kmetav1.Object{existing, vanished, replaced})
+	ids, err := c.vanished([]kmetav1.Object{existing, vanished, replaced})
 	if err != nil {
 		t.Fatal(err)
 	}
