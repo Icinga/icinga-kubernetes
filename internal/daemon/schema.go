@@ -192,10 +192,8 @@ func hasSocketDiscoveryColumns(ctx context.Context, db *database.DB) (bool, erro
 // checkSchemaVersion checks if the database schema version is compatible with
 // the expected version.
 //
-// It returns an error if the schema version is newer than expected (which would
-// require a downgrade). Otherwise, it returns empty string and nil error, indicating
-// that the schema is up to date, and the current schema version if it is older than
-// expected.
+// It returns an error for an unsupported version, an empty string for an
+// up-to-date schema, or the normalized version for a supported upgrade.
 func checkSchemaVersion(ctx context.Context, db *database.DB, expectedSchemaVersion string) (string, error) {
 	// The schema table exists, so we need to check the current schema version
 	// and apply any pending migrations.
@@ -224,6 +222,15 @@ func checkSchemaVersion(ctx context.Context, db *database.DB, expectedSchemaVers
 	haveSchemaVersion := "v" + strings.TrimPrefix(dbResult[0], "v")
 	if !semver.IsValid(haveSchemaVersion) {
 		return "", errors.Errorf("database schema version %q is not a valid semantic version", dbResult[0])
+	}
+
+	// The MySQL v0.5.0 migration assumes the table layout from v0.4.0.
+	const minimumMySQLSchemaVersion = "v0.4.0"
+	if db.DriverName() == database.MySQL && semver.Compare(haveSchemaVersion, minimumMySQLSchemaVersion) < 0 {
+		return "", errors.Errorf(
+			"database schema version %s is older than the minimum supported version %s",
+			haveSchemaVersion, minimumMySQLSchemaVersion,
+		)
 	}
 
 	if result := semver.Compare(haveSchemaVersion, expectedSchemaVersion); result == 0 {
