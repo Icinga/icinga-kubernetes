@@ -63,6 +63,9 @@ Defined in the `notifications` section of the configuration file. If `url` is
 not set, the configuration stored in the database (e.g. set via Icinga for Kubernetes Web)
 is used, if any.
 
+Restart the Icinga for Kubernetes daemon after saving notification settings in
+Icinga for Kubernetes Web. The daemon reads these settings at startup.
+
 Which authentication options are required depends on the scheme of `url`:
 
 * `http`: Unencrypted HTTP connection. `username` and `password` or
@@ -85,6 +88,33 @@ Which authentication options are required depends on the scheme of `url`:
 | key            | **Optional.** Path to the TLS client private key for `https`. Requires `cert`.                                                                |
 | insecure       | **Optional.** Skip verification of the server certificate. Can be set to `true` or `false`. Defaults to `false`.                              |
 
+### Unix Socket Discovery
+
+Icinga for Kubernetes Web uses the socket path and the daemon's OS username to offer
+assisted source setup. The daemon probes the socket at startup and every 55 seconds.
+The probe opens a connection and closes it without sending a request. To enable
+notifications, save the connection settings in Web or configure `notifications.url`.
+
+Discovery defaults to `/run/icinga-notifications/api.sock`, the path configured by the
+Icinga Notifications Debian package. For other paths, set
+`ICINGA_NOTIFICATIONS_LISTENER_SOCKET` to the absolute path visible to the Kubernetes
+daemon. Use a single leading slash. Set this variable to an empty value to disable
+discovery.
+
+The Kubernetes daemon needs access to the socket directory and permission to connect.
+The Debian package makes the socket writable by the `icinga-notifications` group.
+For instances managed by systemd, grant the Kubernetes service that supplementary
+group with `SupplementaryGroups=icinga-notifications` in its service drop-in and
+restart the service. Where Notifications uses a different `socket_group`, grant
+access through that group.
+
+For containers, make the socket directory visible to both daemons. Icinga Notifications
+authenticates requests by resolving the connecting process's UID in its own account
+database. Assisted setup requires that UID to resolve to the same username that
+Icinga for Kubernetes publishes from its local account database. If the Kubernetes
+daemon has no account entry or the account mappings differ, configure the
+Notifications source manually with the listener-side username.
+
 ## Prometheus Configuration
 
 Connection configuration for a Prometheus instance that collects metrics from
@@ -102,7 +132,7 @@ username or password is set, both must be set.
 
 # Configuration via Environment Variables
 
-**All** environment variables are prefixed with `ICINGA_FOR_KUBERNETES_`.
+The variables in the following tables are prefixed with `ICINGA_FOR_KUBERNETES_`.
 The database type would therefore be `ICINGA_FOR_KUBERNETES_DATABASE_TYPE`.
 The configurations set by environment variables override the ones set by YAML.
 

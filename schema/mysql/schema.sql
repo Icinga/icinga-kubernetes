@@ -868,6 +868,8 @@ CREATE TABLE kubernetes_instance (
   kubernetes_api_reachable enum('n', 'y') COLLATE utf8mb4_unicode_ci NOT NULL,
   message text NULL DEFAULT NULL,
   heartbeat bigint unsigned NOT NULL,
+  notifications_discovered_socket_path text NULL DEFAULT NULL,
+  kubernetes_service_user varchar(255) NULL DEFAULT NULL,
   PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin ROW_FORMAT=DYNAMIC;
 
@@ -900,4 +902,4 @@ CREATE TABLE kubernetes_schema (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 INSERT INTO kubernetes_schema (version, timestamp, success, reason)
-VALUES ('v0.5.0', UNIX_TIMESTAMP() * 1000, 'y', 'Initial import');
+VALUES ('v0.5.1', UNIX_TIMESTAMP() * 1000, 'y', 'Initial import');

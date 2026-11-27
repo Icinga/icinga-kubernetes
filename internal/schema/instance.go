@@ -8,6 +8,7 @@ import (
 
 type Instance struct {
 	kdatabase.EntityStub
+
 	Uuid                   types.UUID
 	ClusterUuid            types.UUID
 	Version                string
@@ -16,6 +17,9 @@ type Instance struct {
 	KubernetesApiReachable types.Bool
 	Message                types.String
 	Heartbeat              types.UnixMilli
+
+	NotificationsDiscoveredSocketPath types.String
+	KubernetesServiceUser             types.String
 }
 
 func (Instance) TableName() string {
