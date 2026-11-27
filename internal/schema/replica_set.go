@@ -83,7 +83,6 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 	r.FullyLabeledReplicas = replicaSet.Status.FullyLabeledReplicas
 	r.ReadyReplicas = replicaSet.Status.ReadyReplicas
 	r.AvailableReplicas = replicaSet.Status.AvailableReplicas
-	r.IcingaState, r.IcingaStateReason = r.getIcingaState()
 
 	for _, condition := range replicaSet.Status.Conditions {
 		r.Conditions = append(r.Conditions, ReplicaSetCondition{
@@ -95,6 +94,8 @@ func (r *ReplicaSet) Obtain(k8s kmetav1.Object, clusterUuid types.UUID) {
 			Message:        condition.Message,
 		})
 	}
+
+	r.IcingaState, r.IcingaStateReason = r.getIcingaState()
 
 	for _, ownerReference := range replicaSet.OwnerReferences {
 		var blockOwnerDeletion, controller bool
