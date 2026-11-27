@@ -103,7 +103,15 @@ func (s *Sync) warmup(ctx context.Context) (map[string]types.UUID, error) {
 // and no event will ever report it. A key the list does deliver under a
 // different UID counts as gone as well, its object having been replaced by
 // another one of the same name.
-func (s *Sync) deleteVanished(ctx context.Context, sink *Sink, synced map[string]types.UUID) error {
+//
+// The entities are sent to vanished to be deleted right away rather than
+// soft-deleted, as their deletion is only inferred: an object is also missing
+// if its namespace is filtered out or it may not be listed. Once listed again,
+// it would be upserted into its soft-deleted row, which an upsert cannot
+// restore, and vanish with the purge of that row.
+func (s *Sync) deleteVanished(ctx context.Context, vanished chan<- any, synced map[string]types.UUID) error {
+	defer close(vanished)
+
 	if len(synced) == 0 {
 		return nil
 	}
@@ -122,8 +130,10 @@ func (s *Sync) deleteVanished(ctx context.Context, sink *Sink, synced map[string
 			continue
 		}
 
-		if err := sink.Delete(ctx, id); err != nil {
-			return err
+		select {
+		case vanished <- id:
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 	}
 
@@ -217,9 +227,15 @@ func (s *Sync) sync(ctx context.Context, c *Controller, synced map[string]types.
 	g.Go(func() error {
 		return c.Stream(ctx, sink)
 	})
-	g.Go(func() error {
-		return s.deleteVanished(ctx, sink, synced)
-	})
+	if !with.NoDelete() {
+		vanished := make(chan any)
+		g.Go(func() error {
+			return s.deleteVanished(ctx, vanished, synced)
+		})
+		g.Go(func() error {
+			return s.db.DeleteStreamedCascading(ctx, s.factory(), vanished, with.OnDelete())
+		})
+	}
 	g.Go(func() error {
 		return s.db.UpsertStreamedCascading(ctx, sink.UpsertCh(), onUpsert)
 	})

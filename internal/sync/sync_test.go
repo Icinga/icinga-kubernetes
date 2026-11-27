@@ -38,8 +38,13 @@ func TestSyncDeleteVanished(t *testing.T) {
 	sync := &Sync{informers: Informers{informer}}
 
 	t.Run("NothingSynced", func(t *testing.T) {
-		if err := sync.deleteVanished(ctx, NewSink(nil, nil), nil); err != nil {
+		vanished := make(chan any)
+		if err := sync.deleteVanished(ctx, vanished, nil); err != nil {
 			t.Fatal(err)
+		}
+
+		if _, more := <-vanished; more {
+			t.Fatal("expected vanished to be closed")
 		}
 	})
 
@@ -50,23 +55,18 @@ func TestSyncDeleteVanished(t *testing.T) {
 			"default/vanished": vanished,
 		}
 
-		sink := NewSink(nil, func(k any) any { return k })
+		ids := make(chan any)
 
 		errs := make(chan error, 1)
-		go func() { errs <- sync.deleteVanished(ctx, sink, synced) }()
+		go func() { errs <- sync.deleteVanished(ctx, ids, synced) }()
 
 		var deleted []any
-		for done := false; !done; {
-			select {
-			case id := <-sink.DeleteCh():
-				deleted = append(deleted, id)
-			case err := <-errs:
-				if err != nil {
-					t.Error(err)
-				}
+		for id := range ids {
+			deleted = append(deleted, id)
+		}
 
-				done = true
-			}
+		if err := <-errs; err != nil {
+			t.Fatal(err)
 		}
 
 		if len(deleted) != 1 || deleted[0].(types.UUID) != vanished {
