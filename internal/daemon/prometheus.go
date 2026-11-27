@@ -43,14 +43,14 @@ func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *metrics.
 		if config.Token != "" {
 			toDb = append(
 				toDb,
-				schema.Config{ClusterUuid: clusterUuid, Key: schema.ConfigKeyPrometheusToken, Value: config.Token, Locked: _true},
+				schema.Config{ClusterUuid: clusterUuid, Key: schema.ConfigKeyPrometheusToken, Value: config.Token, Locked: types.MakeBool(true)},
 			)
 		}
 
 		if config.TokenFile != "" {
 			toDb = append(
 				toDb,
-				schema.Config{ClusterUuid: clusterUuid, Key: schema.ConfigKeyPrometheusTokenFile, Value: config.TokenFile, Locked: _true},
+				schema.Config{ClusterUuid: clusterUuid, Key: schema.ConfigKeyPrometheusTokenFile, Value: config.TokenFile, Locked: types.MakeBool(true)},
 			)
 		}
 
