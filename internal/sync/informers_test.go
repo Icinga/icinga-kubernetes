@@ -116,7 +116,7 @@ func TestInformersSkipForbidden(t *testing.T) {
 	}
 
 	// A denied informer cannot sync, so only the skip lets it count as synced.
-	if _, forbidden := forbiddenInformers.Load(informer); !forbidden || informer.HasSynced() {
+	if _, forbidden := forbiddenInformers.Load(informer.GetIndexer()); !forbidden || informer.HasSynced() {
 		t.Fatal("informer was not skipped as denied")
 	}
 
@@ -132,11 +132,12 @@ func TestInformersSkipForbidden(t *testing.T) {
 }
 
 // stubInformer is denied and synced whenever a test says so, instead of
-// whenever the reflector retries. Its other methods panic, as the embedded
-// informer is nil.
+// whenever the reflector retries. It has an indexer of its own, as denials are
+// recorded by indexer. Its other methods panic, as the embedded informer is nil.
 type stubInformer struct {
 	cache.SharedIndexInformer
 	handler cache.WatchErrorHandlerWithContext
+	indexer cache.Indexer
 	synced  atomic.Bool
 }
 
@@ -150,12 +151,16 @@ func (s *stubInformer) HasSynced() bool {
 	return s.synced.Load()
 }
 
+func (s *stubInformer) GetIndexer() cache.Indexer {
+	return s.indexer
+}
+
 // TestInformersSkipForbiddenPermittedAgain checks that a denied informer is
 // logged as permitted once it is, and that its denial is forgotten then, so that
 // the next one is warned about again. Being denied while running, it is logged
 // as permitted only once it is permitted again.
 func TestInformersSkipForbiddenPermittedAgain(t *testing.T) {
-	informer := &stubInformer{}
+	informer := &stubInformer{indexer: cache.NewIndexer(cache.MetaNamespaceKeyFunc, nil)}
 
 	deny := kerrors.NewForbidden(schema.GroupResource{Resource: "pods"}, "", errors.New("denied"))
 
@@ -245,10 +250,45 @@ func TestInformersSkipForbiddenWatch(t *testing.T) {
 	go i.Run(ctx.Done())
 
 	if !cache.WaitForCacheSync(ctx.Done(), func() bool {
-		_, forbidden := forbiddenInformers.Load(informer)
+		_, forbidden := forbiddenInformers.Load(informer.GetIndexer())
 
 		return forbidden && informer.HasSynced()
 	}) {
 		t.Fatal("timed out waiting for the informer to sync and be denied")
+	}
+}
+
+func TestInformersSkipForbiddenSeparateCalls(t *testing.T) {
+	client := fake.NewClientset(&kcorev1.Pod{Namespace: "b", Name: "pod"})
+
+	deny := kerrors.NewForbidden(schema.GroupResource{Resource: "pods"}, "", errors.New("denied"))
+	client.PrependReactor("list", "pods", func(ktesting.Action) (bool, runtime.Object, error) {
+		return true, nil, deny
+	})
+	client.PrependWatchReactor("pods", func(ktesting.Action) (bool, watch.Interface, error) {
+		return true, nil, deny
+	})
+
+	// Like main.go, which calls factory.Pods() for the sync and again for
+	// ServicePodSync and PromMetricSync.
+	factory := informers.NewSharedInformerFactoryWithOptions(client, 0, informers.WithNamespace("b"))
+	forSync := Informers{factory.Core().V1().Pods().Informer()}
+	forOthers := Informers{factory.Core().V1().Pods().Informer()}
+
+	if err := forSync.SkipForbidden(logging.NewLogger(zap.NewNop().Sugar(), time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+
+	go forSync.Run(ctx.Done())
+
+	if !cache.WaitForCacheSync(ctx.Done(), forSync.HasSynced) {
+		t.Fatal("timed out waiting for the informers of the sync")
+	}
+
+	if !cache.WaitForCacheSync(ctx.Done(), forOthers.HasSynced) {
+		t.Fatal("timed out waiting for the informers of the others")
 	}
 }

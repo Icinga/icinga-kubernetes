@@ -18,6 +18,8 @@ import (
 // forbiddenInformers maps the informers that are denied to list or watch to
 // the time of their latest denial. It is shared, as the same informer can be
 // part of several Informers, e.g., pods for their sync and their metrics.
+// It is keyed by indexer, as Informer() of a factory wraps the shared informer
+// on every call, while the indexer stays the same.
 var forbiddenInformers sync.Map
 
 const (
@@ -69,7 +71,7 @@ func (i Informers) skipForbidden(log *logging.Logger, permittedFor, permittedInt
 				return
 			}
 
-			if _, denied := forbiddenInformers.Swap(informer, time.Now()); denied {
+			if _, denied := forbiddenInformers.Swap(informer.GetIndexer(), time.Now()); denied {
 				log.Debugw("Cannot list and watch", logging.Error(err))
 
 				return
@@ -100,7 +102,7 @@ func awaitPermitted(
 	permittedInterval time.Duration,
 ) {
 	if err := wait.PollUntilContextCancel(ctx, permittedInterval, false, func(context.Context) (bool, error) {
-		v, ok := forbiddenInformers.Load(informer)
+		v, ok := forbiddenInformers.Load(informer.GetIndexer())
 		if !ok {
 			// The denial was forgotten elsewhere, so there is nothing to await.
 			// This is defensive and currently can't happen.
@@ -115,7 +117,7 @@ func awaitPermitted(
 			return false, nil
 		}
 
-		return forbiddenInformers.CompareAndDelete(informer, deniedAt), nil
+		return forbiddenInformers.CompareAndDelete(informer.GetIndexer(), deniedAt), nil
 	}); err != nil {
 		return
 	}
@@ -135,7 +137,7 @@ func (i Informers) Run(stopCh <-chan struct{}) {
 // HasSynced reports whether all informers have synced or were denied to list or watch.
 func (i Informers) HasSynced() bool {
 	for _, informer := range i {
-		if _, forbidden := forbiddenInformers.Load(informer); !forbidden && !informer.HasSynced() {
+		if _, forbidden := forbiddenInformers.Load(informer.GetIndexer()); !forbidden && !informer.HasSynced() {
 			return false
 		}
 	}

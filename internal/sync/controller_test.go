@@ -74,7 +74,7 @@ func TestControllerStreamForbidden(t *testing.T) {
 
 	// Streaming starts only once every informer has synced or was denied,
 	// so the informer of b is known as denied by now.
-	if _, denied := forbiddenInformers.Load(i[1]); !denied {
+	if _, denied := forbiddenInformers.Load(i[1].GetIndexer()); !denied {
 		t.Fatal("informer of b was not denied")
 	}
 
