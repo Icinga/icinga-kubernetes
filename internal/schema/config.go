@@ -31,4 +31,6 @@ const (
 	ConfigKeyPrometheusInsecure         ConfigKey = "prometheus.insecure"
 	ConfigKeyPrometheusUsername         ConfigKey = "prometheus.username"
 	ConfigKeyPrometheusPassword         ConfigKey = "prometheus.password"
+	ConfigKeyPrometheusToken            ConfigKey = "prometheus.token"
+	ConfigKeyPrometheusTokenFile        ConfigKey = "prometheus.token_file"
 )

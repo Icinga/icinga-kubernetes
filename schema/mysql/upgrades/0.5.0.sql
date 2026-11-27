@@ -106,8 +106,11 @@ ALTER TABLE config
         'prometheus.url',
         'prometheus.insecure',
         'prometheus.username',
-        'prometheus.password'
-    ) COLLATE utf8mb4_unicode_ci NOT NULL;
+        'prometheus.password',
+        'prometheus.token',
+        'prometheus.token_file'
+    ) COLLATE utf8mb4_unicode_ci NOT NULL,
+    MODIFY COLUMN value text NOT NULL;
 
 ALTER TABLE config_map
     ADD COLUMN deleted bigint unsigned NULL DEFAULT NULL,

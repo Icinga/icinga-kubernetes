@@ -40,6 +40,20 @@ func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *metrics.
 			)
 		}
 
+		if config.Token != "" {
+			toDb = append(
+				toDb,
+				schema.Config{ClusterUuid: clusterUuid, Key: schema.ConfigKeyPrometheusToken, Value: config.Token, Locked: types.MakeBool(true)},
+			)
+		}
+
+		if config.TokenFile != "" {
+			toDb = append(
+				toDb,
+				schema.Config{ClusterUuid: clusterUuid, Key: schema.ConfigKeyPrometheusTokenFile, Value: config.TokenFile, Locked: types.MakeBool(true)},
+			)
+		}
+
 		if err := db.ExecTx(ctx, nil, func(ctx context.Context, tx *sqlx.Tx) error {
 			if _, err := tx.ExecContext(
 				ctx,
@@ -100,6 +114,12 @@ func SyncPrometheusConfig(ctx context.Context, db *database.DB, config *metrics.
 					config.Username = r.Value
 				case schema.ConfigKeyPrometheusPassword:
 					config.Password = r.Value
+				case schema.ConfigKeyPrometheusToken:
+					config.Token = r.Value
+				case schema.ConfigKeyPrometheusTokenFile:
+					// The token file is only honored from the local configuration. Taken from
+					// the database, it would let Icinga Web send any file the daemon can read,
+					// such as its service account token, to a Prometheus URL of its choice.
 				}
 			}
 
