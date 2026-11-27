@@ -17,17 +17,20 @@ type PrometheusConfig struct {
 // Validate checks constraints in the supplied Prometheus configuration and
 // returns an error if they are violated.
 func (c *PrometheusConfig) Validate() error {
+	// Values loaded later from the database or by auto-detection never clear
+	// local ones, so conflicting local authentication options stay conflicting
+	// even without a local URL.
+	if c.Username != "" && (c.Token != "" || c.TokenFile != "") {
+		return errors.New("username/password and token authentication are mutually exclusive")
+	}
+
+	if c.Token != "" && c.TokenFile != "" {
+		return errors.New("token and token_file are mutually exclusive")
+	}
+
 	if c.Url != "" {
 		if (c.Username == "") != (c.Password == "") {
 			return errors.New("both username and password must be provided")
-		}
-
-		if c.Username != "" && (c.Token != "" || c.TokenFile != "") {
-			return errors.New("username/password and token authentication are mutually exclusive")
-		}
-
-		if c.Token != "" && c.TokenFile != "" {
-			return errors.New("token and token_file are mutually exclusive")
 		}
 
 		if c.Insecure != "" && c.Insecure != "true" && c.Insecure != "false" {
