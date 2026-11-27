@@ -27,9 +27,11 @@ func TestBearerTokenTransportSetsAuthorization(t *testing.T) {
 	inner := &recordingTransport{}
 	req := newRequest(t)
 
-	if _, err := NewBearerTokenTransport(inner, testToken).RoundTrip(req); err != nil {
+	res, err := NewBearerTokenTransport(inner, testToken).RoundTrip(req)
+	if err != nil {
 		t.Fatalf("got error %v, want none", err)
 	}
+	_ = res.Body.Close()
 
 	if got, want := inner.req.Header.Get("Authorization"), "Bearer "+testToken; got != want {
 		t.Errorf("got Authorization %q, want %q", got, want)
@@ -42,9 +44,11 @@ func TestBearerTokenTransportDoesNotModifyRequest(t *testing.T) {
 	inner := &recordingTransport{}
 	req := newRequest(t)
 
-	if _, err := NewBearerTokenTransport(inner, testToken).RoundTrip(req); err != nil {
+	res, err := NewBearerTokenTransport(inner, testToken).RoundTrip(req)
+	if err != nil {
 		t.Fatalf("got error %v, want none", err)
 	}
+	_ = res.Body.Close()
 
 	if got := req.Header.Get("Authorization"); got != "" {
 		t.Errorf("got Authorization %q on the caller's request, want it untouched", got)
@@ -67,9 +71,11 @@ func TestBearerTokenFileTransportTrimsToken(t *testing.T) {
 	inner := &recordingTransport{}
 	tokenFile := writeTokenFile(t, "  "+testToken+"\n")
 
-	if _, err := NewBearerTokenFileTransport(inner, tokenFile).RoundTrip(newRequest(t)); err != nil {
+	res, err := NewBearerTokenFileTransport(inner, tokenFile).RoundTrip(newRequest(t))
+	if err != nil {
 		t.Fatalf("got error %v, want none", err)
 	}
+	_ = res.Body.Close()
 
 	if got, want := inner.req.Header.Get("Authorization"), "Bearer "+testToken; got != want {
 		t.Errorf("got Authorization %q, want %q", got, want)
@@ -83,18 +89,22 @@ func TestBearerTokenFileTransportPicksUpRotatedToken(t *testing.T) {
 	tokenFile := writeTokenFile(t, testToken)
 	transport := NewBearerTokenFileTransport(inner, tokenFile)
 
-	if _, err := transport.RoundTrip(newRequest(t)); err != nil {
+	res, err := transport.RoundTrip(newRequest(t))
+	if err != nil {
 		t.Fatalf("got error %v, want none", err)
 	}
+	_ = res.Body.Close()
 
 	const rotated = "rotated-token"
 	if err := os.WriteFile(tokenFile, []byte(rotated), 0o600); err != nil {
 		t.Fatalf("cannot rotate token file: %v", err)
 	}
 
-	if _, err := transport.RoundTrip(newRequest(t)); err != nil {
+	res, err = transport.RoundTrip(newRequest(t))
+	if err != nil {
 		t.Fatalf("got error %v, want none", err)
 	}
+	_ = res.Body.Close()
 
 	if got, want := inner.req.Header.Get("Authorization"), "Bearer "+rotated; got != want {
 		t.Errorf("got Authorization %q, want %q", got, want)
@@ -107,8 +117,12 @@ func TestBearerTokenFileTransportFailsOnUnreadableFile(t *testing.T) {
 	inner := &recordingTransport{}
 	tokenFile := filepath.Join(t.TempDir(), "missing")
 
-	if _, err := NewBearerTokenFileTransport(inner, tokenFile).RoundTrip(newRequest(t)); err == nil {
+	res, err := NewBearerTokenFileTransport(inner, tokenFile).RoundTrip(newRequest(t))
+	if err == nil {
 		t.Error("got no error, want the missing token file to be reported")
+	}
+	if res != nil {
+		_ = res.Body.Close()
 	}
 
 	if inner.req != nil {
@@ -122,8 +136,12 @@ func TestBearerTokenFileTransportFailsOnEmptyFile(t *testing.T) {
 	inner := &recordingTransport{}
 	tokenFile := writeTokenFile(t, " \n")
 
-	if _, err := NewBearerTokenFileTransport(inner, tokenFile).RoundTrip(newRequest(t)); err == nil {
+	res, err := NewBearerTokenFileTransport(inner, tokenFile).RoundTrip(newRequest(t))
+	if err == nil {
 		t.Error("got no error, want the empty token file to be reported")
+	}
+	if res != nil {
+		_ = res.Body.Close()
 	}
 
 	if inner.req != nil {
@@ -164,8 +182,12 @@ func TestBearerTokenFileTransportClosesBodyOnError(t *testing.T) {
 	}
 
 	tokenFile := filepath.Join(t.TempDir(), "missing")
-	if _, err := NewBearerTokenFileTransport(&recordingTransport{}, tokenFile).RoundTrip(req); err == nil {
+	res, err := NewBearerTokenFileTransport(&recordingTransport{}, tokenFile).RoundTrip(req)
+	if err == nil {
 		t.Fatal("got no error, want the missing token file to be reported")
+	}
+	if res != nil {
+		_ = res.Body.Close()
 	}
 
 	if !body.closed {
