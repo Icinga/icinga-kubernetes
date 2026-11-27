@@ -39,8 +39,36 @@ CREATE USER 'kubernetes'@'localhost' IDENTIFIED BY 'CHANGEME';
 GRANT ALL ON kubernetes.* TO 'kubernetes'@'localhost';
 ```
 
-Icinga for Kubernetes automatically imports the schema on first start and also
-applies schema migrations if required.
+Icinga for Kubernetes automatically imports the schema into an empty database
+on first start.
+
+#### Upgrading an Existing Database
+
+Schedule a maintenance window for a schema upgrade. The oldest schema this daemon
+can upgrade is `0.4.0`.
+
+1. Stop every Icinga for Kubernetes daemon that uses the database, including
+   daemons monitoring other clusters. Keep automatic restarts and rollouts paused
+   during the upgrade, including any automatic start during package installation.
+   Pause configuration changes in Icinga for Kubernetes Web during the maintenance.
+2. Back up the database and verify that you can restore the backup.
+3. Start one upgraded daemon. For a `0.4.0` schema it applies the `v0.5.0` migration
+   followed by `v0.5.1`. A database already at `v0.5.0` requires the `v0.5.1`
+   migration. Wait for the daemon to finish the migration and verify that the
+   newest entry in `kubernetes_schema` records a successful `v0.5.1` upgrade.
+4. Start the remaining daemons with the upgraded version.
+
+MySQL and MariaDB commit schema changes individually. If the `v0.5.0` migration
+fails or is interrupted, keep the daemons stopped and restore the pre-upgrade
+backup before retrying. If `v0.5.0` completed and startup was interrupted while
+applying `v0.5.1`, restart the same upgraded daemon to resume the second stage.
+If the daemon reports incompatible columns, keep the daemons stopped and restore
+the backup before retrying.
+
+To roll back the daemon, stop all instances and restore a database backup with the
+schema version expected by the old binary before starting it. Restore a backup with
+schema version `0.4.0` before starting the released v0.4.0 daemon. That binary drops
+existing tables when it encounters a different schema version.
 
 ### Running Within Kubernetes
 
